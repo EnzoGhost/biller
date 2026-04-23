@@ -20,7 +20,7 @@ def patient_options():
 @router.get("", response_model=dict)
 async def list_patients(
     page: int = Query(1, ge=1),
-    per_page: int = Query(25, ge=1, le=100),
+    per_page: int = Query(25, ge=1, le=1000),
     search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
