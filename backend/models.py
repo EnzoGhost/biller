@@ -1,0 +1,311 @@
+"""
+SQLAlchemy ORM models for Medical Biller.
+"""
+from __future__ import annotations
+import enum
+from datetime import datetime, date
+from sqlalchemy import (
+    String, Integer, Float, Boolean, Text, Date, DateTime,
+    ForeignKey, Enum as SAEnum, JSON
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from database import Base
+
+
+# ── Enums ────────────────────────────────────────────────────────────────────
+
+class ClaimStatus(str, enum.Enum):
+    DRAFT = "draft"
+    READY = "ready"
+    SUBMITTED = "submitted"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    PAID = "paid"
+    DENIED = "denied"
+    APPEALED = "appealed"
+    VOID = "void"
+
+
+class Gender(str, enum.Enum):
+    M = "M"
+    F = "F"
+    U = "U"
+
+
+class UserRole(str, enum.Enum):
+    ADMIN = "admin"
+    BILLER = "biller"
+    PROVIDER = "provider"
+    VIEWER = "viewer"
+
+
+class PayerType(str, enum.Enum):
+    COMMERCIAL = "commercial"
+    MEDICARE = "medicare"
+    MEDICAID = "medicaid"
+    VISION = "vision"
+    DENTAL = "dental"
+    OTHER = "other"
+
+
+class SubmissionMethod(str, enum.Enum):
+    STEDI = "stedi"
+    INMEDIATA = "inmediata"
+    FAX = "fax"
+    MAIL = "mail"
+
+
+# ── Users ────────────────────────────────────────────────────────────────────
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[UserRole] = mapped_column(SAEnum(UserRole), default=UserRole.BILLER)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── Providers ────────────────────────────────────────────────────────────────
+
+class Provider(Base):
+    __tablename__ = "providers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    npi: Mapped[str] = mapped_column(String(10), unique=True, index=True, nullable=False)
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    specialty: Mapped[str] = mapped_column(String(100), nullable=True)
+    taxonomy_code: Mapped[str] = mapped_column(String(10), nullable=True)
+    license_number: Mapped[str] = mapped_column(String(50), nullable=True)
+    address_line1: Mapped[str] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[str] = mapped_column(String(100), nullable=True)
+    city: Mapped[str] = mapped_column(String(100), nullable=True)
+    state: Mapped[str] = mapped_column(String(2), default="PR")
+    zip_code: Mapped[str] = mapped_column(String(10), nullable=True)
+    phone: Mapped[str] = mapped_column(String(20), nullable=True)
+    fax: Mapped[str] = mapped_column(String(20), nullable=True)
+    ein: Mapped[str] = mapped_column(String(20), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    claims: Mapped[list["Claim"]] = relationship("Claim", back_populates="provider")
+
+
+# ── Payers ───────────────────────────────────────────────────────────────────
+
+class Payer(Base):
+    __tablename__ = "payers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    payer_id: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
+    payer_type: Mapped[PayerType] = mapped_column(SAEnum(PayerType), default=PayerType.COMMERCIAL)
+    submission_method: Mapped[SubmissionMethod] = mapped_column(SAEnum(SubmissionMethod), default=SubmissionMethod.STEDI)
+    stedi_payer_id: Mapped[str] = mapped_column(String(50), nullable=True)
+    inmediata_payer_id: Mapped[str] = mapped_column(String(50), nullable=True)
+    address_line1: Mapped[str] = mapped_column(String(255), nullable=True)
+    city: Mapped[str] = mapped_column(String(100), nullable=True)
+    state: Mapped[str] = mapped_column(String(2), default="PR")
+    zip_code: Mapped[str] = mapped_column(String(10), nullable=True)
+    phone: Mapped[str] = mapped_column(String(20), nullable=True)
+    fax_number: Mapped[str] = mapped_column(String(20), nullable=True)
+    timely_filing_days: Mapped[int] = mapped_column(Integer, default=90)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    notes: Mapped[str] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    claims: Mapped[list["Claim"]] = relationship("Claim", back_populates="payer")
+    patient_insurances: Mapped[list["PatientInsurance"]] = relationship("PatientInsurance", back_populates="payer")
+
+
+# ── Patients ─────────────────────────────────────────────────────────────────
+
+class Patient(Base):
+    __tablename__ = "patients"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    # External IDs
+    wink_patient_id: Mapped[str] = mapped_column(String(50), nullable=True, index=True)
+    mrn: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=True)
+    # Demographics
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    dob: Mapped[date] = mapped_column(Date, nullable=False)
+    gender: Mapped[Gender] = mapped_column(SAEnum(Gender), default=Gender.U)
+    ssn_last4: Mapped[str] = mapped_column(String(4), nullable=True)
+    # Contact
+    phone: Mapped[str] = mapped_column(String(20), nullable=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=True)
+    address_line1: Mapped[str] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[str] = mapped_column(String(100), nullable=True)
+    city: Mapped[str] = mapped_column(String(100), nullable=True)
+    state: Mapped[str] = mapped_column(String(2), default="PR")
+    zip_code: Mapped[str] = mapped_column(String(10), nullable=True)
+    # Metadata
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    insurances: Mapped[list["PatientInsurance"]] = relationship("PatientInsurance", back_populates="patient")
+    claims: Mapped[list["Claim"]] = relationship("Claim", back_populates="patient")
+
+
+class PatientInsurance(Base):
+    __tablename__ = "patient_insurances"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    patient_id: Mapped[int] = mapped_column(Integer, ForeignKey("patients.id"), nullable=False)
+    payer_id: Mapped[int] = mapped_column(Integer, ForeignKey("payers.id"), nullable=False)
+    member_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    group_number: Mapped[str] = mapped_column(String(50), nullable=True)
+    subscriber_name: Mapped[str] = mapped_column(String(255), nullable=True)
+    subscriber_dob: Mapped[date] = mapped_column(Date, nullable=True)
+    relationship_to_subscriber: Mapped[str] = mapped_column(String(20), default="self")
+    effective_date: Mapped[date] = mapped_column(Date, nullable=True)
+    termination_date: Mapped[date] = mapped_column(Date, nullable=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    patient: Mapped["Patient"] = relationship("Patient", back_populates="insurances")
+    payer: Mapped["Payer"] = relationship("Payer", back_populates="patient_insurances")
+
+
+# ── Claims ───────────────────────────────────────────────────────────────────
+
+class Claim(Base):
+    __tablename__ = "claims"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_number: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
+    # Relationships
+    patient_id: Mapped[int] = mapped_column(Integer, ForeignKey("patients.id"), nullable=False)
+    provider_id: Mapped[int] = mapped_column(Integer, ForeignKey("providers.id"), nullable=False)
+    payer_id: Mapped[int] = mapped_column(Integer, ForeignKey("payers.id"), nullable=False)
+    # Status
+    status: Mapped[ClaimStatus] = mapped_column(SAEnum(ClaimStatus), default=ClaimStatus.DRAFT, index=True)
+    # Dates
+    service_date_from: Mapped[date] = mapped_column(Date, nullable=False)
+    service_date_to: Mapped[date] = mapped_column(Date, nullable=True)
+    date_of_submission: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    # CMS-1500 fields
+    place_of_service: Mapped[str] = mapped_column(String(2), default="11")  # 11=office
+    diagnosis_codes: Mapped[dict] = mapped_column(JSON, default=list)  # ["Z00.00", ...]
+    prior_auth_number: Mapped[str] = mapped_column(String(50), nullable=True)
+    referral_number: Mapped[str] = mapped_column(String(50), nullable=True)
+    # Financial
+    total_billed: Mapped[float] = mapped_column(Float, default=0.0)
+    total_allowed: Mapped[float] = mapped_column(Float, nullable=True)
+    total_paid: Mapped[float] = mapped_column(Float, default=0.0)
+    patient_responsibility: Mapped[float] = mapped_column(Float, default=0.0)
+    adjustment_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    # Clearinghouse tracking
+    stedi_transaction_id: Mapped[str] = mapped_column(String(100), nullable=True)
+    clearinghouse_ref: Mapped[str] = mapped_column(String(100), nullable=True)
+    payer_claim_number: Mapped[str] = mapped_column(String(100), nullable=True)
+    # AI
+    scrub_score: Mapped[float] = mapped_column(Float, nullable=True)
+    scrub_issues: Mapped[dict] = mapped_column(JSON, nullable=True)
+    denial_risk_score: Mapped[float] = mapped_column(Float, nullable=True)
+    # Source
+    source: Mapped[str] = mapped_column(String(50), default="manual")  # manual, wink, csv
+    external_ref: Mapped[str] = mapped_column(String(100), nullable=True)
+    # Notes
+    notes: Mapped[str] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    patient: Mapped["Patient"] = relationship("Patient", back_populates="claims")
+    provider: Mapped["Provider"] = relationship("Provider", back_populates="claims")
+    payer: Mapped["Payer"] = relationship("Payer", back_populates="claims")
+    service_lines: Mapped[list["ServiceLine"]] = relationship("ServiceLine", back_populates="claim", cascade="all, delete-orphan")
+    payments: Mapped[list["Payment"]] = relationship("Payment", back_populates="claim")
+    denials: Mapped[list["Denial"]] = relationship("Denial", back_populates="claim")
+    appeals: Mapped[list["Appeal"]] = relationship("Appeal", back_populates="claim")
+
+
+class ServiceLine(Base):
+    __tablename__ = "service_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(Integer, ForeignKey("claims.id"), nullable=False)
+    line_number: Mapped[int] = mapped_column(Integer, default=1)
+    cpt_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    modifiers: Mapped[dict] = mapped_column(JSON, default=list)  # ["-25", "-LT"]
+    description: Mapped[str] = mapped_column(String(255), nullable=True)
+    service_date: Mapped[date] = mapped_column(Date, nullable=True)
+    place_of_service: Mapped[str] = mapped_column(String(2), default="11")
+    units: Mapped[int] = mapped_column(Integer, default=1)
+    billed_amount: Mapped[float] = mapped_column(Float, nullable=False)
+    allowed_amount: Mapped[float] = mapped_column(Float, nullable=True)
+    paid_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    diagnosis_pointers: Mapped[dict] = mapped_column(JSON, default=list)  # [1, 2]
+
+    claim: Mapped["Claim"] = relationship("Claim", back_populates="service_lines")
+
+
+# ── Payments ─────────────────────────────────────────────────────────────────
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(Integer, ForeignKey("claims.id"), nullable=False)
+    check_number: Mapped[str] = mapped_column(String(50), nullable=True)
+    check_date: Mapped[date] = mapped_column(Date, nullable=True)
+    payment_amount: Mapped[float] = mapped_column(Float, nullable=False)
+    adjustment_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    patient_responsibility: Mapped[float] = mapped_column(Float, default=0.0)
+    payment_method: Mapped[str] = mapped_column(String(20), default="eft")  # check, eft, virtual_card
+    eob_data: Mapped[dict] = mapped_column(JSON, nullable=True)
+    notes: Mapped[str] = mapped_column(Text, nullable=True)
+    posted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    claim: Mapped["Claim"] = relationship("Claim", back_populates="payments")
+
+
+# ── Denials & Appeals ────────────────────────────────────────────────────────
+
+class Denial(Base):
+    __tablename__ = "denials"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(Integer, ForeignKey("claims.id"), nullable=False)
+    denial_code: Mapped[str] = mapped_column(String(20), nullable=False)
+    denial_reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    denial_date: Mapped[date] = mapped_column(Date, nullable=False)
+    carc_code: Mapped[str] = mapped_column(String(10), nullable=True)   # Claim Adjustment Reason Code
+    rarc_code: Mapped[str] = mapped_column(String(10), nullable=True)   # Remittance Advice Remark Code
+    ai_analysis: Mapped[dict] = mapped_column(JSON, nullable=True)
+    is_resolved: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    claim: Mapped["Claim"] = relationship("Claim", back_populates="denials")
+    appeals: Mapped[list["Appeal"]] = relationship("Appeal", back_populates="denial")
+
+
+class Appeal(Base):
+    __tablename__ = "appeals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(Integer, ForeignKey("claims.id"), nullable=False)
+    denial_id: Mapped[int] = mapped_column(Integer, ForeignKey("denials.id"), nullable=True)
+    appeal_date: Mapped[date] = mapped_column(Date, nullable=False)
+    deadline: Mapped[date] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="pending")
+    appeal_letter: Mapped[str] = mapped_column(Text, nullable=True)
+    ai_drafted: Mapped[bool] = mapped_column(Boolean, default=False)
+    supporting_docs: Mapped[dict] = mapped_column(JSON, default=list)
+    outcome: Mapped[str] = mapped_column(String(50), nullable=True)
+    outcome_date: Mapped[date] = mapped_column(Date, nullable=True)
+    notes: Mapped[str] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    claim: Mapped["Claim"] = relationship("Claim", back_populates="appeals")
+    denial: Mapped["Denial"] = relationship("Denial", back_populates="appeals")
