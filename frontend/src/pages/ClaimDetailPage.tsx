@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft, Send, Trash2, Sparkles, ShieldCheck,
-  ChevronDown, ChevronUp, AlertTriangle
+  ChevronDown, ChevronUp, AlertTriangle, RefreshCw, Check, X
 } from 'lucide-react';
 import api from '../lib/api';
 import { formatDateShort } from '../lib/dates';
@@ -19,6 +19,14 @@ export default function ClaimDetailPage() {
   const [showLines, setShowLines] = useState(true);
   const [scrubResult, setScrubResult] = useState<{ score: number; issues: any[]; suggestions: string[] } | null>(null);
   const [scrubbing, setScrubbing] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [stediStatus, setStediStatus] = useState<Record<string, unknown> | null>(null);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+
+  const showToast = (msg: string, ok = true) => {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   const { data: claim, isLoading } = useQuery<Claim>({
     queryKey: ['claim', id],
@@ -39,8 +47,30 @@ export default function ClaimDetailPage() {
 
   const submitMutation = useMutation({
     mutationFn: () => api.post(`/stedi/submit/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['claim', id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['claim', id] });
+      showToast(t('stedi.submit_success'));
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail ?? t('common.error');
+      showToast(detail, false);
+    },
   });
+
+  const handleCheckStatus = async () => {
+    setCheckingStatus(true);
+    try {
+      const { data } = await api.get(`/stedi/status/${id}`);
+      setStediStatus(data);
+      qc.invalidateQueries({ queryKey: ['claim', id] });
+      showToast(t('stedi.status_refreshed'));
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail ?? t('common.error');
+      showToast(detail, false);
+    } finally {
+      setCheckingStatus(false);
+    }
+  };
 
   const voidMutation = useMutation({
     mutationFn: () => api.post(`/claims/${id}/void`),
@@ -71,6 +101,15 @@ export default function ClaimDetailPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium text-white transition-all ${
+          toast.ok ? 'bg-emerald-500' : 'bg-red-500'
+        }`}>
+          {toast.ok ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+          {toast.msg}
+        </div>
+      )}
       {/* Back */}
       <Link to="/claims" className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4">
         <ArrowLeft className="w-4 h-4" /> {t('claims.title')}
@@ -101,12 +140,26 @@ export default function ClaimDetailPage() {
               <button
                 onClick={() => submitMutation.mutate()}
                 disabled={submitMutation.isPending}
-                className="flex items-center gap-1.5 px-3 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm rounded-lg"
+                className="flex items-center gap-1.5 px-3 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm rounded-lg disabled:opacity-60"
               >
-                <Send className="w-4 h-4" />
-                {t('claims.submit')}
+                {submitMutation.isPending
+                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <Send className="w-4 h-4" />}
+                {submitMutation.isPending ? t('stedi.submitting') : t('stedi.submit_stedi')}
               </button>
             </>
+          )}
+          {(claim.status === 'submitted' || claim.status === 'accepted' || claim.status === 'rejected') && (
+            <button
+              onClick={handleCheckStatus}
+              disabled={checkingStatus}
+              className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-sm rounded-lg hover:bg-slate-50 text-slate-700 disabled:opacity-60"
+            >
+              {checkingStatus
+                ? <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                : <RefreshCw className="w-4 h-4" />}
+              {t('stedi.check_status')}
+            </button>
           )}
           {claim.status !== 'void' && (
             <button
@@ -240,6 +293,37 @@ export default function ClaimDetailPage() {
           ))}
         </div>
       </div>
+
+      {/* Stedi Transaction Info */}
+      {claim.stedi_transaction_id && (
+        <div className="bg-sky-50 rounded-xl border border-sky-200 p-4 mb-4">
+          <h2 className="text-sm font-semibold text-sky-700 mb-2">{t('stedi.transaction_info')}</h2>
+          <div className="text-sm text-sky-800 space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sky-500">{t('stedi.transaction_id')}:</span>
+              <span className="font-mono font-medium">{claim.stedi_transaction_id}</span>
+            </div>
+            {claim.payer_claim_number && (
+              <div className="flex items-center gap-2">
+                <span className="text-sky-500">{t('stedi.payer_claim_number')}:</span>
+                <span className="font-mono">{claim.payer_claim_number}</span>
+              </div>
+            )}
+            {claim.date_of_submission && (
+              <div className="flex items-center gap-2">
+                <span className="text-sky-500">{t('stedi.submitted_on')}:</span>
+                <span>{formatDateShort(claim.date_of_submission)}</span>
+              </div>
+            )}
+          </div>
+          {stediStatus && (
+            <div className="mt-3 pt-3 border-t border-sky-200">
+              <p className="text-xs font-medium text-sky-600 mb-1">{t('stedi.raw_status')}</p>
+              <pre className="text-xs text-sky-800 overflow-x-auto">{JSON.stringify(stediStatus, null, 2)}</pre>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Denials */}
       {denials && denials.length > 0 && (

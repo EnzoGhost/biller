@@ -13,6 +13,8 @@ const NewClaimPage     = lazy(() => import('./pages/NewClaimPage'));
 const DenialsPage      = lazy(() => import('./pages/DenialsPage'));
 const EligibilityPage  = lazy(() => import('./pages/EligibilityPage'));
 const PayersPage       = lazy(() => import('./pages/PayersPage'));
+const ProvidersPage    = lazy(() => import('./pages/ProvidersPage'));
+const PatientsPage     = lazy(() => import('./pages/PatientsPage'));
 const ImportPage       = lazy(() => import('./pages/ImportPage'));
 const SettingsPage     = lazy(() => import('./pages/SettingsPage'));
 
@@ -59,6 +61,8 @@ export default function App() {
               <Route path="denials" element={<DenialsPage />} />
               <Route path="eligibility" element={<EligibilityPage />} />
               <Route path="payers" element={<PayersPage />} />
+              <Route path="providers" element={<ProvidersPage />} />
+              <Route path="patients" element={<PatientsPage />} />
               <Route path="import" element={<ImportPage />} />
               <Route path="settings" element={<SettingsPage />} />
               {/* fallback */}

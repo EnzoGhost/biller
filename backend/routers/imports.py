@@ -25,6 +25,19 @@ router = APIRouter(prefix="/import", tags=["import"])
 
 # ── Wink Integration ──────────────────────────────────────────────────────────
 
+def _wink_conn():
+    """Open a read-only connection to the Wink (iris) SQLite database."""
+    if not settings.WINK_DB_PATH:
+        raise HTTPException(400, "WINK_DB_PATH no configurado. Configure la ruta a la base de datos de Wink.")
+    try:
+        conn = sqlite3.connect(f"file:{settings.WINK_DB_PATH}?mode=ro", uri=True)
+    except sqlite3.OperationalError:
+        # Fall back to normal (not URI-mode) if path has no read-only flag support
+        conn = sqlite3.connect(settings.WINK_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 @router.post("/wink", response_model=ImportResult)
 async def import_from_wink(
     provider_id: int,
@@ -33,37 +46,59 @@ async def import_from_wink(
     _: User = Depends(get_current_user),
 ):
     """
-    Pull patients and encounters from Wink's SQLite database.
-    Creates patients and DRAFT claims in Biller.
+    Pull patients from Wink's iris.db SQLite database.
+    Maps Wink patient schema to Biller patients, skips duplicates by wink_patient_id.
+    Also imports patient insurance data when available.
     """
-    if not settings.WINK_DB_PATH:
-        raise HTTPException(400, "WINK_DB_PATH no configurado. Configure la ruta a la base de datos de Wink.")
-
     imported = 0
     skipped = 0
     errors = []
-    claim_ids = []
+    claim_ids: list[int] = []
 
     try:
-        conn = sqlite3.connect(settings.WINK_DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = _wink_conn()
         cursor = conn.cursor()
 
-        # Try to fetch patients from Wink
+        # iris.db patients schema:
+        # id, first_name, last_name, date_of_birth, gender (male/female/other),
+        # phone, mobile, email, address, city, state, zip, record_number,
+        # insurance_provider, insurance_id, insurance_group, active
         try:
             cursor.execute("""
-                SELECT p.id, p.first_name, p.last_name, p.dob, p.gender,
-                       p.phone, p.email, p.address, p.city, p.zip_code
+                SELECT p.id,
+                       p.first_name, p.last_name,
+                       p.date_of_birth, p.gender,
+                       p.phone, p.mobile, p.email,
+                       p.address, p.city, p.state, p.zip,
+                       p.record_number,
+                       p.insurance_provider, p.insurance_id, p.insurance_group
                 FROM patients p
-                WHERE p.is_active = 1
+                WHERE p.active = 1
                 LIMIT 500
             """)
             wink_patients = cursor.fetchall()
         except sqlite3.OperationalError as e:
-            raise HTTPException(500, f"Error leyendo Wink DB: {e}")
+            raise HTTPException(500, f"Error leyendo tabla patients de Wink DB: {e}")
+
+        # Pre-load existing patient insurance enrollments from patient_insurance table
+        try:
+            cursor.execute("""
+                SELECT pi.patient_id, ip.name AS plan_name, pi.member_id, pi.is_primary
+                FROM patient_insurance pi
+                JOIN insurance_plans ip ON ip.id = pi.insurance_plan_id
+                WHERE pi.is_primary = 1
+            """)
+            wink_ins_rows = cursor.fetchall()
+            wink_insurance_map: dict[int, sqlite3.Row] = {}
+            for row in wink_ins_rows:
+                pid = row["patient_id"]
+                if pid not in wink_insurance_map:
+                    wink_insurance_map[pid] = row
+        except sqlite3.OperationalError:
+            wink_insurance_map = {}
 
         for wp in wink_patients:
-            # Check if patient already imported
+            # Skip if already imported
             existing = await db.execute(
                 select(Patient).where(Patient.wink_patient_id == str(wp["id"]))
             )
@@ -72,32 +107,46 @@ async def import_from_wink(
                 continue
 
             try:
-                dob = date.fromisoformat(wp["dob"]) if wp["dob"] else date(1970, 1, 1)
-                gender_map = {"M": Gender.M, "F": Gender.F}
-                gender = gender_map.get((wp["gender"] or "").upper(), Gender.U)
+                raw_dob = wp["date_of_birth"]
+                if raw_dob:
+                    try:
+                        dob = date.fromisoformat(raw_dob[:10])
+                    except ValueError:
+                        dob = date(1970, 1, 1)
+                else:
+                    dob = date(1970, 1, 1)
+
+                gender_str = (wp["gender"] or "").lower()
+                gender = Gender.M if gender_str == "male" else (Gender.F if gender_str == "female" else Gender.U)
 
                 patient = Patient(
                     wink_patient_id=str(wp["id"]),
+                    mrn=wp["record_number"],
                     first_name=wp["first_name"] or "",
                     last_name=wp["last_name"] or "",
                     dob=dob,
                     gender=gender,
-                    phone=wp["phone"],
+                    phone=wp["phone"] or wp["mobile"],
                     email=wp["email"],
                     address_line1=wp["address"],
                     city=wp["city"] or "San Juan",
-                    state="PR",
-                    zip_code=wp["zip_code"],
+                    state=wp["state"] or "PR",
+                    zip_code=wp["zip"],
                 )
                 db.add(patient)
                 await db.flush()
 
-                # Add default insurance if payer specified
+                # Insurance: prefer payer from patient_insurance join, fall back to inline fields
                 if default_payer_id:
+                    wink_ins = wink_insurance_map.get(wp["id"])
+                    member_id = (wink_ins["member_id"] if wink_ins and wink_ins["member_id"] else None) \
+                                or wp["insurance_id"] \
+                                or f"WINK-{wp['id']}"
                     ins = PatientInsurance(
                         patient_id=patient.id,
                         payer_id=default_payer_id,
-                        member_id=f"WINK-{wp['id']}",
+                        member_id=member_id,
+                        group_number=wp["insurance_group"],
                         is_primary=True,
                     )
                     db.add(ins)
@@ -114,6 +163,159 @@ async def import_from_wink(
         raise
     except Exception as e:
         raise HTTPException(500, f"Error de importación: {e}")
+
+    return ImportResult(imported=imported, skipped=skipped, errors=errors, claims_created=claim_ids)
+
+
+@router.post("/wink/encounters", response_model=ImportResult)
+async def import_wink_encounters(
+    provider_id: int,
+    payer_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """
+    Import completed/signed exam encounters from Wink (iris.db) as DRAFT claims.
+    Skips encounters already imported (tracked via Claim.external_ref = 'enc_{id}').
+    Maps diagnosis_a-d to ICD-10 codes and procedures_cpt to CPT service lines.
+    """
+    import json as _json
+    import random, string
+    from datetime import datetime
+
+    imported = 0
+    skipped = 0
+    errors = []
+    claim_ids: list[int] = []
+
+    try:
+        conn = _wink_conn()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("""
+                SELECT ee.id, ee.patient_id, ee.encounter_date, ee.status,
+                       ee.diagnosis_a, ee.diagnosis_b, ee.diagnosis_c, ee.diagnosis_d,
+                       ee.procedures_cpt, ee.assessment, ee.plan
+                FROM exam_encounters ee
+                WHERE ee.status IN ('completed', 'signed')
+                ORDER BY ee.encounter_date DESC
+                LIMIT 500
+            """)
+            encounters = cursor.fetchall()
+        except sqlite3.OperationalError as e:
+            raise HTTPException(500, f"Error leyendo exam_encounters de Wink DB: {e}")
+
+        conn.close()
+
+        for enc in encounters:
+            enc_ref = f"enc_{enc['id']}"
+
+            # Skip if already imported
+            existing = await db.execute(
+                select(Claim).where(
+                    Claim.source == "wink",
+                    Claim.external_ref == enc_ref,
+                )
+            )
+            if existing.scalar_one_or_none():
+                skipped += 1
+                continue
+
+            # Find matching biller patient by wink_patient_id
+            patient_result = await db.execute(
+                select(Patient).where(Patient.wink_patient_id == str(enc["patient_id"]))
+            )
+            patient = patient_result.scalar_one_or_none()
+            if not patient:
+                errors.append(f"Encuentro {enc['id']}: paciente Wink {enc['patient_id']} no importado aún")
+                skipped += 1
+                continue
+
+            try:
+                # Service date
+                raw_date = enc["encounter_date"]
+                try:
+                    svc_date = date.fromisoformat(raw_date[:10]) if raw_date else date.today()
+                except ValueError:
+                    svc_date = date.today()
+
+                # Diagnosis codes (ICD-10)
+                dx_codes = [
+                    c for c in [
+                        enc["diagnosis_a"], enc["diagnosis_b"],
+                        enc["diagnosis_c"], enc["diagnosis_d"],
+                    ] if c
+                ]
+
+                # CPT procedures — stored as JSON array string or plain text
+                cpt_list: list[dict] = []
+                raw_cpt = enc["procedures_cpt"]
+                if raw_cpt:
+                    try:
+                        parsed = _json.loads(raw_cpt)
+                        if isinstance(parsed, list):
+                            cpt_list = parsed
+                    except (_json.JSONDecodeError, TypeError):
+                        # Plain comma-separated CPT codes
+                        for code in raw_cpt.split(","):
+                            code = code.strip()
+                            if code:
+                                cpt_list.append({"code": code, "units": 1, "amount": 0.0})
+
+                # Default to a comprehensive eye exam if no CPT codes present
+                if not cpt_list:
+                    cpt_list = [{"code": "92014", "units": 1, "amount": 0.0}]
+
+                total_billed = sum(float(c.get("amount", 0) or 0) for c in cpt_list)
+
+                ts = datetime.utcnow().strftime("%Y%m%d")
+                suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+                claim = Claim(
+                    claim_number=f"CLM-{ts}-{suffix}",
+                    patient_id=patient.id,
+                    provider_id=provider_id,
+                    payer_id=payer_id,
+                    service_date_from=svc_date,
+                    service_date_to=svc_date,
+                    diagnosis_codes=dx_codes,
+                    total_billed=total_billed,
+                    status=ClaimStatus.DRAFT,
+                    source="wink",
+                    external_ref=enc_ref,
+                    place_of_service="11",
+                )
+                db.add(claim)
+                await db.flush()
+
+                for i, cpt_item in enumerate(cpt_list, start=1):
+                    code = cpt_item.get("code") or "92014"
+                    units = int(cpt_item.get("units") or 1)
+                    amount = float(cpt_item.get("amount") or 0.0)
+                    sl = ServiceLine(
+                        claim_id=claim.id,
+                        line_number=i,
+                        cpt_code=code,
+                        service_date=svc_date,
+                        units=units,
+                        billed_amount=amount,
+                        diagnosis_pointers=[1] if dx_codes else [],
+                    )
+                    db.add(sl)
+
+                claim_ids.append(claim.id)
+                imported += 1
+            except Exception as e:
+                errors.append(f"Encuentro {enc['id']}: {e}")
+                skipped += 1
+
+        await db.commit()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Error importando encuentros: {e}")
 
     return ImportResult(imported=imported, skipped=skipped, errors=errors, claims_created=claim_ids)
 
