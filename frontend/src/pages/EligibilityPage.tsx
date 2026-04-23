@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle, XCircle, Search, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Search, AlertCircle, Globe } from 'lucide-react';
 import api from '../lib/api';
 import { formatDate } from '../lib/dates';
 import DatePicker from '../components/ui/DatePicker';
@@ -21,6 +21,18 @@ interface EligibilityResult {
   raw_response?: Record<string, unknown>;
 }
 
+interface StediPayer {
+  stediId: string;
+  displayName: string;
+  primaryPayerId: string;
+  operatingStates?: string[];
+  transactionSupport?: {
+    eligibilityCheck?: string;
+    claimSubmission?: string;
+  };
+  coverageTypes?: string[];
+}
+
 const fmt = (n?: number) =>
   n != null
     ? new Intl.NumberFormat('es-PR', { style: 'currency', currency: 'USD' }).format(n)
@@ -37,10 +49,19 @@ export default function EligibilityPage() {
   const [result, setResult] = useState<EligibilityResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPrPayers, setShowPrPayers] = useState(false);
+  const [selectedStediPayer, setSelectedStediPayer] = useState<StediPayer | null>(null);
 
   const { data: payers } = useQuery<{ items: Payer[] }>({
     queryKey: ['payers-all'],
     queryFn: () => api.get('/payers?per_page=200').then(r => r.data),
+  });
+
+  const { data: prPayers, isLoading: loadingPrPayers } = useQuery<{ items: StediPayer[]; total: number }>({
+    queryKey: ['stedi-payers-pr'],
+    queryFn: () => api.get('/stedi/payers/pr').then(r => r.data),
+    enabled: showPrPayers,
+    staleTime: 5 * 60 * 1000, // 5 min cache
   });
 
   const handleCheck = async () => {
@@ -65,12 +86,86 @@ export default function EligibilityPage() {
     }
   };
 
+  const eligibilityBadge = (status?: string) => {
+    if (status === 'SUPPORTED') return <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">✓ Elegibilidad</span>;
+    if (status === 'ENROLLMENT_REQUIRED') return <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Requiere Enrollment</span>;
+    return <span className="text-xs text-slate-400">Sin soporte</span>;
+  };
+
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <h1 className="text-xl font-bold text-slate-900 mb-6">{t('eligibility.title')}</h1>
 
+      {/* PR Payer Directory Panel */}
+      <div className="mb-6">
+        <button
+          onClick={() => setShowPrPayers(v => !v)}
+          className="flex items-center gap-2 text-sm font-medium text-sky-600 hover:text-sky-700 transition-colors"
+        >
+          <Globe className="w-4 h-4" />
+          {showPrPayers ? 'Ocultar directorio de pagadores PR' : 'Ver pagadores de Puerto Rico (Stedi)'}
+        </button>
+
+        {showPrPayers && (
+          <div className="mt-3 bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <div className="px-4 py-3 bg-sky-50 border-b border-slate-200">
+              <p className="text-sm font-semibold text-sky-800">
+                Pagadores de Puerto Rico — Directorio Stedi
+              </p>
+              {prPayers && (
+                <p className="text-xs text-sky-600 mt-0.5">{prPayers.total} pagadores encontrados</p>
+              )}
+            </div>
+            {loadingPrPayers ? (
+              <div className="p-6 text-center text-sm text-slate-400">Cargando directorio…</div>
+            ) : (
+              <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+                {prPayers?.items.map(p => (
+                  <div
+                    key={p.stediId}
+                    className={`flex items-center justify-between px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors ${selectedStediPayer?.stediId === p.stediId ? 'bg-sky-50' : ''}`}
+                    onClick={() => setSelectedStediPayer(prev => prev?.stediId === p.stediId ? null : p)}
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">{p.displayName}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        ID: {p.primaryPayerId}
+                        {p.operatingStates?.includes('PR') && (
+                          <span className="ml-2 text-sky-500 font-semibold">🇵🇷 PR</span>
+                        )}
+                        {p.coverageTypes && p.coverageTypes.length > 0 && (
+                          <span className="ml-2 text-slate-300">· {p.coverageTypes.join(', ')}</span>
+                        )}
+                      </p>
+                    </div>
+                    {eligibilityBadge(p.transactionSupport?.eligibilityCheck)}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Form */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6 space-y-4">
+        {selectedStediPayer && (
+          <div className="flex items-center gap-3 bg-sky-50 border border-sky-100 rounded-lg px-4 py-3">
+            <Globe className="w-4 h-4 text-sky-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-sky-700 uppercase tracking-wide">Stedi Payer Seleccionado</p>
+              <p className="text-sm font-medium text-sky-900 truncate">{selectedStediPayer.displayName}</p>
+              <p className="text-xs text-sky-500">Stedi ID: {selectedStediPayer.stediId} · Payer ID: {selectedStediPayer.primaryPayerId}</p>
+            </div>
+            <button
+              onClick={() => setSelectedStediPayer(null)}
+              className="text-xs text-sky-400 hover:text-sky-600"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">

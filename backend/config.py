@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "sqlite+aiosqlite:///./biller.db"
 
-    STEDI_API_KEY: str = ""
+    STEDI_API_KEY: str = "test_7ONIdmf.E4zgLsNHAdLr3CN3poSOZWLt"
     STEDI_ISA_SENDER_ID: str = ""
     STEDI_ISA_SENDER_QUALIFIER: str = "ZZ"
 

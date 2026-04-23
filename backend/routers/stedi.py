@@ -20,11 +20,125 @@ router = APIRouter(prefix="/stedi", tags=["stedi"])
 STEDI_BASE = "https://healthcare.us.stedi.com/2024-04-01"
 
 
-def stedi_headers():
+STEDI_PAYERS_BASE = "https://healthcare.us.stedi.com/2024-04-01"
+
+# Known PR payer stediIds for filtering (populated from API discovery)
+PR_PAYER_STEDI_IDS = {
+    "VMJBW",  # Triple-S Salud (Commercial and Medicaid)
+    "FMGTK",  # Triple-S Salud (Medicare Advantage)
+    "OLFKO",  # MCS
+    "FMKIY",  # First Medical Health Plan
+    "HMWME",  # First Medical Puerto Rico Government Health Plan (VITAL)
+    "GZMSV",  # Humana Puerto Rico
+    "KXVQE",  # Medicare Puerto Rico Part B
+    "WGJSF",  # Medicare Puerto Rico Part A
+    "QBHCS",  # FHC of Puerto Rico
+    "WSXQY",  # Envolve Vision of Puerto Rico
+    "OKALU",  # APS Healthcare Puerto Rico Inc
+    "TQMVS",  # Delta Dental of Puerto Rico
+    "BHGVK",  # Asociacion de Maestros Puerto Rico
+    "EYDBY",  # Therapy Network of Puerto Rico
+    "DCURP",  # MMM
+    "BSURE",  # MMM Healthcare
+    "QPDZX",  # MMM Multi Health
+}
+
+
+def stedi_headers() -> dict:
     return {
         "Authorization": f"Key {settings.STEDI_API_KEY}",
         "Content-Type": "application/json",
     }
+
+
+# ── Payer Directory ───────────────────────────────────────────────────────────
+
+@router.get("/payers")
+async def list_stedi_payers(
+    query: str = "",
+    eligibility_only: bool = False,
+    _: User = Depends(get_current_user),
+):
+    """
+    Fetch payer list from Stedi. Optionally filter by name query or
+    eligibility support. Proxies Stedi's payer directory.
+    """
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        if query:
+            resp = await client.get(
+                f"{STEDI_PAYERS_BASE}/payers/search",
+                headers=stedi_headers(),
+                params={"query": query, "pageSize": 50},
+            )
+        else:
+            resp = await client.get(
+                f"{STEDI_PAYERS_BASE}/payers",
+                headers=stedi_headers(),
+                params={"pageSize": 100},
+            )
+
+    if resp.status_code != 200:
+        raise HTTPException(502, f"Error de Stedi: {resp.text}")
+
+    raw = resp.json()
+    # Search endpoint wraps each result in {"payer": {...}}, list endpoint does not
+    items = raw.get("items", [])
+    payers = [item.get("payer", item) for item in items]
+
+    if eligibility_only:
+        payers = [
+            p for p in payers
+            if p.get("transactionSupport", {}).get("eligibilityCheck") == "SUPPORTED"
+        ]
+
+    return {"items": payers, "total": len(payers)}
+
+
+@router.get("/payers/pr")
+async def list_pr_payers(
+    _: User = Depends(get_current_user),
+):
+    """
+    Returns Puerto Rico payers available in Stedi's network.
+    Combines operatingStates=PR filter with known PR-specific payer IDs.
+    """
+    pr_payers = []
+    seen_ids: set = set()
+
+    # Search terms that surface PR payers
+    pr_queries = ["Triple-S", "MCS Puerto Rico", "First Medical", "MMM", "Humana Puerto Rico", "Puerto Rico"]
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for q in pr_queries:
+            try:
+                resp = await client.get(
+                    f"{STEDI_PAYERS_BASE}/payers/search",
+                    headers=stedi_headers(),
+                    params={"query": q, "pageSize": 25},
+                )
+                if resp.status_code != 200:
+                    continue
+                items = resp.json().get("items", [])
+                for item in items:
+                    p = item.get("payer", item)
+                    stedi_id = p.get("stediId")
+                    if not stedi_id or stedi_id in seen_ids:
+                        continue
+                    states = p.get("operatingStates", [])
+                    # Include if operating in PR or in our known PR payer set
+                    if "PR" in states or stedi_id in PR_PAYER_STEDI_IDS:
+                        seen_ids.add(stedi_id)
+                        pr_payers.append(p)
+            except Exception:
+                continue
+
+    # Sort: eligibility-supported first, then by name
+    def sort_key(p):
+        elig = p.get("transactionSupport", {}).get("eligibilityCheck", "")
+        return (0 if elig == "SUPPORTED" else 1, p.get("displayName", ""))
+
+    pr_payers.sort(key=sort_key)
+    return {"items": pr_payers, "total": len(pr_payers)}
 
 
 # ── Eligibility ───────────────────────────────────────────────────────────────
@@ -37,13 +151,27 @@ async def check_eligibility(
 ):
     """
     Real-time eligibility check via Stedi 270/271.
-    Returns coverage info for the patient/payer combination.
+    Looks up the payer in the DB to get the Stedi trading partner ID,
+    then calls Stedi's eligibility API.
     """
+    # Resolve the trading partner ID from the DB payer
+    from models import Payer as PayerModel
+    payer_result = await db.execute(select(PayerModel).where(PayerModel.id == body.payer_id))
+    db_payer = payer_result.scalar_one_or_none()
+
+    # Use stedi_payer_id if set, otherwise fall back to payer_id string
+    trading_partner_id = (
+        (db_payer.stedi_payer_id or db_payer.payer_id)
+        if db_payer
+        else str(body.payer_id)
+    )
+    payer_display_name = db_payer.name if db_payer else ""
+
     if not settings.STEDI_API_KEY:
         # Return mock response in dev mode
         return EligibilityResponse(
             is_eligible=True,
-            payer_name="Triple-S Salud (DEMO)",
+            payer_name=payer_display_name or "Triple-S Salud (DEMO)",
             member_id=body.member_id,
             coverage_start=body.service_date,
             coverage_end=None,
@@ -55,9 +183,12 @@ async def check_eligibility(
             raw_response={"demo": True},
         )
 
+    import uuid
+    control_number = str(uuid.uuid4().int)[:9].zfill(9)
+
     payload = {
-        "controlNumber": "123456789",
-        "tradingPartnerServiceId": body.payer_id,
+        "controlNumber": control_number,
+        "tradingPartnerServiceId": trading_partner_id,
         "provider": {
             "organizationName": "Biller Clinic",
             "npi": "1234567890",
@@ -75,30 +206,70 @@ async def check_eligibility(
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
-            f"{STEDI_BASE}/eligibility",
+            f"{STEDI_BASE}/change-healthcare/eligibility/v2",
             headers=stedi_headers(),
             json=payload,
         )
-        if resp.status_code != 200:
-            raise HTTPException(502, f"Error de Stedi: {resp.text}")
-        data = resp.json()
 
-    # Parse 271 response
+    if resp.status_code not in (200, 201):
+        # Stedi returns structured error objects — surface them helpfully
+        try:
+            err = resp.json()
+            detail = err.get("message") or err.get("error") or resp.text
+        except Exception:
+            detail = resp.text
+        raise HTTPException(502, f"Error de Stedi: {detail}")
+
+    data = resp.json()
+
+    # Parse 271 response — benefitsInformation has typed benefit entries
     benefits = data.get("benefitsInformation", [])
-    copay = next((b.get("benefitAmount") for b in benefits if b.get("code") == "B"), None)
-    deductible = next((b.get("benefitAmount") for b in benefits if b.get("code") == "C"), None)
+
+    def find_benefit_amount(code: str) -> float | None:
+        """Find benefit amount by service type code."""
+        for b in benefits:
+            if b.get("code") == code:
+                amt = b.get("benefitAmount")
+                if amt is not None:
+                    try:
+                        return float(amt)
+                    except (ValueError, TypeError):
+                        pass
+        return None
+
+    # Plan status codes: 1=Active, 6=Inactive
+    plan_statuses = data.get("planStatus", [])
+    is_active = any(s.get("statusCode") == "1" for s in plan_statuses) if plan_statuses else False
+
+    # Coverage dates from planStatus
+    coverage_start = None
+    coverage_end = None
+    for ps in plan_statuses:
+        dates = ps.get("planDetails", {})
+        if dates.get("policyEffectiveDate"):
+            try:
+                from datetime import datetime
+                coverage_start = datetime.strptime(dates["policyEffectiveDate"], "%Y%m%d").date()
+            except (ValueError, KeyError):
+                pass
+        if dates.get("policyExpirationDate"):
+            try:
+                from datetime import datetime
+                coverage_end = datetime.strptime(dates["policyExpirationDate"], "%Y%m%d").date()
+            except (ValueError, KeyError):
+                pass
 
     return EligibilityResponse(
-        is_eligible=data.get("planStatus", [{}])[0].get("statusCode") == "1",
-        payer_name=data.get("payer", {}).get("name", ""),
+        is_eligible=is_active,
+        payer_name=data.get("payer", {}).get("name", "") or payer_display_name,
         member_id=body.member_id,
-        coverage_start=None,
-        coverage_end=None,
-        copay=float(copay) if copay else None,
-        deductible=float(deductible) if deductible else None,
-        deductible_met=None,
-        out_of_pocket_max=None,
-        out_of_pocket_met=None,
+        coverage_start=coverage_start,
+        coverage_end=coverage_end,
+        copay=find_benefit_amount("B"),        # B = Co-Payment
+        deductible=find_benefit_amount("C"),   # C = Deductible
+        deductible_met=find_benefit_amount("CB"),
+        out_of_pocket_max=find_benefit_amount("G"),  # G = Out of Pocket (Stop Loss)
+        out_of_pocket_met=find_benefit_amount("GB"),
         raw_response=data,
     )
 
