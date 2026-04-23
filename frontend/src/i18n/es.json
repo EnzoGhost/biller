@@ -162,9 +162,12 @@
   },
   "import": {
     "title": "Importar Datos",
-    "wink": "Importar desde Wink",
-    "wink_desc": "Sincroniza reclamaciones directamente desde Wink EHR vía API.",
+    "wink": "Integración con Wink",
+    "wink_desc": "Sincroniza pacientes e importa encuentros completados como reclamaciones borrador desde Wink EHR.",
     "sync": "Sincronizar",
+    "sync_patients": "Sincronizar Pacientes de Wink",
+    "import_encounters": "Importar Encuentros como Reclamaciones",
+    "claims_created": "{{count}} reclamación(es) creada(s)",
     "csv": "Importar Superbill CSV",
     "download_template": "Descargar Plantilla",
     "template_desc": "Descarga la plantilla CSV de superbill con todos los campos requeridos.",
@@ -179,7 +182,8 @@
     "errors": "Errores",
     "errors_label": "Errores:",
     "error_importing": "Error al importar",
-    "error_wink": "Error al sincronizar con Wink"
+    "error_wink": "Error al sincronizar pacientes con Wink",
+    "error_encounters": "Error al importar encuentros de Wink"
   },
   "providers": {
     "new": "Nuevo Proveedor",
