@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from database import get_db
 from models import Denial, Appeal, Claim, ClaimStatus
@@ -11,7 +12,57 @@ from models import User
 router = APIRouter(tags=["denials & appeals"])
 
 
-# ── Denials ───────────────────────────────────────────────────────────────────
+# ── Global Denials List ───────────────────────────────────────────────────────
+
+@router.get("/denials", response_model=dict)
+async def list_all_denials(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    is_resolved: Optional[bool] = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    q = select(Denial)
+    if is_resolved is not None:
+        q = q.where(Denial.is_resolved == is_resolved)
+
+    count_q = select(func.count()).select_from(Denial)
+    if is_resolved is not None:
+        count_q = count_q.where(Denial.is_resolved == is_resolved)
+    total = (await db.execute(count_q)).scalar_one()
+
+    q = q.order_by(Denial.created_at.desc()).offset((page - 1) * per_page).limit(per_page)
+    result = await db.execute(q)
+    items = [DenialOut.model_validate(d) for d in result.scalars().all()]
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": max(1, (total + per_page - 1) // per_page),
+    }
+
+
+@router.patch("/denials/{denial_id}", response_model=DenialOut)
+async def update_denial(
+    denial_id: int,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Denial).where(Denial.id == denial_id))
+    denial = result.scalar_one_or_none()
+    if not denial:
+        raise HTTPException(404, "Denegación no encontrada")
+    for field, value in body.items():
+        if hasattr(denial, field):
+            setattr(denial, field, value)
+    await db.commit()
+    await db.refresh(denial)
+    return DenialOut.model_validate(denial)
+
+
+# ── Per-Claim Denials ─────────────────────────────────────────────────────────
 
 @router.get("/claims/{claim_id}/denials", response_model=list[DenialOut])
 async def list_denials(

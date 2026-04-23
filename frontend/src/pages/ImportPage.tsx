@@ -39,7 +39,7 @@ export default function ImportPage() {
     try {
       const form = new FormData();
       form.append('file', file);
-      const { data } = await api.post<ImportResult>('/imports/superbill', form, {
+      const { data } = await api.post<ImportResult>('/import/superbill', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setResult(data);
@@ -85,7 +85,7 @@ export default function ImportPage() {
             Sincroniza reclamaciones directamente desde Wink EHR vía API.
           </p>
           <button
-            onClick={() => api.post('/imports/wink').catch(() => setError('Error al sincronizar con Wink'))}
+            onClick={() => api.post('/import/wink').catch(() => setError('Error al sincronizar con Wink'))}
             className="w-full bg-sky-500 hover:bg-sky-600 text-white text-xs font-medium py-2 rounded-lg transition-colors"
           >
             Sincronizar

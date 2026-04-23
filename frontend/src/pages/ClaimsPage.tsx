@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../lib/api';
+import { formatDateShort } from '../lib/dates';
 import type { Claim, ClaimStatus, PaginatedResponse } from '../types';
 import StatusBadge from '../components/ui/Badge';
 
@@ -96,7 +97,7 @@ export default function ClaimsPage() {
                     {claim.patient ? `${claim.patient.last_name}, ${claim.patient.first_name}` : `#${claim.patient_id}`}
                   </td>
                   <td className="px-4 py-3 text-slate-600">{claim.payer?.name ?? `#${claim.payer_id}`}</td>
-                  <td className="px-4 py-3 text-slate-600">{claim.service_date_from}</td>
+                  <td className="px-4 py-3 text-slate-600">{formatDateShort(claim.service_date_from)}</td>
                   <td className="px-4 py-3 text-right font-medium text-slate-900">{fmt(claim.total_billed)}</td>
                   <td className="px-4 py-3 text-right font-medium text-emerald-700">{fmt(claim.total_paid)}</td>
                   <td className="px-4 py-3">

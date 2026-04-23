@@ -247,7 +247,7 @@ export default function ClaimDetailPage() {
           {denials.map(d => (
             <div key={d.id} className="text-sm text-rose-800">
               <span className="font-mono font-medium">{d.denial_code}</span> — {d.denial_reason}
-              <span className="text-xs text-rose-500 ml-2">({d.denial_date})</span>
+              <span className="text-xs text-rose-500 ml-2">({formatDateShort(d.denial_date)})</span>
             </div>
           ))}
         </div>
@@ -260,7 +260,7 @@ export default function ClaimDetailPage() {
           {appeals.map(a => (
             <div key={a.id} className="text-sm text-amber-800">
               <span className="font-medium capitalize">{a.status}</span>
-              {a.deadline && <span className="text-xs text-amber-600 ml-2">Vence: {a.deadline}</span>}
+              {a.deadline && <span className="text-xs text-amber-600 ml-2">Vence: {formatDateShort(a.deadline)}</span>}
               {a.outcome && <span className="text-xs text-amber-600 ml-2">Resultado: {a.outcome}</span>}
             </div>
           ))}

@@ -4,6 +4,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ArrowLeft } from 'lucide-react';
 import api from '../lib/api';
+import DatePicker from '../components/ui/DatePicker';
 import type { Patient, Provider, Payer } from '../types';
 
 interface ServiceLineForm {
@@ -140,12 +141,19 @@ export default function NewClaimPage() {
           <h2 className="font-semibold text-slate-800 mb-4">Fechas y Códigos</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
-              <label className={labelClass}>{t('claims.service_date')} (Desde) *</label>
-              <input type="date" required value={serviceDateFrom} onChange={e => setServiceDateFrom(e.target.value)} className={inputClass} />
+              <DatePicker
+                label={`${t('claims.service_date')} (Desde) *`}
+                value={serviceDateFrom}
+                onChange={setServiceDateFrom}
+                required
+              />
             </div>
             <div>
-              <label className={labelClass}>{t('claims.service_date')} (Hasta)</label>
-              <input type="date" value={serviceDateTo} onChange={e => setServiceDateTo(e.target.value)} className={inputClass} />
+              <DatePicker
+                label={`${t('claims.service_date')} (Hasta)`}
+                value={serviceDateTo}
+                onChange={setServiceDateTo}
+              />
             </div>
             <div>
               <label className={labelClass}>{t('claims.place_of_service')}</label>

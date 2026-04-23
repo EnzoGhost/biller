@@ -63,6 +63,18 @@
     "insurance": "Seguro",
     "no_patients": "No hay pacientes"
   },
+  "denials": {
+    "title": "Denegaciones",
+    "no_denials": "No hay denegaciones",
+    "pending": "Pendientes",
+    "resolved": "Resueltas",
+    "total": "Total Denegaciones",
+    "resolve": "Marcar Resuelta",
+    "analyze_ai": "Analizar con IA",
+    "adjustment_codes": "Códigos de Ajuste",
+    "ai_analysis": "Análisis IA",
+    "view_claim": "Ver Reclamación"
+  },
   "eligibility": {
     "title": "Verificación de Elegibilidad",
     "check": "Verificar",
@@ -75,7 +87,8 @@
     "deductible": "Deducible",
     "deductible_met": "Deducible Cumplido",
     "oop_max": "Máximo de Bolsillo",
-    "oop_met": "Máximo de Bolsillo Cumplido"
+    "oop_met": "Máximo de Bolsillo Cumplido",
+    "coverage_start": "Inicio de Cobertura"
   },
   "settings": {
     "title": "Configuración",
@@ -129,7 +142,10 @@
     "next": "Siguiente",
     "previous": "Anterior",
     "show": "Mostrar",
-    "per_page": "por página"
+    "per_page": "por página",
+    "first": "Nombre",
+    "last": "Apellido",
+    "select_date": "Seleccionar fecha"
   },
   "auth": {
     "login_title": "Medical Biller PR",

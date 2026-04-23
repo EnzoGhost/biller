@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { XCircle, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
 import api from '../lib/api';
+import { formatDateShort } from '../lib/dates';
 import type { Denial, PaginatedResponse } from '../types';
 
 export default function DenialsPage() {
@@ -21,7 +22,7 @@ export default function DenialsPage() {
   });
 
   const analyzeMutation = useMutation({
-    mutationFn: (denialId: number) => api.post(`/ai/analyze-denial/${denialId}`),
+    mutationFn: (denialId: number) => api.post('/ai/denial-analysis', { denial_id: denialId }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['denials'] }),
   });
 
@@ -115,7 +116,7 @@ export default function DenialsPage() {
                   >
                     Claim #{denial.claim_id}
                   </Link>
-                  <span>{denial.denial_date}</span>
+                  <span>{formatDateShort(denial.denial_date)}</span>
                   {denial.is_resolved && (
                     <span className="text-emerald-600 font-medium">Resuelta</span>
                   )}

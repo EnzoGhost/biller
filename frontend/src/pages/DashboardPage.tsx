@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { DollarSign, FileText, TrendingUp, AlertCircle, Clock } from 'lucide-react';
 import api from '../lib/api';
+import { formatDateShort } from '../lib/dates';
 import type { DashboardStats, ClaimStatus } from '../types';
 import StatusBadge from '../components/ui/Badge';
 
@@ -110,7 +111,7 @@ export default function DashboardPage() {
               <div key={claim.id} className="flex items-center justify-between py-1 border-b border-slate-50 last:border-0">
                 <div>
                   <p className="text-xs font-mono text-slate-700">{claim.claim_number}</p>
-                  <p className="text-xs text-slate-400">{claim.service_date_from}</p>
+                  <p className="text-xs text-slate-400">{formatDateShort(claim.service_date_from)}</p>
                 </div>
                 <div className="text-right">
                   <StatusBadge status={claim.status} />

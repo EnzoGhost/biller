@@ -3,22 +3,22 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle, XCircle, Search, AlertCircle } from 'lucide-react';
 import api from '../lib/api';
+import { formatDate } from '../lib/dates';
+import DatePicker from '../components/ui/DatePicker';
 import type { Payer } from '../types';
 
 interface EligibilityResult {
-  eligible: boolean;
-  member_name?: string;
-  member_id: string;
+  is_eligible: boolean;
   payer_name?: string;
+  member_id: string;
+  coverage_start?: string;
+  coverage_end?: string;
   copay?: number;
   deductible?: number;
   deductible_met?: number;
-  oop_max?: number;
-  oop_met?: number;
-  plan_name?: string;
-  effective_date?: string;
-  termination_date?: string;
-  raw?: Record<string, unknown>;
+  out_of_pocket_max?: number;
+  out_of_pocket_met?: number;
+  raw_response?: Record<string, unknown>;
 }
 
 const fmt = (n?: number) =>
@@ -31,6 +31,8 @@ export default function EligibilityPage() {
 
   const [payerId, setPayerId] = useState('');
   const [memberId, setMemberId] = useState('');
+  const [patientFirstName, setPatientFirstName] = useState('');
+  const [patientLastName, setPatientLastName] = useState('');
   const [dob, setDob] = useState('');
   const [result, setResult] = useState<EligibilityResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -50,7 +52,9 @@ export default function EligibilityPage() {
       const { data } = await api.post('/stedi/eligibility', {
         payer_id: Number(payerId),
         member_id: memberId,
-        date_of_birth: dob || undefined,
+        patient_dob: dob || new Date().toISOString().split('T')[0],
+        patient_first_name: patientFirstName || '',
+        patient_last_name: patientLastName || '',
       });
       setResult(data);
     } catch (e: unknown) {
@@ -98,13 +102,33 @@ export default function EligibilityPage() {
 
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-              Fecha de Nacimiento
+              {t('patients.name')} ({t('common.first')})
             </label>
             <input
-              type="date"
-              value={dob}
-              onChange={e => setDob(e.target.value)}
+              value={patientFirstName}
+              onChange={e => setPatientFirstName(e.target.value)}
+              placeholder="Nombre"
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+              {t('patients.name')} ({t('common.last')})
+            </label>
+            <input
+              value={patientLastName}
+              onChange={e => setPatientLastName(e.target.value)}
+              placeholder="Apellido"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+            />
+          </div>
+
+          <div>
+            <DatePicker
+              label={t('patients.dob')}
+              value={dob}
+              onChange={setDob}
             />
           </div>
         </div>
@@ -131,16 +155,16 @@ export default function EligibilityPage() {
       {result && (
         <div className="bg-white rounded-xl border border-slate-200 p-6">
           {/* Status banner */}
-          <div className={`flex items-center gap-3 p-4 rounded-lg mb-6 ${result.eligible ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
-            {result.eligible
+          <div className={`flex items-center gap-3 p-4 rounded-lg mb-6 ${result.is_eligible ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
+            {result.is_eligible
               ? <CheckCircle className="w-6 h-6 text-emerald-600 shrink-0" />
               : <XCircle className="w-6 h-6 text-red-500 shrink-0" />}
             <div>
               <p className="font-bold text-base">
-                {result.eligible ? t('eligibility.eligible') : t('eligibility.not_eligible')}
+                {result.is_eligible ? t('eligibility.eligible') : t('eligibility.not_eligible')}
               </p>
-              {result.member_name && (
-                <p className="text-sm opacity-80">{result.member_name} · {result.member_id}</p>
+              {result.payer_name && (
+                <p className="text-sm opacity-80">{result.payer_name} · {result.member_id}</p>
               )}
             </div>
           </div>
@@ -151,9 +175,9 @@ export default function EligibilityPage() {
               { label: t('eligibility.copay'), value: fmt(result.copay) },
               { label: t('eligibility.deductible'), value: fmt(result.deductible) },
               { label: t('eligibility.deductible_met'), value: fmt(result.deductible_met) },
-              { label: t('eligibility.oop_max'), value: fmt(result.oop_max) },
-              { label: t('eligibility.oop_met'), value: fmt(result.oop_met) },
-              { label: 'Plan', value: result.plan_name ?? '—' },
+              { label: t('eligibility.oop_max'), value: fmt(result.out_of_pocket_max) },
+              { label: t('eligibility.oop_met'), value: fmt(result.out_of_pocket_met) },
+              { label: t('eligibility.coverage_start'), value: result.coverage_start ? formatDate(result.coverage_start) : '—' },
             ].map(({ label, value }) => (
               <div key={label} className="bg-slate-50 rounded-lg p-3">
                 <p className="text-xs text-slate-500 mb-1">{label}</p>
