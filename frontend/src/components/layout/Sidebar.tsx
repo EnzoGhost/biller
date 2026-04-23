@@ -123,7 +123,7 @@ export default function Sidebar() {
           <button
             onClick={handleLogout}
             className="p-1 text-slate-400 hover:text-slate-700 rounded shrink-0"
-            title="Cerrar sesión"
+            title={t('common.logout')}
           >
             <LogOut className="w-3.5 h-3.5" />
           </button>

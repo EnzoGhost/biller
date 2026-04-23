@@ -85,7 +85,7 @@ export default function DashboardPage() {
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <h2 className="text-sm font-semibold text-slate-700 mb-4">{t('dashboard.top_denials')}</h2>
           {s.top_denial_reasons.length === 0 ? (
-            <p className="text-sm text-slate-400">Sin denegaciones 🎉</p>
+            <p className="text-sm text-slate-400">{t('dashboard.no_denials')}</p>
           ) : (
             <div className="space-y-3">
               {s.top_denial_reasons.map((d, i) => (

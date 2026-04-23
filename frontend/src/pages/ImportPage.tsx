@@ -45,7 +45,7 @@ export default function ImportPage() {
       setResult(data);
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(msg ?? 'Error al importar');
+      setError(msg ?? t('import.error_importing'));
     } finally {
       setLoading(false);
     }
@@ -82,13 +82,13 @@ export default function ImportPage() {
             <p className="font-semibold text-slate-800 text-sm">{t('import.wink')}</p>
           </div>
           <p className="text-xs text-slate-500 mb-4">
-            Sincroniza reclamaciones directamente desde Wink EHR vía API.
+            {t('import.wink_desc')}
           </p>
           <button
-            onClick={() => api.post('/import/wink').catch(() => setError('Error al sincronizar con Wink'))}
+            onClick={() => api.post('/import/wink').catch(() => setError(t('import.error_wink')))}
             className="w-full bg-sky-500 hover:bg-sky-600 text-white text-xs font-medium py-2 rounded-lg transition-colors"
           >
-            Sincronizar
+            {t('import.sync')}
           </button>
         </div>
 
@@ -101,13 +101,13 @@ export default function ImportPage() {
             <p className="font-semibold text-slate-800 text-sm">{t('import.download_template')}</p>
           </div>
           <p className="text-xs text-slate-500 mb-4">
-            Descarga la plantilla CSV de superbill con todos los campos requeridos.
+            {t('import.template_desc')}
           </p>
           <button
             onClick={downloadTemplate}
             className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium py-2 rounded-lg transition-colors"
           >
-            Descargar CSV
+            {t('import.download_csv')}
           </button>
         </div>
       </div>
@@ -152,7 +152,7 @@ export default function ImportPage() {
             disabled={loading}
             className="mt-4 w-full bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
           >
-            {loading ? t('import.importing') : 'Importar archivo'}
+            {loading ? t('import.importing') : t('import.import_file')}
           </button>
         )}
 
@@ -187,7 +187,7 @@ export default function ImportPage() {
             </div>
             {result.errors.length > 0 && (
               <div className="mt-2">
-                <p className="text-xs font-semibold text-slate-600 mb-1">Errores:</p>
+                <p className="text-xs font-semibold text-slate-600 mb-1">{t('import.errors_label')}</p>
                 <ul className="space-y-1">
                   {result.errors.map((e, i) => (
                     <li key={i} className="text-xs text-red-600 bg-red-50 rounded px-2 py-1">{e}</li>

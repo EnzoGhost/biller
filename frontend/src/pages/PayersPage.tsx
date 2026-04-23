@@ -16,19 +16,21 @@ const typeColors: Record<PayerType, string> = {
   other:      'bg-slate-100 text-slate-600',
 };
 
-const typeLabels: Record<PayerType, string> = {
-  commercial: 'Comercial',
-  medicare:   'Medicare',
-  medicaid:   'Medicaid',
-  vision:     'Visión',
-  dental:     'Dental',
-  other:      'Otro',
-};
+
 
 export default function PayersPage() {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [type, setType] = useState<PayerType | ''>('');
+
+  const typeLabels: Record<PayerType, string> = {
+    commercial: t('payers.commercial'),
+    medicare:   t('payers.medicare'),
+    medicaid:   t('payers.medicaid'),
+    vision:     t('payers.vision'),
+    dental:     t('payers.dental'),
+    other:      t('payers.other'),
+  };
 
   const params = new URLSearchParams({ per_page: '100' });
   if (type) params.set('payer_type', type);
@@ -77,7 +79,7 @@ export default function PayersPage() {
           <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : !filtered.length ? (
-        <div className="text-center py-12 text-slate-400">No hay pagadores</div>
+        <div className="text-center py-12 text-slate-400">{t('payers.no_payers')}</div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(payer => (
@@ -114,12 +116,12 @@ export default function PayersPage() {
                   </div>
                 )}
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-400">Método:</span>
+                  <span className="text-slate-400">{t('payers.method')}:</span>
                   <span className="font-medium uppercase">{payer.submission_method}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-400">Tiempo límite:</span>
-                  <span className="font-medium">{payer.timely_filing_days} días</span>
+                  <span className="text-slate-400">{t('payers.timely_filing')}:</span>
+                  <span className="font-medium">{payer.timely_filing_days} {t('common.days')}</span>
                 </div>
                 {payer.stedi_payer_id && (
                   <div className="flex items-center gap-2">
@@ -130,7 +132,7 @@ export default function PayersPage() {
               </div>
 
               {!payer.is_active && (
-                <div className="mt-3 text-xs text-red-600 font-medium">Inactivo</div>
+                <div className="mt-3 text-xs text-red-600 font-medium">{t('payers.inactive')}</div>
               )}
             </div>
           ))}

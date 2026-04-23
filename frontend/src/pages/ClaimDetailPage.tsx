@@ -7,6 +7,7 @@ import {
   ChevronDown, ChevronUp, AlertTriangle
 } from 'lucide-react';
 import api from '../lib/api';
+import { formatDateShort } from '../lib/dates';
 import type { Claim, Denial, Appeal } from '../types';
 import StatusBadge from '../components/ui/Badge';
 
@@ -66,7 +67,7 @@ export default function ClaimDetailPage() {
     </div>
   );
 
-  if (!claim) return <div className="p-6 text-slate-500">Reclamación no encontrada</div>;
+  if (!claim) return <div className="p-6 text-slate-500">{t('claims.not_found')}</div>;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -95,7 +96,7 @@ export default function ClaimDetailPage() {
                 className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-sm rounded-lg hover:bg-slate-50 text-slate-700"
               >
                 <Sparkles className="w-4 h-4 text-amber-500" />
-                {scrubbing ? 'Verificando...' : t('claims.scrub')}
+                {scrubbing ? t('claims.scrubbing') : t('claims.scrub')}
               </button>
               <button
                 onClick={() => submitMutation.mutate()}
@@ -109,7 +110,7 @@ export default function ClaimDetailPage() {
           )}
           {claim.status !== 'void' && (
             <button
-              onClick={() => { if (confirm('¿Anular esta reclamación?')) voidMutation.mutate(); }}
+              onClick={() => { if (confirm(t('claims.void_confirm'))) voidMutation.mutate(); }}
               className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-600 text-sm rounded-lg hover:bg-red-50"
             >
               <Trash2 className="w-4 h-4" />
@@ -125,7 +126,7 @@ export default function ClaimDetailPage() {
           <div className="flex items-center gap-2 mb-2">
             <ShieldCheck className={`w-4 h-4 ${scrubResult.score >= 80 ? 'text-emerald-600' : 'text-amber-600'}`} />
             <span className="text-sm font-semibold">
-              Puntuación de limpieza: {scrubResult.score.toFixed(0)}/100
+              {t('claims.scrub_score', { score: scrubResult.score.toFixed(0) })}
             </span>
           </div>
           {scrubResult.issues.map((issue, i) => (
@@ -143,20 +144,20 @@ export default function ClaimDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         {/* Patient */}
         <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <h2 className="text-sm font-semibold text-slate-700 mb-3">Paciente</h2>
+          <h2 className="text-sm font-semibold text-slate-700 mb-3">{t('claims.patient')}</h2>
           {claim.patient ? (
             <div className="space-y-1 text-sm">
               <p className="font-medium text-slate-900">{claim.patient.first_name} {claim.patient.last_name}</p>
-              <p className="text-slate-500">MRN: {claim.patient.mrn}</p>
-              <p className="text-slate-500">F/N: {claim.patient.dob}</p>
+              <p className="text-slate-500">{t('patients.mrn')}: {claim.patient.mrn}</p>
+              <p className="text-slate-500">{t('patients.dob_abbr')}: {claim.patient.dob}</p>
               {claim.patient.phone && <p className="text-slate-500">{claim.patient.phone}</p>}
             </div>
-          ) : <p className="text-slate-400 text-sm">Paciente #{claim.patient_id}</p>}
+          ) : <p className="text-slate-400 text-sm">{t('claims.patient')} #{claim.patient_id}</p>}
         </div>
 
         {/* Provider + Payer */}
         <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <h2 className="text-sm font-semibold text-slate-700 mb-3">Proveedor & Pagador</h2>
+          <h2 className="text-sm font-semibold text-slate-700 mb-3">{t('claims.provider_payer')}</h2>
           <div className="space-y-1 text-sm">
             <p className="font-medium text-slate-900">
               {claim.provider ? `Dr. ${claim.provider.first_name} ${claim.provider.last_name}` : `#${claim.provider_id}`}
@@ -177,15 +178,15 @@ export default function ClaimDetailPage() {
       <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
-            <p className="text-xs text-slate-500 mb-1">Facturado</p>
+            <p className="text-xs text-slate-500 mb-1">{t('claims.billed')}</p>
             <p className="text-lg font-bold text-slate-900">{fmt(claim.total_billed)}</p>
           </div>
           <div>
-            <p className="text-xs text-slate-500 mb-1">Pagado</p>
+            <p className="text-xs text-slate-500 mb-1">{t('claims.paid')}</p>
             <p className="text-lg font-bold text-emerald-700">{fmt(claim.total_paid)}</p>
           </div>
           <div>
-            <p className="text-xs text-slate-500 mb-1">Responsabilidad Paciente</p>
+            <p className="text-xs text-slate-500 mb-1">{t('claims.patient_responsibility')}</p>
             <p className="text-lg font-bold text-amber-700">{fmt(claim.patient_responsibility)}</p>
           </div>
         </div>
@@ -197,7 +198,7 @@ export default function ClaimDetailPage() {
           onClick={() => setShowLines(s => !s)}
           className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
-          Líneas de Servicio ({claim.service_lines.length})
+          {t('claims.service_lines')} ({claim.service_lines.length})
           {showLines ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
         {showLines && (
@@ -206,11 +207,11 @@ export default function ClaimDetailPage() {
               <tr>
                 <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500">#</th>
                 <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500">CPT</th>
-                <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500">Descripción</th>
-                <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500">Mods</th>
-                <th className="text-center px-4 py-2 text-xs font-semibold text-slate-500">Uds</th>
-                <th className="text-right px-4 py-2 text-xs font-semibold text-slate-500">Facturado</th>
-                <th className="text-right px-4 py-2 text-xs font-semibold text-slate-500">Pagado</th>
+                <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500">{t('common.description')}</th>
+                <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500">{t('claims.modifiers_abbr')}</th>
+                <th className="text-center px-4 py-2 text-xs font-semibold text-slate-500">{t('common.units_abbr')}</th>
+                <th className="text-right px-4 py-2 text-xs font-semibold text-slate-500">{t('claims.billed')}</th>
+                <th className="text-right px-4 py-2 text-xs font-semibold text-slate-500">{t('claims.paid')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -243,7 +244,7 @@ export default function ClaimDetailPage() {
       {/* Denials */}
       {denials && denials.length > 0 && (
         <div className="bg-rose-50 rounded-xl border border-rose-200 p-4 mb-4">
-          <h2 className="text-sm font-semibold text-rose-700 mb-2">Denegaciones</h2>
+          <h2 className="text-sm font-semibold text-rose-700 mb-2">{t('denials.title')}</h2>
           {denials.map(d => (
             <div key={d.id} className="text-sm text-rose-800">
               <span className="font-mono font-medium">{d.denial_code}</span> — {d.denial_reason}
@@ -256,12 +257,12 @@ export default function ClaimDetailPage() {
       {/* Appeals */}
       {appeals && appeals.length > 0 && (
         <div className="bg-amber-50 rounded-xl border border-amber-200 p-4">
-          <h2 className="text-sm font-semibold text-amber-700 mb-2">Apelaciones</h2>
+          <h2 className="text-sm font-semibold text-amber-700 mb-2">{t('claims.appeals')}</h2>
           {appeals.map(a => (
             <div key={a.id} className="text-sm text-amber-800">
               <span className="font-medium capitalize">{a.status}</span>
-              {a.deadline && <span className="text-xs text-amber-600 ml-2">Vence: {formatDateShort(a.deadline)}</span>}
-              {a.outcome && <span className="text-xs text-amber-600 ml-2">Resultado: {a.outcome}</span>}
+              {a.deadline && <span className="text-xs text-amber-600 ml-2">{t('claims.deadline')}: {formatDateShort(a.deadline)}</span>}
+              {a.outcome && <span className="text-xs text-amber-600 ml-2">{t('claims.outcome')}: {a.outcome}</span>}
             </div>
           ))}
         </div>

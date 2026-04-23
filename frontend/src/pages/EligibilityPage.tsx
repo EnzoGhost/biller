@@ -59,7 +59,7 @@ export default function EligibilityPage() {
       setResult(data);
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(msg ?? 'Error al verificar elegibilidad');
+      setError(msg ?? t('eligibility.error_checking'));
     } finally {
       setLoading(false);
     }
@@ -107,7 +107,7 @@ export default function EligibilityPage() {
             <input
               value={patientFirstName}
               onChange={e => setPatientFirstName(e.target.value)}
-              placeholder="Nombre"
+              placeholder={t('common.first_name')}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
             />
           </div>
@@ -119,7 +119,7 @@ export default function EligibilityPage() {
             <input
               value={patientLastName}
               onChange={e => setPatientLastName(e.target.value)}
-              placeholder="Apellido"
+              placeholder={t('common.last_name')}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
             />
           </div>

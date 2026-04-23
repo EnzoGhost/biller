@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ArrowLeft } from 'lucide-react';
 import api from '../lib/api';
 import DatePicker from '../components/ui/DatePicker';
+import SearchableSelect from '../components/ui/SearchableSelect';
 import type { Patient, Provider, Payer } from '../types';
 
 interface ServiceLineForm {
@@ -92,6 +93,29 @@ export default function NewClaimPage() {
     });
   };
 
+  // Build options for searchable selects
+  const patientOptions = (patients?.items ?? []).map(p => ({
+    value: String(p.id),
+    label: `${p.last_name}, ${p.first_name}`,
+  }));
+  const providerOptions = (providers?.items ?? []).map(p => ({
+    value: String(p.id),
+    label: `${p.last_name}, ${p.first_name}`,
+  }));
+  const payerOptions = (payers?.items ?? []).map(p => ({
+    value: String(p.id),
+    label: p.name,
+  }));
+
+  const posOptions = [
+    { value: '11', label: t('pos.11') },
+    { value: '21', label: t('pos.21') },
+    { value: '22', label: t('pos.22') },
+    { value: '23', label: t('pos.23') },
+    { value: '31', label: t('pos.31') },
+    { value: '12', label: t('pos.12') },
+  ];
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -104,45 +128,48 @@ export default function NewClaimPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Patient / Provider / Payer */}
         <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h2 className="font-semibold text-slate-800 mb-4">Información General</h2>
+          <h2 className="font-semibold text-slate-800 mb-4">{t('claims.general_info')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className={labelClass}>{t('claims.patient')} *</label>
-              <select required value={patientId} onChange={e => setPatientId(e.target.value)} className={inputClass}>
-                <option value="">— Seleccionar —</option>
-                {patients?.items.map(p => (
-                  <option key={p.id} value={p.id}>{p.last_name}, {p.first_name}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                options={patientOptions}
+                value={patientId}
+                onChange={setPatientId}
+                placeholder={t('common.select_placeholder')}
+                required
+              />
             </div>
             <div>
               <label className={labelClass}>{t('claims.provider')} *</label>
-              <select required value={providerId} onChange={e => setProviderId(e.target.value)} className={inputClass}>
-                <option value="">— Seleccionar —</option>
-                {providers?.items.map(p => (
-                  <option key={p.id} value={p.id}>{p.last_name}, {p.first_name}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                options={providerOptions}
+                value={providerId}
+                onChange={setProviderId}
+                placeholder={t('common.select_placeholder')}
+                required
+              />
             </div>
             <div>
               <label className={labelClass}>{t('claims.payer')} *</label>
-              <select required value={payerId} onChange={e => setPayerId(e.target.value)} className={inputClass}>
-                <option value="">— Seleccionar —</option>
-                {payers?.items.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                options={payerOptions}
+                value={payerId}
+                onChange={setPayerId}
+                placeholder={t('common.select_placeholder')}
+                required
+              />
             </div>
           </div>
         </div>
 
         {/* Dates & Codes */}
         <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h2 className="font-semibold text-slate-800 mb-4">Fechas y Códigos</h2>
+          <h2 className="font-semibold text-slate-800 mb-4">{t('claims.dates_and_codes')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <DatePicker
-                label={`${t('claims.service_date')} (Desde) *`}
+                label={`${t('claims.service_date_from')} *`}
                 value={serviceDateFrom}
                 onChange={setServiceDateFrom}
                 required
@@ -150,29 +177,43 @@ export default function NewClaimPage() {
             </div>
             <div>
               <DatePicker
-                label={`${t('claims.service_date')} (Hasta)`}
+                label={t('claims.service_date_to')}
                 value={serviceDateTo}
                 onChange={setServiceDateTo}
               />
             </div>
             <div>
               <label className={labelClass}>{t('claims.place_of_service')}</label>
-              <select value={placeOfService} onChange={e => setPlaceOfService(e.target.value)} className={inputClass}>
-                <option value="11">11 – Consultorio</option>
-                <option value="21">21 – Hospital Inpatient</option>
-                <option value="22">22 – Hospital Outpatient</option>
-                <option value="23">23 – Emergencias</option>
-                <option value="31">31 – Hogar de Ancianos</option>
-                <option value="12">12 – Hogar del Paciente</option>
+              <select
+                value={placeOfService}
+                onChange={e => setPlaceOfService(e.target.value)}
+                className={inputClass}
+              >
+                {posOptions.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
               </select>
             </div>
             <div className="sm:col-span-2">
-              <label className={labelClass}>{t('claims.diagnosis_codes')} (separados por coma) *</label>
-              <input required value={diagCodes} onChange={e => setDiagCodes(e.target.value)} placeholder="J06.9, Z00.00" className={inputClass} />
+              <label className={labelClass}>
+                {t('claims.diagnosis_codes')} ({t('claims.diagnosis_codes_hint')}) *
+              </label>
+              <input
+                required
+                value={diagCodes}
+                onChange={e => setDiagCodes(e.target.value)}
+                placeholder="J06.9, Z00.00"
+                className={inputClass}
+              />
             </div>
             <div>
               <label className={labelClass}>{t('claims.prior_auth')}</label>
-              <input value={priorAuth} onChange={e => setPriorAuth(e.target.value)} placeholder="PA123456" className={inputClass} />
+              <input
+                value={priorAuth}
+                onChange={e => setPriorAuth(e.target.value)}
+                placeholder="PA123456"
+                className={inputClass}
+              />
             </div>
           </div>
         </div>
@@ -186,7 +227,7 @@ export default function NewClaimPage() {
               onClick={() => setLines(prev => [...prev, defaultLine()])}
               className="flex items-center gap-1 text-sky-600 hover:text-sky-700 text-sm font-medium"
             >
-              <Plus className="w-4 h-4" /> Agregar línea
+              <Plus className="w-4 h-4" /> {t('claims.add_line')}
             </button>
           </div>
 
@@ -195,23 +236,52 @@ export default function NewClaimPage() {
               <div key={i} className="grid grid-cols-12 gap-2 items-end p-3 bg-slate-50 rounded-lg">
                 <div className="col-span-2">
                   {i === 0 && <label className={labelClass}>CPT *</label>}
-                  <input required value={line.cpt_code} onChange={e => updateLine(i, { cpt_code: e.target.value })} placeholder="99213" className={inputClass} />
+                  <input
+                    required
+                    value={line.cpt_code}
+                    onChange={e => updateLine(i, { cpt_code: e.target.value })}
+                    placeholder="99213"
+                    className={inputClass}
+                  />
                 </div>
                 <div className="col-span-4">
-                  {i === 0 && <label className={labelClass}>Descripción</label>}
-                  <input value={line.description} onChange={e => updateLine(i, { description: e.target.value })} placeholder="Office visit..." className={inputClass} />
+                  {i === 0 && <label className={labelClass}>{t('common.description')}</label>}
+                  <input
+                    value={line.description}
+                    onChange={e => updateLine(i, { description: e.target.value })}
+                    placeholder="Office visit..."
+                    className={inputClass}
+                  />
                 </div>
                 <div className="col-span-1">
-                  {i === 0 && <label className={labelClass}>Unid.</label>}
-                  <input type="number" min="1" value={line.units} onChange={e => updateLine(i, { units: Number(e.target.value) })} className={inputClass} />
+                  {i === 0 && <label className={labelClass}>{t('common.units_abbr')}</label>}
+                  <input
+                    type="number"
+                    min="1"
+                    value={line.units}
+                    onChange={e => updateLine(i, { units: Number(e.target.value) })}
+                    className={inputClass}
+                  />
                 </div>
                 <div className="col-span-2">
-                  {i === 0 && <label className={labelClass}>Monto</label>}
-                  <input type="number" step="0.01" min="0" value={line.billed_amount} onChange={e => updateLine(i, { billed_amount: Number(e.target.value) })} className={inputClass} />
+                  {i === 0 && <label className={labelClass}>{t('common.amount')}</label>}
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={line.billed_amount}
+                    onChange={e => updateLine(i, { billed_amount: Number(e.target.value) })}
+                    className={inputClass}
+                  />
                 </div>
                 <div className="col-span-2">
-                  {i === 0 && <label className={labelClass}>Mod.</label>}
-                  <input value={line.modifiers} onChange={e => updateLine(i, { modifiers: e.target.value })} placeholder="25,59" className={inputClass} />
+                  {i === 0 && <label className={labelClass}>{t('claims.modifiers_abbr')}</label>}
+                  <input
+                    value={line.modifiers}
+                    onChange={e => updateLine(i, { modifiers: e.target.value })}
+                    placeholder="25,59"
+                    className={inputClass}
+                  />
                 </div>
                 <div className="col-span-1 flex justify-end">
                   {lines.length > 1 && (
@@ -229,7 +299,7 @@ export default function NewClaimPage() {
           </div>
 
           <div className="mt-3 text-right text-sm font-semibold text-slate-800">
-            Total:{' '}
+            {t('common.total')}:{' '}
             {new Intl.NumberFormat('es-PR', { style: 'currency', currency: 'USD' }).format(
               lines.reduce((s, l) => s + l.billed_amount * l.units, 0)
             )}
@@ -244,7 +314,7 @@ export default function NewClaimPage() {
             onChange={e => setNotes(e.target.value)}
             rows={3}
             className={inputClass}
-            placeholder="Notas internas..."
+            placeholder={t('claims.internal_notes_placeholder')}
           />
         </div>
 
@@ -255,7 +325,7 @@ export default function NewClaimPage() {
             disabled={mutation.isPending}
             className="bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white text-sm font-medium px-6 py-2.5 rounded-lg transition-colors"
           >
-            {mutation.isPending ? t('common.loading') : 'Crear Reclamación'}
+            {mutation.isPending ? t('common.loading') : t('claims.create')}
           </button>
           <button
             type="button"

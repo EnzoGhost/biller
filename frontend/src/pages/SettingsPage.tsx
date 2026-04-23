@@ -3,19 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Save, CheckCircle, Building2, Shield, Cpu, Globe } from 'lucide-react';
 import api from '../lib/api';
 
-interface Section {
-  key: string;
-  label: string;
-  icon: React.ElementType;
-}
-
-const SECTIONS: Section[] = [
-  { key: 'clinic',  label: 'Información de la Clínica', icon: Building2 },
-  { key: 'stedi',   label: 'Stedi (Clearinghouse)',      icon: Shield },
-  { key: 'ai',      label: 'Inteligencia Artificial',    icon: Cpu },
-  { key: 'lang',    label: 'Idioma',                     icon: Globe },
-];
-
 export default function SettingsPage() {
   const { t, i18n } = useTranslation();
   const [active, setActive] = useState('clinic');
@@ -56,6 +43,13 @@ export default function SettingsPage() {
   const inputClass = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500';
   const labelClass = 'block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1';
 
+  const SECTIONS = [
+    { key: 'clinic', labelKey: 'settings.clinic_info', icon: Building2 },
+    { key: 'stedi',  labelKey: 'settings.stedi',       icon: Shield },
+    { key: 'ai',     labelKey: 'settings.ai',          icon: Cpu },
+    { key: 'lang',   labelKey: 'settings.language',    icon: Globe },
+  ];
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <h1 className="text-xl font-bold text-slate-900 mb-6">{t('settings.title')}</h1>
@@ -64,7 +58,7 @@ export default function SettingsPage() {
         {/* Sidebar tabs */}
         <div className="w-52 shrink-0">
           <nav className="space-y-0.5">
-            {SECTIONS.map(({ key, label, icon: Icon }) => (
+            {SECTIONS.map(({ key, labelKey, icon: Icon }) => (
               <button
                 key={key}
                 onClick={() => setActive(key)}
@@ -75,7 +69,7 @@ export default function SettingsPage() {
                 }`}
               >
                 <Icon className="w-4 h-4 shrink-0" />
-                {label}
+                {t(labelKey)}
               </button>
             ))}
           </nav>
@@ -86,10 +80,10 @@ export default function SettingsPage() {
           {/* Clinic */}
           {active === 'clinic' && (
             <div className="space-y-4">
-              <h2 className="font-semibold text-slate-800 mb-4">Información de la Clínica</h2>
+              <h2 className="font-semibold text-slate-800 mb-4">{t('settings.clinic_info')}</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={labelClass}>Nombre de la Clínica</label>
+                  <label className={labelClass}>{t('settings.clinic_name')}</label>
                   <input value={clinicName} onChange={e => setClinicName(e.target.value)} className={inputClass} placeholder="Clínica Ejemplo" />
                 </div>
                 <div>
@@ -101,11 +95,11 @@ export default function SettingsPage() {
                   <input value={clinicTax} onChange={e => setClinicTax(e.target.value)} className={inputClass} placeholder="12-3456789" />
                 </div>
                 <div>
-                  <label className={labelClass}>Teléfono</label>
+                  <label className={labelClass}>{t('common.phone')}</label>
                   <input value={clinicPhone} onChange={e => setClinicPhone(e.target.value)} className={inputClass} placeholder="(787) 555-0000" />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelClass}>Dirección</label>
+                  <label className={labelClass}>{t('settings.address')}</label>
                   <input value={clinicAddr} onChange={e => setClinicAddr(e.target.value)} className={inputClass} placeholder="Ave. Principal 123, San Juan, PR 00901" />
                 </div>
               </div>
@@ -115,7 +109,7 @@ export default function SettingsPage() {
           {/* Stedi */}
           {active === 'stedi' && (
             <div className="space-y-4">
-              <h2 className="font-semibold text-slate-800 mb-4">Stedi Clearinghouse</h2>
+              <h2 className="font-semibold text-slate-800 mb-4">{t('settings.stedi')}</h2>
               <div>
                 <label className={labelClass}>API Key</label>
                 <input
@@ -126,19 +120,19 @@ export default function SettingsPage() {
                   placeholder="sk_live_..."
                 />
                 <p className="text-xs text-slate-400 mt-1">
-                  Obtén tu API key en{' '}
+                  {t('settings.get_api_key_at')}{' '}
                   <a href="https://www.stedi.com" target="_blank" rel="noreferrer" className="text-sky-600 hover:underline">stedi.com</a>
                 </p>
               </div>
               <div>
-                <label className={labelClass}>Entorno</label>
+                <label className={labelClass}>{t('settings.environment')}</label>
                 <select value={stediEnv} onChange={e => setStediEnv(e.target.value as 'sandbox' | 'production')} className={inputClass}>
-                  <option value="sandbox">Sandbox (Pruebas)</option>
-                  <option value="production">Producción</option>
+                  <option value="sandbox">{t('settings.sandbox')}</option>
+                  <option value="production">{t('settings.production')}</option>
                 </select>
               </div>
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
-                ⚠️ En modo sandbox, las transacciones no se envían al clearinghouse real.
+                {t('settings.sandbox_warning')}
               </div>
             </div>
           )}
@@ -146,11 +140,11 @@ export default function SettingsPage() {
           {/* AI */}
           {active === 'ai' && (
             <div className="space-y-4">
-              <h2 className="font-semibold text-slate-800 mb-4">Inteligencia Artificial</h2>
+              <h2 className="font-semibold text-slate-800 mb-4">{t('settings.ai')}</h2>
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                 <div>
-                  <p className="text-sm font-medium text-slate-700">Análisis IA habilitado</p>
-                  <p className="text-xs text-slate-400">Análisis de denegaciones, scrubbing, y sugerencias</p>
+                  <p className="text-sm font-medium text-slate-700">{t('settings.ai_enabled')}</p>
+                  <p className="text-xs text-slate-400">{t('settings.ai_desc')}</p>
                 </div>
                 <button
                   onClick={() => setAiEnabled(!aiEnabled)}
@@ -164,11 +158,11 @@ export default function SettingsPage() {
                 <input type="password" value={aiKey} onChange={e => setAiKey(e.target.value)} className={inputClass} placeholder="sk-..." />
               </div>
               <div>
-                <label className={labelClass}>Modelo</label>
+                <label className={labelClass}>{t('settings.model')}</label>
                 <select value={aiModel} onChange={e => setAiModel(e.target.value)} className={inputClass}>
-                  <option value="gpt-4o">GPT-4o (Recomendado)</option>
-                  <option value="gpt-4o-mini">GPT-4o Mini (Económico)</option>
-                  <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                  <option value="gpt-4o">{t('settings.gpt4o')}</option>
+                  <option value="gpt-4o-mini">{t('settings.gpt4o_mini')}</option>
+                  <option value="gpt-4-turbo">{t('settings.gpt4_turbo')}</option>
                 </select>
               </div>
             </div>
@@ -177,12 +171,12 @@ export default function SettingsPage() {
           {/* Language */}
           {active === 'lang' && (
             <div className="space-y-4">
-              <h2 className="font-semibold text-slate-800 mb-4">Idioma de la Interfaz</h2>
+              <h2 className="font-semibold text-slate-800 mb-4">{t('settings.interface_language')}</h2>
               <div className="space-y-2">
                 {[
-                  { code: 'es', label: 'Español (Puerto Rico)', flag: '🇵🇷' },
-                  { code: 'en', label: 'English', flag: '🇺🇸' },
-                ].map(({ code, label, flag }) => (
+                  { code: 'es', labelKey: 'settings.lang_es', flag: '🇵🇷' },
+                  { code: 'en', labelKey: 'settings.lang_en', flag: '🇺🇸' },
+                ].map(({ code, labelKey, flag }) => (
                   <button
                     key={code}
                     onClick={() => i18n.changeLanguage(code)}
@@ -193,7 +187,7 @@ export default function SettingsPage() {
                     }`}
                   >
                     <span className="text-xl">{flag}</span>
-                    {label}
+                    {t(labelKey)}
                     {i18n.language === code && <CheckCircle className="w-4 h-4 ml-auto text-sky-500" />}
                   </button>
                 ))}
@@ -214,7 +208,7 @@ export default function SettingsPage() {
               {saved && (
                 <div className="flex items-center gap-1.5 text-emerald-600 text-sm">
                   <CheckCircle className="w-4 h-4" />
-                  Guardado
+                  {t('settings.saved')}
                 </div>
               )}
             </div>
