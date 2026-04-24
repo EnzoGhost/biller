@@ -34,6 +34,17 @@ def get_openai():
 
 # ── Claim Scrubber ────────────────────────────────────────────────────────────
 
+@router.post("/scrub/{claim_id}", response_model=ScrubResponse)
+async def scrub_claim_by_id(
+    claim_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Scrub a claim by path parameter (convenience endpoint)."""
+    from schemas import ScrubRequest as SR
+    return await scrub_claim(SR(claim_id=claim_id), db, current_user)
+
+
 @router.post("/scrub", response_model=ScrubResponse)
 async def scrub_claim(
     body: ScrubRequest,

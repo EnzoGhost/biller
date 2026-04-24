@@ -39,6 +39,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/inmediata", tags=["inmediata"])
 
+# Runtime config overrides (set via /config endpoint)
+_runtime_config: dict = {}
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -392,6 +395,50 @@ async def reconcile_era(
         "unmatched":      unmatched_count,
         "posted":         posted,
         "results":        results,
+    }
+
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+
+# ── Config ───────────────────────────────────────────────────────────────────
+
+class InmediataConfigRequest(BaseModel):
+    sftp_host:      Optional[str] = None
+    sftp_user:      Optional[str] = None
+    sftp_password:  Optional[str] = None
+    sftp_upload_dir: Optional[str] = None
+    sftp_download_dir: Optional[str] = None
+    submitter_id:   Optional[str] = None
+
+
+@router.post("/config")
+async def save_inmediata_config(
+    body: InmediataConfigRequest,
+    _: User = Depends(get_current_user),
+):
+    """
+    Update Inmediata SFTP settings at runtime (in-memory override).
+    """
+    if body.sftp_host is not None:        _runtime_config["sftp_host"] = body.sftp_host
+    if body.sftp_user is not None:        _runtime_config["sftp_user"] = body.sftp_user
+    if body.sftp_password is not None:    _runtime_config["sftp_password"] = body.sftp_password
+    if body.sftp_upload_dir is not None:  _runtime_config["sftp_upload_dir"] = body.sftp_upload_dir
+    if body.sftp_download_dir is not None: _runtime_config["sftp_download_dir"] = body.sftp_download_dir
+    if body.submitter_id is not None:     _runtime_config["submitter_id"] = body.submitter_id
+    return {"status": "saved"}
+
+
+@router.get("/config")
+async def get_inmediata_config(
+    _: User = Depends(get_current_user),
+):
+    """Return current (non-secret) Inmediata config."""
+    return {
+        "sftp_host":        _runtime_config.get("sftp_host", settings.INMEDIATA_SFTP_HOST or ""),
+        "sftp_user":        _runtime_config.get("sftp_user", settings.INMEDIATA_SFTP_USER or ""),
+        "sftp_upload_dir":  _runtime_config.get("sftp_upload_dir", settings.INMEDIATA_SFTP_UPLOAD_DIR or "/837"),
+        "sftp_download_dir":_runtime_config.get("sftp_download_dir", settings.INMEDIATA_SFTP_DOWNLOAD_DIR or "/835"),
+        "submitter_id":     _runtime_config.get("submitter_id", settings.INMEDIATA_SUBMITTER_ID or ""),
     }
 
 

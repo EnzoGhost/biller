@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Save, CheckCircle, Building2, Shield, Cpu, Globe } from 'lucide-react';
+import { Save, CheckCircle, Building2, Shield, Cpu, Globe, Zap } from 'lucide-react';
 import api from '../lib/api';
 
 export default function SettingsPage() {
@@ -24,12 +24,29 @@ export default function SettingsPage() {
   const [aiModel,    setAiModel]    = useState('gpt-4o');
   const [aiEnabled,  setAiEnabled]  = useState(true);
 
+  // Inmediata
+  const [sftpHost,   setSftpHost]   = useState('');
+  const [sftpUser,   setSftpUser]   = useState('');
+  const [sftpPass,   setSftpPass]   = useState('');
+  const [sftpUpDir,  setSftpUpDir]  = useState('/UPLOAD/837');
+  const [sftpDnDir,  setSftpDnDir]  = useState('/DOWNLOAD/835');
+  const [submitterId,setSubmitterId]= useState('');
+
   const handleSave = async () => {
     try {
       if (active === 'stedi') {
         await api.post('/stedi/config', { api_key: stediKey, environment: stediEnv });
       } else if (active === 'ai') {
         await api.post('/ai/config', { api_key: aiKey, model: aiModel, enabled: aiEnabled });
+      } else if (active === 'inmediata') {
+        await api.post('/inmediata/config', {
+          sftp_host: sftpHost,
+          sftp_user: sftpUser,
+          sftp_password: sftpPass,
+          sftp_upload_dir: sftpUpDir,
+          sftp_download_dir: sftpDnDir,
+          submitter_id: submitterId,
+        });
       }
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -44,10 +61,11 @@ export default function SettingsPage() {
   const labelClass = 'block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1';
 
   const SECTIONS = [
-    { key: 'clinic', labelKey: 'settings.clinic_info', icon: Building2 },
-    { key: 'stedi',  labelKey: 'settings.stedi',       icon: Shield },
-    { key: 'ai',     labelKey: 'settings.ai',          icon: Cpu },
-    { key: 'lang',   labelKey: 'settings.language',    icon: Globe },
+    { key: 'clinic',     labelKey: 'settings.clinic_info', icon: Building2 },
+    { key: 'stedi',      labelKey: 'settings.stedi',       icon: Shield },
+    { key: 'inmediata',  labelKey: 'inmediata.title',      icon: Zap },
+    { key: 'ai',         labelKey: 'settings.ai',          icon: Cpu },
+    { key: 'lang',       labelKey: 'settings.language',    icon: Globe },
   ];
 
   return (
@@ -133,6 +151,39 @@ export default function SettingsPage() {
               </div>
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
                 {t('settings.sandbox_warning')}
+              </div>
+            </div>
+          )}
+
+          {/* Inmediata */}
+          {active === 'inmediata' && (
+            <div className="space-y-4">
+              <h2 className="font-semibold text-slate-800 mb-4">{t('inmediata.title')}</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>{t('inmediata.sftp_host')}</label>
+                  <input value={sftpHost} onChange={e => setSftpHost(e.target.value)} className={inputClass} placeholder="sftp.inmediata.com" />
+                </div>
+                <div>
+                  <label className={labelClass}>{t('inmediata.sftp_user')}</label>
+                  <input value={sftpUser} onChange={e => setSftpUser(e.target.value)} className={inputClass} placeholder="username" />
+                </div>
+                <div>
+                  <label className={labelClass}>{t('inmediata.sftp_password')}</label>
+                  <input type="password" value={sftpPass} onChange={e => setSftpPass(e.target.value)} className={inputClass} placeholder="••••••••" />
+                </div>
+                <div>
+                  <label className={labelClass}>{t('inmediata.submitter_id')}</label>
+                  <input value={submitterId} onChange={e => setSubmitterId(e.target.value)} className={inputClass} placeholder="YOURID" />
+                </div>
+                <div>
+                  <label className={labelClass}>{t('inmediata.upload_dir')}</label>
+                  <input value={sftpUpDir} onChange={e => setSftpUpDir(e.target.value)} className={inputClass} placeholder="/UPLOAD/837" />
+                </div>
+                <div>
+                  <label className={labelClass}>{t('inmediata.download_dir')}</label>
+                  <input value={sftpDnDir} onChange={e => setSftpDnDir(e.target.value)} className={inputClass} placeholder="/DOWNLOAD/835" />
+                </div>
               </div>
             </div>
           )}

@@ -17,6 +17,8 @@ const ProvidersPage    = lazy(() => import('./pages/ProvidersPage'));
 const PatientsPage     = lazy(() => import('./pages/PatientsPage'));
 const ImportPage       = lazy(() => import('./pages/ImportPage'));
 const SettingsPage     = lazy(() => import('./pages/SettingsPage'));
+const ReportsPage      = lazy(() => import('./pages/ReportsPage'));
+const ERADashboardPage = lazy(() => import('./pages/ERADashboardPage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -65,6 +67,8 @@ export default function App() {
               <Route path="patients" element={<PatientsPage />} />
               <Route path="import" element={<ImportPage />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="reports" element={<ReportsPage />} />
+              <Route path="era" element={<ERADashboardPage />} />
               {/* fallback */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from database import get_db
-from models import Claim, ClaimStatus, Denial, Appeal, User
+from models import Claim, ClaimStatus, Denial, Appeal, User, Payer
 from auth import get_current_user
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -80,4 +80,140 @@ async def get_stats(
         "pending_appeals": pending_appeals,
         "top_denial_reasons": top_denials,
         "recent_claims": recent_claims,
+    }
+
+
+@router.get("/reports")
+async def get_reports(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Reporting data: claims by payer, revenue by month, denial rates, aging, avg days."""
+    today = date.today()
+
+    # ── Claims by payer ─────────────────────────────────────────────────────
+    payer_rows = await db.execute(
+        select(
+            Payer.name,
+            func.count(Claim.id).label("count"),
+            func.coalesce(func.sum(Claim.total_billed), 0.0).label("billed"),
+            func.coalesce(func.sum(Claim.total_paid), 0.0).label("paid"),
+        )
+        .join(Payer, Claim.payer_id == Payer.id)
+        .group_by(Payer.id, Payer.name)
+        .order_by(func.count(Claim.id).desc())
+    )
+    claims_by_payer = [
+        {"payer": r[0], "claims": r[1], "billed": round(float(r[2]), 2), "paid": round(float(r[3]), 2)}
+        for r in payer_rows.fetchall()
+    ]
+
+    # ── Revenue by month ────────────────────────────────────────────────────
+    rev_rows = await db.execute(
+        select(
+            func.strftime("%Y-%m", Claim.service_date_from).label("month"),
+            func.coalesce(func.sum(Claim.total_billed), 0.0).label("billed"),
+            func.coalesce(func.sum(Claim.total_paid), 0.0).label("paid"),
+            func.count(Claim.id).label("count"),
+        )
+        .where(Claim.status != ClaimStatus.VOID)
+        .where(Claim.service_date_from != None)  # noqa: E711
+        .group_by(func.strftime("%Y-%m", Claim.service_date_from))
+        .order_by(func.strftime("%Y-%m", Claim.service_date_from).desc())
+        .limit(12)
+    )
+    revenue_by_month = [
+        {"month": r[0], "billed": round(float(r[1]), 2), "paid": round(float(r[2]), 2), "count": r[3]}
+        for r in rev_rows.fetchall()
+    ]
+    revenue_by_month.reverse()
+
+    # ── Denial rate by payer ────────────────────────────────────────────────
+    total_rows = await db.execute(
+        select(Payer.id, Payer.name, func.count(Claim.id).label("total"))
+        .join(Payer, Claim.payer_id == Payer.id)
+        .group_by(Payer.id, Payer.name)
+    )
+    total_map = {r[0]: (r[1], r[2]) for r in total_rows.fetchall()}  # payer_id -> (name, total)
+
+    denied_rows = await db.execute(
+        select(Payer.id, func.count(Claim.id).label("denied"))
+        .join(Payer, Claim.payer_id == Payer.id)
+        .where(Claim.status == ClaimStatus.DENIED)
+        .group_by(Payer.id)
+    )
+    denied_map = {r[0]: r[1] for r in denied_rows.fetchall()}
+
+    denial_rate_by_payer = []
+    for payer_id, (payer_name, total) in total_map.items():
+        denied = denied_map.get(payer_id, 0)
+        denial_rate_by_payer.append({
+            "payer": payer_name,
+            "denied": denied,
+            "total": total,
+            "rate": round(denied / total * 100, 1) if total > 0 else 0.0,
+        })
+    denial_rate_by_payer.sort(key=lambda x: x["rate"], reverse=True)
+
+    # ── Aging report ────────────────────────────────────────────────────────
+    aging_buckets = {"0_30": (0, 0.0), "31_60": (0, 0.0), "61_90": (0, 0.0),
+                     "91_120": (0, 0.0), "over_120": (0, 0.0)}
+
+    unpaid_rows = await db.execute(
+        select(Claim.service_date_from, (Claim.total_billed - Claim.total_paid).label("balance"))
+        .where(Claim.status.in_([
+            ClaimStatus.SUBMITTED, ClaimStatus.ACCEPTED, ClaimStatus.REJECTED,
+            ClaimStatus.DENIED, ClaimStatus.DRAFT, ClaimStatus.READY
+        ]))
+        .where(Claim.service_date_from != None)  # noqa: E711
+    )
+    for svc_date, balance in unpaid_rows.fetchall():
+        if isinstance(svc_date, str):
+            svc_date = datetime.strptime(svc_date, "%Y-%m-%d").date()
+        bal = float(balance) if balance else 0.0
+        days = (today - svc_date).days
+        if days <= 30:
+            k = "0_30"
+        elif days <= 60:
+            k = "31_60"
+        elif days <= 90:
+            k = "61_90"
+        elif days <= 120:
+            k = "91_120"
+        else:
+            k = "over_120"
+        c, a = aging_buckets[k]
+        aging_buckets[k] = (c + 1, a + bal)
+
+    aging = [
+        {"bucket": "0-30",   "count": aging_buckets["0_30"][0],    "amount": round(aging_buckets["0_30"][1], 2)},
+        {"bucket": "31-60",  "count": aging_buckets["31_60"][0],   "amount": round(aging_buckets["31_60"][1], 2)},
+        {"bucket": "61-90",  "count": aging_buckets["61_90"][0],   "amount": round(aging_buckets["61_90"][1], 2)},
+        {"bucket": "91-120", "count": aging_buckets["91_120"][0],  "amount": round(aging_buckets["91_120"][1], 2)},
+        {"bucket": "120+",   "count": aging_buckets["over_120"][0],"amount": round(aging_buckets["over_120"][1], 2)},
+    ]
+
+    # ── Average days to payment ─────────────────────────────────────────────
+    paid_rows = await db.execute(
+        select(Claim.service_date_from, Claim.updated_at)
+        .where(Claim.status == ClaimStatus.PAID)
+        .where(Claim.service_date_from != None)  # noqa: E711
+        .limit(200)
+    )
+    days_list = []
+    for svc_date, updated_at in paid_rows.fetchall():
+        if svc_date and updated_at:
+            if isinstance(svc_date, str):
+                svc_date = datetime.strptime(svc_date, "%Y-%m-%d").date()
+            paid_date = updated_at.date() if hasattr(updated_at, "date") else updated_at
+            days_list.append((paid_date - svc_date).days)
+
+    avg_days = round(sum(days_list) / len(days_list), 1) if days_list else 0.0
+
+    return {
+        "claims_by_payer":       claims_by_payer,
+        "revenue_by_month":      revenue_by_month,
+        "denial_rate_by_payer":  denial_rate_by_payer,
+        "aging":                 aging,
+        "avg_days_to_payment":   avg_days,
     }

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, FileText, Users, Building2,
   Shield, CheckCircle, Upload, BarChart3, Settings,
-  ChevronLeft, ChevronRight, LogOut, Stethoscope,
+  ChevronLeft, ChevronRight, LogOut, Stethoscope, RefreshCw,
 } from 'lucide-react';
 import { useAuthStore } from '../../hooks/useAuth';
 import clsx from 'clsx';
@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { to: '/eligibility',icon: CheckCircle,     labelKey: 'nav.eligibility' },
   { to: '/import',     icon: Upload,          labelKey: 'nav.import' },
   { to: '/reports',    icon: BarChart3,       labelKey: 'nav.reports' },
+  { to: '/era',        icon: RefreshCw,       labelKey: 'inmediata.era_dashboard' },
   { to: '/settings',   icon: Settings,        labelKey: 'nav.settings' },
 ];
 
