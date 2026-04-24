@@ -128,17 +128,31 @@
     "filter_code": "Filtrar por código",
     "carc_codes": {
       "CO-4": "CO-4: Servicio no cubierto por este plan",
+      "CO-11": "CO-11: Diagnóstico inconsistente con procedimiento",
+      "CO-15": "CO-15: Autorización previa no obtenida",
       "CO-16": "CO-16: Reclamación carece de información necesaria",
       "CO-18": "CO-18: Reclamación duplicada",
       "CO-22": "CO-22: Coordinación de beneficios",
       "CO-29": "CO-29: Reclamación sometida fuera de tiempo",
       "CO-45": "CO-45: Cargos exceden la tarifa del plan",
       "CO-50": "CO-50: Servicio no considerado médicamente necesario",
+      "CO-59": "CO-59: Ajuste procesado con base a múltiples procedimientos",
+      "CO-96": "CO-96: Cargo no cubierto: Refracción rutinaria y adaptación de lentes de contacto no cubierta",
       "CO-97": "CO-97: Servicio incluido en otro pago",
+      "CO-109": "CO-109: Reclamación no cubierta bajo el contrato del proveedor",
+      "CO-151": "CO-151: Pago ajustado por acuerdo con proveedor",
+      "CO-167": "CO-167: Diagnóstico(s) no consistente(s) con el sexo del paciente",
+      "CO-197": "CO-197: Autorización previa/referido no obtenido",
+      "CO-236": "CO-236: Procedimiento/ingreso no cubierto. Cargo del proveedor",
+      "CO-242": "CO-242: Servicio no cubierto cuando se realiza con otro servicio",
+      "CO-252": "CO-252: Servicio requiere autorización previa",
+      "CO-253": "CO-253: Secuenciación de procedimiento incorrecta",
+      "OA-23": "OA-23: Impacto de adjudicación previa",
       "PR-1": "PR-1: Monto del deducible",
       "PR-2": "PR-2: Monto de coaseguro",
       "PR-3": "PR-3: Monto del copago",
-      "PR-22": "PR-22: Paciente puede no ser elegible"
+      "PR-22": "PR-22: Paciente puede no ser elegible",
+      "PR-96": "PR-96: Cargo no cubierto"
     }
   },
   "eligibility": {

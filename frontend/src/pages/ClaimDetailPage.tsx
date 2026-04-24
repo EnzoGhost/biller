@@ -14,6 +14,7 @@ import api from '../lib/api';
 import { formatDateShort, formatDate } from '../lib/dates';
 import type { Claim, Denial, Appeal, ValidationResult, AuditLogEntry, Payment, PriorAuth } from '../types';
 import StatusBadge from '../components/ui/Badge';
+import DatePicker from '../components/ui/DatePicker';
 
 // ── Routing indicator ─────────────────────────────────────────────────────────
 
@@ -970,11 +971,10 @@ export default function ClaimDetailPage() {
                   </div>
                   <div>
                     <label className="block text-xs text-slate-500 mb-1">{t('prior_auth.expiry_date')}</label>
-                    <input
-                      type="date"
+                    <DatePicker
                       value={paExpiry}
-                      onChange={e => setPaExpiry(e.target.value)}
-                      className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm"
+                      onChange={setPaExpiry}
+                      placeholder="Select date"
                     />
                   </div>
                 </div>
@@ -985,9 +985,9 @@ export default function ClaimDetailPage() {
                     className="flex items-center gap-1 px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-xs font-medium rounded disabled:opacity-50"
                   >
                     {savingPa ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                    Save
+                    {t('common.save')}
                   </button>
-                  <button onClick={() => setShowPriorAuthForm(false)} className="text-xs text-slate-500 hover:text-slate-700">Cancel</button>
+                  <button onClick={() => setShowPriorAuthForm(false)} className="text-xs text-slate-500 hover:text-slate-700">{t('common.cancel')}</button>
                 </div>
               </div>
             )}

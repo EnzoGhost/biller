@@ -128,17 +128,31 @@
     "filter_code": "Filter by code",
     "carc_codes": {
       "CO-4": "CO-4: Service not covered by this plan",
+      "CO-11": "CO-11: Diagnosis inconsistent with procedure",
+      "CO-15": "CO-15: Prior authorization not obtained",
       "CO-16": "CO-16: Claim lacks information needed for processing",
       "CO-18": "CO-18: Duplicate claim",
       "CO-22": "CO-22: Coordination of benefits",
       "CO-29": "CO-29: Claim submitted past filing limit",
       "CO-45": "CO-45: Charges exceed fee schedule",
       "CO-50": "CO-50: Service not deemed medically necessary",
+      "CO-59": "CO-59: Adjustment processed based on multiple procedures",
+      "CO-96": "CO-96: Non-covered charge: Routine refraction and contact lens fitting not covered",
       "CO-97": "CO-97: Service included in another payment",
+      "CO-109": "CO-109: Claim not covered by provider contract",
+      "CO-151": "CO-151: Payment adjusted per provider agreement",
+      "CO-167": "CO-167: Diagnosis(es) not consistent with patient gender",
+      "CO-197": "CO-197: Prior authorization/referral not obtained",
+      "CO-236": "CO-236: Procedure/admission not covered. Provider liable",
+      "CO-242": "CO-242: Service not covered when performed with another service",
+      "CO-252": "CO-252: Service requires prior authorization",
+      "CO-253": "CO-253: Incorrect procedure sequencing",
+      "OA-23": "OA-23: Impact of prior adjudication",
       "PR-1": "PR-1: Deductible amount",
       "PR-2": "PR-2: Coinsurance amount",
       "PR-3": "PR-3: Copayment amount",
-      "PR-22": "PR-22: Patient may not be eligible"
+      "PR-22": "PR-22: Patient may not be eligible",
+      "PR-96": "PR-96: Non-covered charge"
     }
   },
   "eligibility": {
