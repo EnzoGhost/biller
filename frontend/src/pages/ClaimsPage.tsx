@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../lib/api';
@@ -12,12 +12,20 @@ const ALL_STATUSES: ClaimStatus[] = ['draft', 'ready', 'submitted', 'accepted', 
 
 export default function ClaimsPage() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const [page, setPage] = useState(1);
-  const [status, setStatus] = useState<ClaimStatus | ''>('');
+  const [status, setStatus] = useState<ClaimStatus | ''>('' );
   const [search, setSearch] = useState('');
+
+  // Sync status from URL ?status=xxx
+  useEffect(() => {
+    const s = searchParams.get('status') as ClaimStatus | null;
+    if (s) setStatus(s);
+  }, [searchParams]);
 
   const params = new URLSearchParams({ page: String(page), per_page: '25' });
   if (status) params.set('status', status);
+  if (search) params.set('search', search);
 
   const { data, isLoading } = useQuery<PaginatedResponse<Claim>>({
     queryKey: ['claims', page, status, search],

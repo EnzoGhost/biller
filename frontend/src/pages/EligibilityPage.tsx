@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle, XCircle, Search, AlertCircle, Globe } from 'lucide-react';
+import { CheckCircle, XCircle, Search, AlertCircle, Globe, User } from 'lucide-react';
 import api from '../lib/api';
 import { formatDate } from '../lib/dates';
 import DatePicker from '../components/ui/DatePicker';
-import type { Payer } from '../types';
+import type { Patient, Payer } from '../types';
 
 interface EligibilityResult {
   is_eligible: boolean;
@@ -52,17 +52,43 @@ export default function EligibilityPage() {
   const [showPrPayers, setShowPrPayers] = useState(false);
   const [selectedStediPayer, setSelectedStediPayer] = useState<StediPayer | null>(null);
 
+  // Patient search state
+  const [patientSearch, setPatientSearch] = useState('');
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+
   const { data: payers } = useQuery<{ items: Payer[] }>({
     queryKey: ['payers-all'],
     queryFn: () => api.get('/payers?per_page=200').then(r => r.data),
+  });
+
+  const { data: patientResults } = useQuery<{ items: Patient[] }>({
+    queryKey: ['patient-search', patientSearch],
+    queryFn: () => api.get(`/patients?per_page=20&search=${encodeURIComponent(patientSearch)}`).then(r => r.data),
+    enabled: patientSearch.length >= 2,
   });
 
   const { data: prPayers, isLoading: loadingPrPayers } = useQuery<{ items: StediPayer[]; total: number }>({
     queryKey: ['stedi-payers-pr'],
     queryFn: () => api.get('/stedi/payers/pr').then(r => r.data),
     enabled: showPrPayers,
-    staleTime: 5 * 60 * 1000, // 5 min cache
+    staleTime: 5 * 60 * 1000,
   });
+
+  const selectPatient = (patient: Patient) => {
+    setSelectedPatient(patient);
+    setPatientFirstName(patient.first_name);
+    setPatientLastName(patient.last_name);
+    setDob(patient.dob);
+    // Auto-fill payer from primary insurance
+    const primary = patient.insurances?.find(i => i.is_primary) ?? patient.insurances?.[0];
+    if (primary) {
+      setPayerId(String(primary.payer_id));
+      setMemberId(primary.member_id);
+    }
+    setShowPatientDropdown(false);
+    setPatientSearch('');
+  };
 
   const handleCheck = async () => {
     if (!payerId || !memberId) return;
@@ -109,12 +135,8 @@ export default function EligibilityPage() {
         {showPrPayers && (
           <div className="mt-3 bg-white border border-slate-200 rounded-xl overflow-hidden">
             <div className="px-4 py-3 bg-sky-50 border-b border-slate-200">
-              <p className="text-sm font-semibold text-sky-800">
-                Pagadores de Puerto Rico — Directorio Stedi
-              </p>
-              {prPayers && (
-                <p className="text-xs text-sky-600 mt-0.5">{prPayers.total} pagadores encontrados</p>
-              )}
+              <p className="text-sm font-semibold text-sky-800">Pagadores de Puerto Rico — Directorio Stedi</p>
+              {prPayers && <p className="text-xs text-sky-600 mt-0.5">{prPayers.total} pagadores encontrados</p>}
             </div>
             {loadingPrPayers ? (
               <div className="p-6 text-center text-sm text-slate-400">Cargando directorio…</div>
@@ -130,12 +152,8 @@ export default function EligibilityPage() {
                       <p className="text-sm font-medium text-slate-800">{p.displayName}</p>
                       <p className="text-xs text-slate-400 mt-0.5">
                         ID: {p.primaryPayerId}
-                        {p.operatingStates?.includes('PR') && (
-                          <span className="ml-2 text-sky-500 font-semibold">🇵🇷 PR</span>
-                        )}
-                        {p.coverageTypes && p.coverageTypes.length > 0 && (
-                          <span className="ml-2 text-slate-300">· {p.coverageTypes.join(', ')}</span>
-                        )}
+                        {p.operatingStates?.includes('PR') && <span className="ml-2 text-sky-500 font-semibold">🇵🇷 PR</span>}
+                        {p.coverageTypes && p.coverageTypes.length > 0 && <span className="ml-2 text-slate-300">· {p.coverageTypes.join(', ')}</span>}
                       </p>
                     </div>
                     {eligibilityBadge(p.transactionSupport?.eligibilityCheck)}
@@ -157,14 +175,69 @@ export default function EligibilityPage() {
               <p className="text-sm font-medium text-sky-900 truncate">{selectedStediPayer.displayName}</p>
               <p className="text-xs text-sky-500">Stedi ID: {selectedStediPayer.stediId} · Payer ID: {selectedStediPayer.primaryPayerId}</p>
             </div>
-            <button
-              onClick={() => setSelectedStediPayer(null)}
-              className="text-xs text-sky-400 hover:text-sky-600"
-            >
-              ✕
-            </button>
+            <button onClick={() => setSelectedStediPayer(null)} className="text-xs text-sky-400 hover:text-sky-600">✕</button>
           </div>
         )}
+
+        {/* Patient Search — ONE box that auto-fills everything */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+            {t('patients.name')} / {t('eligibility.payer')}
+          </label>
+          {selectedPatient ? (
+            <div className="flex items-center gap-3 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2.5">
+              <User className="w-4 h-4 text-sky-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-800">{selectedPatient.first_name} {selectedPatient.last_name}</p>
+                <p className="text-xs text-slate-500">{t('patients.dob')}: {dob} · {t('eligibility.member_id')}: {memberId}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedPatient(null);
+                  setPatientFirstName('');
+                  setPatientLastName('');
+                  setDob('');
+                  setMemberId('');
+                  setPayerId('');
+                }}
+                className="text-xs text-sky-400 hover:text-sky-600"
+              >✕</button>
+            </div>
+          ) : (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                value={patientSearch}
+                onChange={e => { setPatientSearch(e.target.value); setShowPatientDropdown(true); }}
+                onFocus={() => patientSearch && setShowPatientDropdown(true)}
+                onBlur={() => setTimeout(() => setShowPatientDropdown(false), 150)}
+                placeholder={t('patients.name') + '...'}
+                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+              {showPatientDropdown && patientResults?.items && patientResults.items.length > 0 && (
+                <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white rounded-xl border border-slate-200 shadow-xl max-h-60 overflow-y-auto">
+                  {patientResults.items.map(p => {
+                    const primary = p.insurances?.find(i => i.is_primary) ?? p.insurances?.[0];
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onMouseDown={() => selectPatient(p)}
+                        className="w-full text-left px-3 py-2.5 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0"
+                      >
+                        <p className="text-sm font-medium text-slate-800">{p.first_name} {p.last_name}</p>
+                        <p className="text-xs text-slate-500">
+                          {t('patients.dob')}: {p.dob}
+                          {primary && ` · ${primary.payer?.name ?? 'Payer #' + primary.payer_id} · ${primary.member_id}`}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
@@ -195,29 +268,33 @@ export default function EligibilityPage() {
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-              {t('patients.name')} ({t('common.first')})
-            </label>
-            <input
-              value={patientFirstName}
-              onChange={e => setPatientFirstName(e.target.value)}
-              placeholder={t('common.first_name')}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-            />
-          </div>
+          {!selectedPatient && (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                  {t('patients.name')} ({t('common.first')})
+                </label>
+                <input
+                  value={patientFirstName}
+                  onChange={e => setPatientFirstName(e.target.value)}
+                  placeholder={t('common.first_name')}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-              {t('patients.name')} ({t('common.last')})
-            </label>
-            <input
-              value={patientLastName}
-              onChange={e => setPatientLastName(e.target.value)}
-              placeholder={t('common.last_name')}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-            />
-          </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                  {t('patients.name')} ({t('common.last')})
+                </label>
+                <input
+                  value={patientLastName}
+                  onChange={e => setPatientLastName(e.target.value)}
+                  placeholder={t('common.last_name')}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+            </>
+          )}
 
           <div>
             <DatePicker
@@ -249,7 +326,6 @@ export default function EligibilityPage() {
       {/* Result */}
       {result && (
         <div className="bg-white rounded-xl border border-slate-200 p-6">
-          {/* Status banner */}
           <div className={`flex items-center gap-3 p-4 rounded-lg mb-6 ${result.is_eligible ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
             {result.is_eligible
               ? <CheckCircle className="w-6 h-6 text-emerald-600 shrink-0" />
@@ -264,7 +340,6 @@ export default function EligibilityPage() {
             </div>
           </div>
 
-          {/* Benefits grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {[
               { label: t('eligibility.copay'), value: fmt(result.copay) },

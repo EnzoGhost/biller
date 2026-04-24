@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { DollarSign, FileText, TrendingUp, AlertCircle, Clock, Zap, TriangleAlert, Send, ChevronRight, BarChart2 } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { DollarSign, FileText, TrendingUp, AlertCircle, Clock, Zap, TriangleAlert, Send, ChevronRight, BarChart2, CheckCircle } from 'lucide-react';
 import api from '../lib/api';
 import { formatDateShort } from '../lib/dates';
 import type { DashboardStats, ClaimStatus } from '../types';
@@ -57,17 +58,37 @@ export default function DashboardPage() {
     refetchInterval: 60_000,
   });
 
-  // Quick-action: submit all ready claims
+  // Bulk submit state
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; failed: string[] } | null>(null);
+
+  // Quick-action: submit all ready claims with progress
   const submitAllMutation = useMutation({
     mutationFn: async () => {
       const resp = await api.get('/claims?status=ready&per_page=100');
-      const ready = resp.data.items;
-      await Promise.all(ready.map((c: { id: number }) => api.post(`/stedi/submit/${c.id}`)));
-      return ready.length;
+      const ready: { id: number; claim_number: string }[] = resp.data.items;
+      if (!ready.length) return { count: 0, failed: [] };
+      setBulkProgress({ done: 0, total: ready.length, failed: [] });
+      const failed: string[] = [];
+      for (let i = 0; i < ready.length; i++) {
+        const c = ready[i];
+        try {
+          await api.post(`/stedi/submit/${c.id}`);
+        } catch {
+          failed.push(c.claim_number || String(c.id));
+        }
+        setBulkProgress({ done: i + 1, total: ready.length, failed });
+      }
+      return { count: ready.length - failed.length, failed };
     },
-    onSuccess: (count) => {
+    onSuccess: ({ count, failed }) => {
       qc.invalidateQueries({ queryKey: ['dashboard'] });
-      alert(`${count} claim(s) submitted to Stedi`);
+      qc.invalidateQueries({ queryKey: ['claims'] });
+      setTimeout(() => setBulkProgress(null), 4000);
+      if (failed.length === 0) {
+        alert(`✅ ${count} claim(s) submitted successfully`);
+      } else {
+        alert(`✅ ${count} submitted\n❌ ${failed.length} failed: ${failed.join(', ')}`);
+      }
     },
   });
 
@@ -103,7 +124,9 @@ export default function DashboardPage() {
             {submitAllMutation.isPending
               ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               : <Send className="w-3.5 h-3.5" />}
-            Submit All Ready
+            {bulkProgress && submitAllMutation.isPending
+              ? `Submitting ${bulkProgress.done}/${bulkProgress.total}...`
+              : 'Submit All Ready'}
           </button>
         </div>
       </div>
@@ -169,10 +192,14 @@ export default function DashboardPage() {
               const count = s.claims_by_status[status] ?? 0;
               if (count === 0) return null;
               return (
-                <div key={status} className="flex items-center justify-between">
+                <Link
+                  key={status}
+                  to={`/claims?status=${status}`}
+                  className="flex items-center justify-between hover:bg-slate-50 rounded-lg px-2 py-1 -mx-2 transition-colors group"
+                >
                   <StatusBadge status={status} />
-                  <span className="text-sm font-semibold text-slate-900">{count}</span>
-                </div>
+                  <span className="text-sm font-semibold text-slate-900 group-hover:text-sky-600">{count}</span>
+                </Link>
               );
             })}
           </div>
@@ -216,12 +243,17 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-3">
               {s.top_denial_reasons.map((d, i) => (
-                <div key={i} className="flex items-start gap-2">
+                <Link
+                  key={i}
+                  to={`/denials?reason=${encodeURIComponent(d.reason)}`}
+                  className="flex items-start gap-2 hover:bg-rose-50 rounded-lg px-2 py-1 -mx-2 transition-colors"
+                >
                   <span className="text-xs font-bold text-rose-600 bg-rose-50 rounded px-1.5 py-0.5 shrink-0">
                     {d.count}
                   </span>
                   <p className="text-sm text-slate-700 leading-snug">{d.reason}</p>
-                </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 ml-auto shrink-0 mt-0.5" />
+                </Link>
               ))}
             </div>
           )}

@@ -297,3 +297,47 @@ async def post_payment(
     await db.commit()
     await db.refresh(payment)
     return PaymentOut.model_validate(payment)
+
+
+@router.post("/batch-submit", response_model=dict)
+async def batch_submit_claims(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Batch submit all ready claims (status=ready). Returns success/failure counts."""
+    result = await db.execute(
+        select(Claim).options(*claim_with_relations()).where(Claim.status == ClaimStatus.READY)
+    )
+    ready_claims = result.scalars().all()
+
+    if not ready_claims:
+        return {"submitted": 0, "failed": 0, "errors": [], "total": 0}
+
+    submitted = 0
+    failed_list = []
+
+    for claim in ready_claims:
+        try:
+            old_status = claim.status
+            claim.status = ClaimStatus.SUBMITTED
+            claim.date_of_submission = datetime.utcnow()
+            await log_action(
+                db, "claim", claim.id, "status_change",
+                claim_id=claim.id,
+                old_value=str(old_status),
+                new_value=ClaimStatus.SUBMITTED,
+                user=current_user,
+                notes="Batch submit",
+            )
+            submitted += 1
+        except Exception as e:
+            failed_list.append({"claim_id": claim.id, "claim_number": claim.claim_number, "error": str(e)})
+
+    await db.commit()
+
+    return {
+        "submitted": submitted,
+        "failed": len(failed_list),
+        "errors": failed_list,
+        "total": len(ready_claims),
+    }

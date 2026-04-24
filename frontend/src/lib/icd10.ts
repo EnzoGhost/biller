@@ -1,0 +1,102 @@
+export interface ICD10Code {
+  code: string;
+  en: string;
+  es: string;
+}
+
+export const OPTOMETRY_ICD10_CODES: ICD10Code[] = [
+  // H52 - Refractive errors
+  { code: 'H52.00', en: 'Hypermetropia, unspecified eye', es: 'Hipermetropía, ojo no especificado' },
+  { code: 'H52.01', en: 'Hypermetropia, right eye', es: 'Hipermetropía, ojo derecho' },
+  { code: 'H52.02', en: 'Hypermetropia, left eye', es: 'Hipermetropía, ojo izquierdo' },
+  { code: 'H52.10', en: 'Myopia, unspecified eye', es: 'Miopía, ojo no especificado' },
+  { code: 'H52.11', en: 'Myopia, right eye', es: 'Miopía, ojo derecho' },
+  { code: 'H52.12', en: 'Myopia, left eye', es: 'Miopía, ojo izquierdo' },
+  { code: 'H52.201', en: 'Unspecified astigmatism, right eye', es: 'Astigmatismo no especificado, ojo derecho' },
+  { code: 'H52.202', en: 'Unspecified astigmatism, left eye', es: 'Astigmatismo no especificado, ojo izquierdo' },
+  { code: 'H52.4', en: 'Presbyopia', es: 'Presbicia' },
+  { code: 'H52.511', en: 'Internal ophthalmoplegia (complete), right eye', es: 'Oftalmoplejía interna, ojo derecho' },
+  { code: 'H52.6', en: 'Other refractive disorders', es: 'Otros trastornos de refracción' },
+  // H40 - Glaucoma
+  { code: 'H40.10X0', en: 'Primary open-angle glaucoma, unspecified stage', es: 'Glaucoma primario de ángulo abierto, sin estadio' },
+  { code: 'H40.10X1', en: 'Primary open-angle glaucoma, mild stage', es: 'Glaucoma primario de ángulo abierto, estadio leve' },
+  { code: 'H40.10X2', en: 'Primary open-angle glaucoma, moderate stage', es: 'Glaucoma primario de ángulo abierto, estadio moderado' },
+  { code: 'H40.10X3', en: 'Primary open-angle glaucoma, severe stage', es: 'Glaucoma primario de ángulo abierto, estadio grave' },
+  { code: 'H40.1110', en: 'Primary open-angle glaucoma, right eye, unspecified stage', es: 'Glaucoma primario de ángulo abierto, ojo derecho' },
+  { code: 'H40.1120', en: 'Primary open-angle glaucoma, left eye, unspecified stage', es: 'Glaucoma primario de ángulo abierto, ojo izquierdo' },
+  { code: 'H40.20X0', en: 'Unspecified primary angle-closure glaucoma, unspecified stage', es: 'Glaucoma de ángulo cerrado primario no especificado' },
+  { code: 'H40.211', en: 'Acute angle-closure glaucoma, right eye', es: 'Glaucoma agudo de ángulo cerrado, ojo derecho' },
+  { code: 'H40.212', en: 'Acute angle-closure glaucoma, left eye', es: 'Glaucoma agudo de ángulo cerrado, ojo izquierdo' },
+  { code: 'H40.9', en: 'Unspecified glaucoma', es: 'Glaucoma no especificado' },
+  // H35 - Retinal disorders
+  { code: 'H35.00', en: 'Unspecified background retinopathy', es: 'Retinopatía de fondo no especificada' },
+  { code: 'H35.30', en: 'Unspecified macular degeneration', es: 'Degeneración macular no especificada' },
+  { code: 'H35.31', en: 'Nonexudative age-related macular degeneration', es: 'Degeneración macular seca relacionada con la edad' },
+  { code: 'H35.32', en: 'Exudative age-related macular degeneration', es: 'Degeneración macular húmeda relacionada con la edad' },
+  { code: 'H35.81', en: 'Retinal edema', es: 'Edema retiniano' },
+  { code: 'H35.9', en: 'Unspecified retinal disorder', es: 'Trastorno retiniano no especificado' },
+  // H26 - Cataracts
+  { code: 'H26.00', en: 'Unspecified infantile and juvenile cataract', es: 'Catarata infantil y juvenil no especificada' },
+  { code: 'H26.10', en: 'Unspecified traumatic cataract', es: 'Catarata traumática no especificada' },
+  { code: 'H26.20', en: 'Unspecified complicated cataract', es: 'Catarata complicada no especificada' },
+  { code: 'H26.9', en: 'Unspecified cataract', es: 'Catarata no especificada' },
+  { code: 'H25.10', en: 'Age-related nuclear cataract, unspecified eye', es: 'Catarata nuclear relacionada con la edad' },
+  { code: 'H25.01', en: 'Cortical age-related cataract, right eye', es: 'Catarata cortical relacionada con la edad, ojo derecho' },
+  { code: 'H25.012', en: 'Cortical age-related cataract, left eye', es: 'Catarata cortical relacionada con la edad, ojo izquierdo' },
+  // H10 - Conjunctivitis
+  { code: 'H10.00', en: 'Mucopurulent conjunctivitis, unspecified eye', es: 'Conjuntivitis mucopurulenta, ojo no especificado' },
+  { code: 'H10.10', en: 'Acute atopic conjunctivitis, unspecified eye', es: 'Conjuntivitis atópica aguda, ojo no especificado' },
+  { code: 'H10.30', en: 'Unspecified acute conjunctivitis, unspecified eye', es: 'Conjuntivitis aguda no especificada' },
+  { code: 'H10.40', en: 'Chronic conjunctivitis, unspecified eye', es: 'Conjuntivitis crónica, ojo no especificado' },
+  { code: 'H10.9', en: 'Unspecified conjunctivitis', es: 'Conjuntivitis no especificada' },
+  // H04 - Dry eye / lacrimal disorders
+  { code: 'H04.121', en: 'Dry eye syndrome of right lacrimal gland', es: 'Síndrome de ojo seco, glándula lacrimal derecha' },
+  { code: 'H04.122', en: 'Dry eye syndrome of left lacrimal gland', es: 'Síndrome de ojo seco, glándula lacrimal izquierda' },
+  { code: 'H04.123', en: 'Dry eye syndrome of bilateral lacrimal glands', es: 'Síndrome de ojo seco bilateral' },
+  { code: 'H04.129', en: 'Dry eye syndrome, unspecified lacrimal gland', es: 'Síndrome de ojo seco, no especificado' },
+  // E11 - Diabetic eye conditions
+  { code: 'E11.311', en: 'Type 2 DM with mild NPDR, right eye', es: 'DM tipo 2 con RDNP leve, ojo derecho' },
+  { code: 'E11.3211', en: 'Type 2 DM with mild NPDR with macular edema, right eye', es: 'DM tipo 2 con RDNP leve con edema macular, ojo derecho' },
+  { code: 'E11.341', en: 'Type 2 DM with severe NPDR, right eye', es: 'DM tipo 2 con RDNP grave, ojo derecho' },
+  { code: 'E11.359', en: 'Type 2 DM with proliferative DR, unspecified eye', es: 'DM tipo 2 con RDP no especificado' },
+  { code: 'E11.39', en: 'Type 2 DM with other diabetic ophthalmic complication', es: 'DM tipo 2 con otra complicación oftálmica' },
+  // H53 - Visual disturbances
+  { code: 'H53.00', en: 'Unspecified amblyopia', es: 'Ambliopía no especificada' },
+  { code: 'H53.10', en: 'Unspecified subjective visual disturbances', es: 'Trastornos visuales subjetivos no especificados' },
+  { code: 'H53.141', en: 'Visual discomfort, right eye', es: 'Molestia visual, ojo derecho' },
+  { code: 'H53.2', en: 'Diplopia', es: 'Diplopía' },
+  { code: 'H53.40', en: 'Unspecified visual field defects', es: 'Defectos del campo visual no especificados' },
+  { code: 'H53.9', en: 'Unspecified visual disturbance', es: 'Trastorno visual no especificado' },
+  // H50 - Strabismus
+  { code: 'H50.00', en: 'Unspecified esotropia', es: 'Esotropía no especificada' },
+  { code: 'H50.10', en: 'Unspecified exotropia', es: 'Exotropía no especificada' },
+  { code: 'H50.40', en: 'Unspecified heterotropia', es: 'Heterotropía no especificada' },
+  { code: 'H50.9', en: 'Unspecified strabismus', es: 'Estrabismo no especificado' },
+  // H00 - Hordeolum/Chalazion
+  { code: 'H00.011', en: 'Hordeolum externum, right upper eyelid', es: 'Orzuelo externo, párpado superior derecho' },
+  { code: 'H00.014', en: 'Hordeolum externum, left upper eyelid', es: 'Orzuelo externo, párpado superior izquierdo' },
+  { code: 'H00.11', en: 'Chalazion, right upper eyelid', es: 'Chalazión, párpado superior derecho' },
+  { code: 'H00.12', en: 'Chalazion, right lower eyelid', es: 'Chalazión, párpado inferior derecho' },
+  { code: 'H00.14', en: 'Chalazion, left upper eyelid', es: 'Chalazión, párpado superior izquierdo' },
+  { code: 'H00.15', en: 'Chalazion, left lower eyelid', es: 'Chalazión, párpado inferior izquierdo' },
+  // Z01 - Routine eye exams
+  { code: 'Z01.00', en: 'Encounter for eye examination without abnormal findings', es: 'Examen oftalmológico sin hallazgos anormales' },
+  { code: 'Z01.01', en: 'Encounter for eye examination with abnormal findings', es: 'Examen oftalmológico con hallazgos anormales' },
+  // Additional common codes
+  { code: 'H16.001', en: 'Unspecified corneal ulcer, right eye', es: 'Úlcera corneal no especificada, ojo derecho' },
+  { code: 'H16.009', en: 'Unspecified corneal ulcer, unspecified eye', es: 'Úlcera corneal no especificada' },
+  { code: 'H11.003', en: 'Pinguecula, bilateral', es: 'Pinguécula bilateral' },
+  { code: 'H11.013', en: 'Pterygium of eye, bilateral', es: 'Pterigión bilateral' },
+  { code: 'H57.10', en: 'Unspecified ocular pain', es: 'Dolor ocular no especificado' },
+  { code: 'H57.11', en: 'Ocular pain, right eye', es: 'Dolor ocular, ojo derecho' },
+  { code: 'H57.12', en: 'Ocular pain, left eye', es: 'Dolor ocular, ojo izquierdo' },
+];
+
+export function searchICD10(query: string, lang = 'en'): ICD10Code[] {
+  const q = query.toLowerCase().trim();
+  if (!q) return [];
+  return OPTOMETRY_ICD10_CODES.filter(c => {
+    const desc = lang.startsWith('es') ? c.es.toLowerCase() : c.en.toLowerCase();
+    return c.code.toLowerCase().includes(q) || desc.includes(q);
+  }).slice(0, 10);
+}

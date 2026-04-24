@@ -9,7 +9,8 @@
     "import": "Importar",
     "reports": "Reportes",
     "settings": "Configuración",
-    "payments": "Pagos"
+    "payments": "Pagos",
+    "denials": "Denegaciones"
   },
   "status": {
     "draft": "Borrador",
@@ -117,7 +118,25 @@
     "adjustment_codes": "Códigos de Ajuste",
     "ai_analysis": "Análisis IA",
     "view_claim": "Ver Reclamación",
-    "not_available": "No disponible"
+    "not_available": "No disponible",
+    "appeal": "Apelar",
+    "appeal_claim": "Apelar Reclamación",
+    "filter_payer": "Filtrar por pagador",
+    "filter_code": "Filtrar por código",
+    "carc_codes": {
+      "CO-4": "CO-4: Servicio no cubierto por este plan",
+      "CO-16": "CO-16: Reclamación carece de información necesaria",
+      "CO-18": "CO-18: Reclamación duplicada",
+      "CO-22": "CO-22: Coordinación de beneficios",
+      "CO-29": "CO-29: Reclamación sometida fuera de tiempo",
+      "CO-45": "CO-45: Cargos exceden la tarifa del plan",
+      "CO-50": "CO-50: Servicio no considerado médicamente necesario",
+      "CO-97": "CO-97: Servicio incluido en otro pago",
+      "PR-1": "PR-1: Monto del deducible",
+      "PR-2": "PR-2: Monto de coaseguro",
+      "PR-3": "PR-3: Monto del copago",
+      "PR-22": "PR-22: Paciente puede no ser elegible"
+    }
   },
   "eligibility": {
     "title": "Verificación de Elegibilidad",

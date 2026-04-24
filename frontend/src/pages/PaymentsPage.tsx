@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { DollarSign, Plus, RefreshCw, ChevronDown, ChevronUp, Check, X, Layers } from 'lucide-react';
+import { DollarSign, Plus, RefreshCw, ChevronDown, ChevronUp, Check, X, Layers, Search } from 'lucide-react';
+import DatePicker from '../components/ui/DatePicker';
 import api from '../lib/api';
 import { formatDate } from '../lib/dates';
 import type { Payment, PaginatedResponse } from '../types';
@@ -41,6 +42,7 @@ export default function PaymentsPage() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
   // Batch form
+  const [historySearch, setHistorySearch] = useState('');
   const [showBatch, setShowBatch] = useState(false);
   const [batchCheckNumber, setBatchCheckNumber] = useState('');
   const [batchCheckDate, setBatchCheckDate] = useState('');
@@ -201,14 +203,10 @@ export default function PaymentsPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                  {t('payments.check_date')}
-                </label>
-                <input
-                  type="date"
+                <DatePicker
+                  label={t('payments.check_date')}
                   value={checkDate}
-                  onChange={e => setCheckDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  onChange={setCheckDate}
                 />
               </div>
             </div>
@@ -320,14 +318,10 @@ export default function PaymentsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                    {t('payments.check_date')}
-                  </label>
-                  <input
-                    type="date"
+                  <DatePicker
+                    label={t('payments.check_date')}
                     value={batchCheckDate}
-                    onChange={e => setBatchCheckDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                    onChange={setBatchCheckDate}
                   />
                 </div>
               </div>
@@ -394,9 +388,18 @@ export default function PaymentsPage() {
 
       {/* Payment History */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
+        <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-3">
           <RefreshCw className="w-4 h-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-slate-700">{t('payments.history')}</h2>
+          <h2 className="text-sm font-semibold text-slate-700 flex-1">{t('payments.history')}</h2>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <input
+              value={historySearch}
+              onChange={e => setHistorySearch(e.target.value)}
+              placeholder={t('common.search')}
+              className="pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 w-48"
+            />
+          </div>
         </div>
         {isLoading ? (
           <div className="p-6 text-center">
@@ -417,10 +420,24 @@ export default function PaymentsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {payments?.items.length === 0 && (
+              {(payments?.items ?? []).filter(p => {
+                if (!historySearch) return true;
+                const s = historySearch.toLowerCase();
+                return (
+                  String(p.claim_id).includes(s) ||
+                  (p.check_number?.toLowerCase().includes(s) ?? false)
+                );
+              }).length === 0 && (
                 <tr><td colSpan={8} className="px-4 py-6 text-center text-slate-400 text-sm">{t('payments.no_payments')}</td></tr>
               )}
-              {payments?.items.map(p => (
+              {(payments?.items ?? []).filter(p => {
+                if (!historySearch) return true;
+                const s = historySearch.toLowerCase();
+                return (
+                  String(p.claim_id).includes(s) ||
+                  (p.check_number?.toLowerCase().includes(s) ?? false)
+                );
+              }).map(p => (
                 <tr key={p.id} className={`hover:bg-slate-50 ${p.payment_amount < 0 ? 'bg-rose-50' : ''}`}>
                   <td className="px-4 py-2 font-mono text-slate-700">#{p.claim_id}</td>
                   <td className="px-4 py-2 font-mono text-slate-600">{p.check_number ?? '—'}</td>

@@ -9,7 +9,8 @@
     "import": "Import",
     "reports": "Reports",
     "settings": "Settings",
-    "payments": "Payments"
+    "payments": "Payments",
+    "denials": "Denials"
   },
   "status": {
     "draft": "Draft",
@@ -117,7 +118,25 @@
     "adjustment_codes": "Adjustment Codes",
     "ai_analysis": "AI Analysis",
     "view_claim": "View Claim",
-    "not_available": "Not available"
+    "not_available": "Not available",
+    "appeal": "Appeal",
+    "appeal_claim": "Appeal Claim",
+    "filter_payer": "Filter by payer",
+    "filter_code": "Filter by code",
+    "carc_codes": {
+      "CO-4": "CO-4: Service not covered by this plan",
+      "CO-16": "CO-16: Claim lacks information needed for processing",
+      "CO-18": "CO-18: Duplicate claim",
+      "CO-22": "CO-22: Coordination of benefits",
+      "CO-29": "CO-29: Claim submitted past filing limit",
+      "CO-45": "CO-45: Charges exceed fee schedule",
+      "CO-50": "CO-50: Service not deemed medically necessary",
+      "CO-97": "CO-97: Service included in another payment",
+      "PR-1": "PR-1: Deductible amount",
+      "PR-2": "PR-2: Coinsurance amount",
+      "PR-3": "PR-3: Copayment amount",
+      "PR-22": "PR-22: Patient may not be eligible"
+    }
   },
   "eligibility": {
     "title": "Eligibility Check",

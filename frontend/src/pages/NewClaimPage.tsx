@@ -6,6 +6,9 @@ import { Plus, Trash2, ArrowLeft } from 'lucide-react';
 import api from '../lib/api';
 import DatePicker from '../components/ui/DatePicker';
 import SearchableSelect from '../components/ui/SearchableSelect';
+import ICD10Input from '../components/ui/ICD10Input';
+import CPTInput from '../components/ui/CPTInput';
+import type { CPTCode } from '../lib/cpt';
 import type { Patient, Provider, Payer } from '../types';
 
 interface ServiceLineForm {
@@ -198,12 +201,10 @@ export default function NewClaimPage() {
               <label className={labelClass}>
                 {t('claims.diagnosis_codes')} ({t('claims.diagnosis_codes_hint')}) *
               </label>
-              <input
-                required
+              <ICD10Input
                 value={diagCodes}
-                onChange={e => setDiagCodes(e.target.value)}
-                placeholder="J06.9, Z00.00"
-                className={inputClass}
+                onChange={setDiagCodes}
+                required
               />
             </div>
             <div>
@@ -236,12 +237,15 @@ export default function NewClaimPage() {
               <div key={i} className="grid grid-cols-12 gap-2 items-end p-3 bg-slate-50 rounded-lg">
                 <div className="col-span-2">
                   {i === 0 && <label className={labelClass}>CPT *</label>}
-                  <input
-                    required
+                  <CPTInput
                     value={line.cpt_code}
-                    onChange={e => updateLine(i, { cpt_code: e.target.value })}
-                    placeholder="99213"
-                    className={inputClass}
+                    onChange={v => updateLine(i, { cpt_code: v })}
+                    onSelect={(cpt: CPTCode) => updateLine(i, {
+                      cpt_code: cpt.code,
+                      description: cpt.description,
+                      billed_amount: cpt.standardFee,
+                    })}
+                    required
                   />
                 </div>
                 <div className="col-span-4">

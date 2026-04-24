@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { Search, Users, Phone, FileText, Plus, X, Check, Trash2 } from 'lucide-react';
 import api from '../lib/api';
 import { formatDate } from '../lib/dates';
+import DatePicker from '../components/ui/DatePicker';
 import type { Patient, Payer, PaginatedResponse, Gender } from '../types';
 
 const GENDERS: Gender[] = ['M', 'F', 'U'];
@@ -334,9 +335,12 @@ export default function PatientsPage() {
               {/* DOB + Gender */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">{t('patients.dob')} *</label>
-                  <input required type="date" value={form.dob} onChange={setField('dob')}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                  <DatePicker
+                    label={`${t('patients.dob')} *`}
+                    value={form.dob}
+                    onChange={v => setForm(f => ({ ...f, dob: v }))}
+                    required
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">{t('patients.gender')}</label>
@@ -447,14 +451,26 @@ export default function PatientsPage() {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-slate-600 mb-1">{t('eligibility.coverage_start')}</label>
-                          <input type="date" value={ins.effective_date} onChange={setInsField(idx, 'effective_date')}
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                          <DatePicker
+                            label={t('eligibility.coverage_start')}
+                            value={ins.effective_date}
+                            onChange={v => setForm(f => {
+                              const updated = [...f.insurances];
+                              updated[idx] = { ...updated[idx], effective_date: v };
+                              return { ...f, insurances: updated };
+                            })}
+                          />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-600 mb-1">{t('patients.termination_date')}</label>
-                          <input type="date" value={ins.termination_date} onChange={setInsField(idx, 'termination_date')}
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                          <DatePicker
+                            label={t('patients.termination_date')}
+                            value={ins.termination_date}
+                            onChange={v => setForm(f => {
+                              const updated = [...f.insurances];
+                              updated[idx] = { ...updated[idx], termination_date: v };
+                              return { ...f, insurances: updated };
+                            })}
+                          />
                         </div>
                       </div>
                       <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
