@@ -1,63 +1,103 @@
-# 📞 Inmediata Call Script — SFTP Access Request
+# 📞 Inmediata — Integration Setup
 
-## Who to call
-**Inmediata Health Group**
-- Phone: **787-641-6500**
-- Hours: Mon-Fri 8AM-5PM AST
-- Ask for: **Technical Support** or **EDI Department**
+## Contact Info
+- **Phone:** (787) 783-3233
+- **Email:** techsupport@inmediata.com
+- **Hours:** Mon-Fri 8AM-5PM AST
 
-## What to have ready BEFORE calling
-1. **Clinic name** (your mom's exact clinic name as registered)
-2. **NPI number** (10-digit National Provider Identifier — ask your mom)
-3. **Tax ID / EIN** (employer identification number — ask your mom)
-4. **Contact email** (where they'll send the SFTP credentials)
-5. **Phone number** (clinic phone on file with them)
-6. **Billing software name** — say: **"Biller PR"** (our app)
+## Option 1: Email First (Recommended)
 
-## What to say (word for word)
+Skip the phone. Send this email to **techsupport@inmediata.com**:
 
-> "Hola, buenos días. Estoy llamando de parte de [NOMBRE DE LA CLÍNICA], NPI [NÚMERO]. 
-> 
-> Estamos implementando un sistema de facturación electrónica nuevo y necesitamos acceso SFTP para envío de reclamaciones en batch y recibir ERAs.
-> 
-> Necesitamos:
-> 1. Las credenciales de SFTP — hostname, usuario, y contraseña
-> 2. El directorio donde subir archivos 837P
-> 3. El directorio donde descargar archivos 835 (ERAs)
-> 4. El Submitter ID de la clínica
-> 5. Cualquier documentación de integración que tengan
+---
+
+**Subject:** Solicitud de integración — [NOMBRE DE LA CLÍNICA] — NPI [NÚMERO]
+
+Estimados,
+
+Estamos implementando un sistema de facturación electrónico nuevo llamado **SometeoPR** para la clínica [NOMBRE DE LA CLÍNICA], NPI [NÚMERO], Tax ID [NÚMERO].
+
+La clínica ya tiene cuenta activa con Inmediata y usa SecureTrack para someter reclamaciones. Ahora necesitamos integrar nuestro sistema directamente con Inmediata para automatizar el envío de reclamaciones y la recepción de ERAs.
+
+Necesitamos lo siguiente:
+
+1. **Opciones de integración disponibles** — ¿Ofrecen SFTP, API (REST/SOAP), o solo el portal web para batch upload?
+2. **Credenciales de acceso SFTP** (si aplica) — hostname, usuario, contraseña, directorios de upload/download
+3. **Submitter ID** de la clínica para el segmento ISA del archivo EDI
+4. **Companion Guide** o documentación de integración para 837P (Professional) y 835 (ERA)
+5. **Ambiente de pruebas** — ¿Tienen un sandbox o entorno de testing?
+6. **Requisitos de formato** — Confirmamos que generamos archivos ANSI X12 837P versión 5010, HIPAA compliant
+
+Nuestro software (SometeoPR) genera archivos 837P y puede procesar 835 ERAs automáticamente. Necesitamos saber cuál es el método preferido para conectar con ustedes.
+
+Pueden enviar la información a: [TU EMAIL]
+
+Gracias,
+[TU NOMBRE]
+[NOMBRE DE LA CLÍNICA]
+Tel: [TELÉFONO]
+
+---
+
+## Option 2: Phone Call
+
+If email doesn't get a response within 2-3 business days, call (787) 783-3233.
+
+### What to have ready:
+1. **Clinic name** (exact as registered with Inmediata)
+2. **NPI number** (10-digit)
+3. **Tax ID / EIN**
+4. **Your email** (where they'll send creds/docs)
+5. **Software name:** say **"SometeoPR"**
+
+### What to say:
+
+> "Hola, buenos días. Estoy llamando de parte de [NOMBRE DE LA CLÍNICA], NPI [NÚMERO].
 >
-> El software se llama Biller PR. Enviamos archivos en formato X12 837P versión 5010."
+> Ya tenemos cuenta activa con Inmediata — usamos SecureTrack. Estamos implementando un sistema de facturación nuevo que se llama SometeoPR y necesitamos integración directa.
+>
+> Primero: ¿Cuáles son las opciones de integración que ofrecen? ¿Tienen SFTP, API, o solo batch upload por el portal?
+>
+> Necesitamos:
+> 1. Credenciales de SFTP o API — lo que tengan disponible
+> 2. El Submitter ID de la clínica
+> 3. Documentación de integración o companion guide
+> 4. Acceso a un ambiente de pruebas si tienen uno
+>
+> SometeoPR genera archivos X12 837P versión 5010 y puede recibir 835 para reconciliación automática de pagos."
 
-## If they ask questions
+### If they push back or ask questions:
 
-**"¿Qué es SFTP?"**
-> "Secure File Transfer Protocol. Es el método estándar para enviar archivos de reclamaciones electrónicas en batch, en vez de entrarlas una por una por el portal."
+**"Solo tienen que usar el portal SecureTrack"**
+> "Entiendo, pero necesitamos automatizar el proceso. El portal es manual — nuestro sistema genera cientos de reclamaciones. ¿No tienen opción de batch upload automático, SFTP, o web service?"
 
-**"¿Ya tienen cuenta con nosotros?"**
-> "Sí, la clínica ya tiene cuenta activa con Inmediata. Usamos el portal para someter reclamaciones. Ahora necesitamos acceso SFTP además del portal para automatizar el proceso."
+**"Eso es solo para software vendors certificados"**
+> "OK, ¿cuál es el proceso de certificación? ¿Qué formularios necesitamos llenar?"
 
-**"¿Cuál es el formato?"**
-> "ANSI X12 837P versión 5010, HIPAA compliant."
+**"Tiene costo adicional"**
+> "¿Cuánto? La clínica ya paga $140 al mes."
 
-**"¿Necesitan algún acuerdo o formulario?"**
-> "Sí, lo que necesiten. Pueden enviar los formularios por email a [EMAIL]."
+**"Necesitan llenar un formulario de Trading Partner"**
+> "Perfecto, pueden enviar el formulario a [EMAIL]."
 
-**"Eso tiene costo adicional?"**
-> Probably not — SFTP is usually included in their $140/month plan. If they say yes, ask how much and we'll decide.
+**"No ofrecemos SFTP/API"**
+> "OK, ¿entonces el batch upload por el portal web acepta archivos 837P? ¿O solo entrada manual?"
+> If yes to 837P upload: "Eso nos funciona. ¿Tienen documentación del formato que aceptan?"
 
-## What they should send you (by email)
-1. ✅ SFTP hostname (something like `sftp.inmediata.com`)
-2. ✅ SFTP username
-3. ✅ SFTP password
-4. ✅ Upload directory path (for 837P files)
-5. ✅ Download directory path (for 835 ERA files)
-6. ✅ Submitter ID (for the ISA segment of EDI files)
-7. ✅ Any companion guide or integration docs
-8. ✅ Test environment info (if they have one)
+## What We Need From Them
 
-## After the call
-Send everything to Rey → I'll configure it in the biller app `.env`:
+| Item | Priority | Notes |
+|------|----------|-------|
+| Integration method (SFTP/API/portal upload) | 🔴 Critical | Determines our architecture |
+| SFTP credentials (host, user, pass, dirs) | 🔴 Critical | If SFTP available |
+| Submitter ID | 🔴 Critical | For ISA segment in EDI files |
+| Companion guide / integration docs | 🟡 Important | Format requirements, business rules |
+| Test environment | 🟡 Important | For safe testing before live |
+| Trading Partner Agreement | 🟢 Nice | May be required before go-live |
+
+## After Getting the Info
+
+Send everything to Enzo. I'll configure it in SometeoPR's `.env`:
 ```
 INMEDIATA_SFTP_HOST=sftp.inmediata.com
 INMEDIATA_SFTP_USER=your_username
@@ -67,7 +107,12 @@ INMEDIATA_SFTP_DOWNLOAD_DIR=/DOWNLOAD/835
 INMEDIATA_SUBMITTER_ID=your_submitter_id
 ```
 
-## Timeline
-- They usually send SFTP creds within **1-3 business days**
-- Some clearinghouses need a **connectivity test** before going live
-- If they say it takes weeks, push back — SFTP access is standard and should be quick
+## Fallback Plan
+
+If Inmediata only supports manual portal entry (no SFTP, no API, no batch upload):
+1. We generate 837P files in SometeoPR
+2. Ruth uploads them manually via SecureTrack's batch upload feature
+3. We download 835 ERAs from SecureTrack manually
+4. Long-term: migrate to Stedi when we have enough volume to justify $500/month
+
+This isn't ideal but it still saves Ruth 80% of the work — she just drags and drops a file instead of typing every claim by hand.
