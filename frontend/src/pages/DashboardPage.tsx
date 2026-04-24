@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { DollarSign, FileText, TrendingUp, AlertCircle, Clock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { DollarSign, FileText, TrendingUp, AlertCircle, Clock, Zap, TriangleAlert, Send, ChevronRight, BarChart2 } from 'lucide-react';
 import api from '../lib/api';
 import { formatDateShort } from '../lib/dates';
 import type { DashboardStats, ClaimStatus } from '../types';
@@ -26,12 +27,48 @@ function StatCard({ label, value, sub, icon: Icon, color }: {
   );
 }
 
+// Mini sparkline using SVG
+function MiniChart({ data }: { data: { week: string; billed: number; paid: number }[] }) {
+  if (!data || data.length === 0) return null;
+  const max = Math.max(...data.map(d => d.billed), 1);
+  const W = 160; const H = 40; const pad = 4;
+  const n = data.length;
+  const stepX = (W - pad * 2) / Math.max(n - 1, 1);
+
+  const billedPts = data.map((d, i) => `${pad + i * stepX},${H - pad - ((d.billed / max) * (H - pad * 2))}`).join(' ');
+  const paidPts   = data.map((d, i) => `${pad + i * stepX},${H - pad - ((d.paid   / max) * (H - pad * 2))}`).join(' ');
+
+  return (
+    <svg width={W} height={H} className="overflow-visible">
+      <polyline points={billedPts} fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeLinejoin="round" />
+      <polyline points={paidPts}   fill="none" stroke="#10b981" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export default function DashboardPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ['dashboard'],
     queryFn: () => api.get('/dashboard/stats').then(r => r.data),
     refetchInterval: 60_000,
+  });
+
+  // Quick-action: submit all ready claims
+  const submitAllMutation = useMutation({
+    mutationFn: async () => {
+      const resp = await api.get('/claims?status=ready&per_page=100');
+      const ready = resp.data.items;
+      await Promise.all(ready.map((c: { id: number }) => api.post(`/stedi/submit/${c.id}`)));
+      return ready.length;
+    },
+    onSuccess: (count) => {
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      alert(`${count} claim(s) submitted to Stedi`);
+    },
   });
 
   const fmt = (n: number) =>
@@ -47,10 +84,32 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-xl font-bold text-slate-900 mb-6">{t('dashboard.title')}</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-xl font-bold text-slate-900">{t('dashboard.title')}</h1>
+        {/* Quick actions */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/eligibility')}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-500" />
+            Check Eligibility
+          </button>
+          <button
+            onClick={() => submitAllMutation.mutate()}
+            disabled={submitAllMutation.isPending}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg disabled:opacity-50"
+          >
+            {submitAllMutation.isPending
+              ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              : <Send className="w-3.5 h-3.5" />}
+            Submit All Ready
+          </button>
+        </div>
+      </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatCard label={t('dashboard.total_claims')} value={String(s.total_claims)} icon={FileText} color="bg-slate-500" />
         <StatCard label={t('dashboard.billed_mtd')} value={fmt(s.total_billed_mtd)} icon={DollarSign} color="bg-sky-500" />
         <StatCard label={t('dashboard.collected_mtd')} value={fmt(s.total_paid_mtd)} icon={TrendingUp} color="bg-emerald-500" />
@@ -61,9 +120,47 @@ export default function DashboardPage() {
           icon={AlertCircle}
           color="bg-amber-500"
         />
+        <StatCard
+          label="Submitted Today"
+          value={String(s.submitted_today ?? 0)}
+          icon={Send}
+          color="bg-indigo-500"
+        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Attention required */}
+      {s.attention_claims && s.attention_claims.length > 0 && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <TriangleAlert className="w-4 h-4 text-rose-500" />
+            <h2 className="text-sm font-semibold text-rose-700">
+              Claims Requiring Attention ({s.attention_claims.length})
+            </h2>
+          </div>
+          <div className="space-y-2">
+            {s.attention_claims.slice(0, 5).map(c => (
+              <div
+                key={c.id}
+                onClick={() => navigate(`/claims/${c.id}`)}
+                className="flex items-center justify-between bg-white rounded-lg px-3 py-2 cursor-pointer hover:bg-rose-50 border border-rose-100"
+              >
+                <div className="flex items-center gap-3">
+                  <StatusBadge status={c.status} />
+                  <span className="font-mono text-xs text-slate-700">{c.claim_number}</span>
+                  <span className="text-xs text-slate-500">{c.reason}</span>
+                </div>
+                <div className="flex items-center gap-3 text-right">
+                  <span className="text-xs font-medium text-slate-700">{fmt(c.total_billed)}</span>
+                  <span className="text-xs text-slate-400">{c.days_old}d</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Claims by status */}
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <h2 className="text-sm font-semibold text-slate-700 mb-4">{t('dashboard.claims_by_status')}</h2>
@@ -79,6 +176,36 @@ export default function DashboardPage() {
               );
             })}
           </div>
+        </div>
+
+        {/* Weekly trends */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <BarChart2 className="w-4 h-4 text-slate-400" />
+              Weekly Trends
+            </h2>
+            <div className="flex items-center gap-3 text-xs text-slate-400">
+              <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-slate-400 inline-block" /> Billed</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block" /> Paid</span>
+            </div>
+          </div>
+          {s.weekly_trends && s.weekly_trends.length > 0 ? (
+            <>
+              <MiniChart data={s.weekly_trends} />
+              <div className="mt-3 space-y-1">
+                {s.weekly_trends.slice(-4).map(w => (
+                  <div key={w.week} className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">{w.week}</span>
+                    <span className="text-slate-700">{w.claims} claims</span>
+                    <span className="text-emerald-600 font-medium">{fmt(w.paid)}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-slate-400">No trend data</p>
+          )}
         </div>
 
         {/* Top denials */}
@@ -99,6 +226,43 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Payer performance */}
+        {s.payer_performance && s.payer_performance.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h2 className="text-sm font-semibold text-slate-700 mb-4">Payer Performance</h2>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="text-left pb-2 font-semibold text-slate-500">Payer</th>
+                  <th className="text-center pb-2 font-semibold text-slate-500">Claims</th>
+                  <th className="text-center pb-2 font-semibold text-slate-500">Denial %</th>
+                  <th className="text-center pb-2 font-semibold text-slate-500">Collection %</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {s.payer_performance.map(p => (
+                  <tr key={p.payer_id}>
+                    <td className="py-1.5 font-medium text-slate-700 truncate max-w-[140px]">{p.payer_name}</td>
+                    <td className="py-1.5 text-center text-slate-600">{p.total_claims}</td>
+                    <td className="py-1.5 text-center">
+                      <span className={`font-semibold ${p.denial_rate > 20 ? 'text-rose-600' : p.denial_rate > 10 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                        {p.denial_rate}%
+                      </span>
+                    </td>
+                    <td className="py-1.5 text-center">
+                      <span className={`font-semibold ${p.collection_rate > 70 ? 'text-emerald-600' : p.collection_rate > 40 ? 'text-amber-600' : 'text-rose-600'}`}>
+                        {p.collection_rate}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Recent claims */}
         <div className="bg-white rounded-xl border border-slate-200 p-5">
@@ -108,7 +272,11 @@ export default function DashboardPage() {
           </h2>
           <div className="space-y-2">
             {s.recent_claims.map(claim => (
-              <div key={claim.id} className="flex items-center justify-between py-1 border-b border-slate-50 last:border-0">
+              <div
+                key={claim.id}
+                onClick={() => navigate(`/claims/${claim.id}`)}
+                className="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 px-1 rounded"
+              >
                 <div>
                   <p className="text-xs font-mono text-slate-700">{claim.claim_number}</p>
                   <p className="text-xs text-slate-400">{formatDateShort(claim.service_date_from)}</p>

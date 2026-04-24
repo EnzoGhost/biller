@@ -170,6 +170,43 @@ export interface Appeal {
   created_at: string;
 }
 
+export interface AuditLogEntry {
+  id: number;
+  entity_type: string;
+  entity_id: number;
+  claim_id?: number;
+  action: string;
+  old_value?: string;
+  new_value?: string;
+  user_email?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export interface ValidationIssue {
+  severity: 'error' | 'warning' | 'info';
+  code: string;
+  field: string;
+  message: string;
+}
+
+export interface EnvolveRouting {
+  is_envolve_payer: boolean;
+  route: 'standard' | 'envolve' | 'medical_bypass';
+  suggestion?: string;
+  envolve_applicable: boolean;
+}
+
+export interface ValidationResult {
+  claim_id: number;
+  is_valid: boolean;
+  error_count: number;
+  warning_count: number;
+  info_count: number;
+  issues: ValidationIssue[];
+  envolve_routing: EnvolveRouting;
+}
+
 export interface DashboardStats {
   total_claims: number;
   claims_by_status: Record<ClaimStatus, number>;
@@ -184,6 +221,29 @@ export interface DashboardStats {
     status: ClaimStatus;
     total_billed: number;
     service_date_from: string;
+  }>;
+  submitted_today: number;
+  attention_claims: Array<{
+    id: number;
+    claim_number: string;
+    status: ClaimStatus;
+    total_billed: number;
+    service_date_from: string;
+    days_old: number;
+    reason: string;
+  }>;
+  weekly_trends: Array<{
+    week: string;
+    claims: number;
+    billed: number;
+    paid: number;
+  }>;
+  payer_performance: Array<{
+    payer_id: number;
+    payer_name: string;
+    total_claims: number;
+    denial_rate: number;
+    collection_rate: number;
   }>;
 }
 

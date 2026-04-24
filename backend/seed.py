@@ -1,17 +1,18 @@
 """
-Seed the database with realistic Puerto Rico medical billing data.
+Seed the database with realistic Puerto Rico optometry billing data.
 Run: python seed.py
 """
 import asyncio
 from datetime import date, datetime, timedelta
 import random
+import string
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from database import init_db, AsyncSessionLocal
 from models import (
     User, Provider, Payer, Patient, PatientInsurance,
-    Claim, ServiceLine, Payment, Denial,
+    Claim, ServiceLine, Payment, Denial, AuditLog,
     ClaimStatus, Gender, UserRole, PayerType, SubmissionMethod
 )
 from auth import hash_password
@@ -23,50 +24,93 @@ PR_PAYERS = [
         "payer_id": "TSS",
         "payer_type": PayerType.COMMERCIAL,
         "submission_method": SubmissionMethod.STEDI,
-        "stedi_payer_id": "SB560",
+        "stedi_payer_id": "VMJBW",
         "address_line1": "PO Box 363628",
         "city": "San Juan",
         "zip_code": "00936",
         "phone": "787-774-6060",
-        "timely_filing_days": 90,
-        "notes": "Largest commercial insurer in Puerto Rico",
+        "timely_filing_days": 180,
+        "notes": "Largest commercial insurer in Puerto Rico. Stedi ID: VMJBW",
     },
     {
         "name": "MCS Healthcare",
         "payer_id": "MCS",
         "payer_type": PayerType.COMMERCIAL,
         "submission_method": SubmissionMethod.STEDI,
-        "stedi_payer_id": "MCS01",
+        "stedi_payer_id": "OLFKO",
         "address_line1": "PO Box 9023518",
         "city": "San Juan",
         "zip_code": "00902",
         "phone": "787-763-4949",
-        "timely_filing_days": 90,
+        "timely_filing_days": 180,
+        "notes": "MCS Healthcare PR. Stedi ID: OLFKO",
     },
     {
         "name": "MMM Healthcare",
         "payer_id": "MMM",
         "payer_type": PayerType.MEDICARE,
         "submission_method": SubmissionMethod.STEDI,
-        "stedi_payer_id": "MMM01",
+        "stedi_payer_id": "DCURP",
         "address_line1": "PO Box 195009",
         "city": "San Juan",
         "zip_code": "00919",
         "phone": "787-774-6700",
-        "timely_filing_days": 90,
-        "notes": "Medicare Advantage plan in PR",
+        "timely_filing_days": 365,
+        "notes": "Medicare Advantage plan in PR. Stedi ID: DCURP",
     },
     {
         "name": "First Medical Health Plan",
         "payer_id": "FMHP",
         "payer_type": PayerType.COMMERCIAL,
         "submission_method": SubmissionMethod.STEDI,
-        "stedi_payer_id": "FMHP1",
+        "stedi_payer_id": "FMKIY",
         "address_line1": "PO Box 9023005",
         "city": "San Juan",
         "zip_code": "00902",
         "phone": "787-474-7474",
-        "timely_filing_days": 90,
+        "timely_filing_days": 180,
+        "notes": "First Medical Health Plan. Stedi ID: FMKIY",
+    },
+    {
+        "name": "Humana Puerto Rico",
+        "payer_id": "HUMPR",
+        "payer_type": PayerType.MEDICARE,
+        "submission_method": SubmissionMethod.STEDI,
+        "stedi_payer_id": "GZMSV",
+        "address_line1": "500 W. Main Street",
+        "city": "San Juan",
+        "zip_code": "00918",
+        "phone": "800-448-6262",
+        "timely_filing_days": 365,
+        "notes": "Humana Puerto Rico Medicare Advantage. Stedi ID: GZMSV",
+    },
+    {
+        "name": "Medicare / Novitas Solutions",
+        "payer_id": "MEDICARE",
+        "payer_type": PayerType.MEDICARE,
+        "submission_method": SubmissionMethod.STEDI,
+        "stedi_payer_id": "KXVQE",
+        "address_line1": "PO Box 3080",
+        "city": "Mechanicsburg",
+        "state": "PA",
+        "zip_code": "17055",
+        "phone": "855-252-8782",
+        "timely_filing_days": 365,
+        "notes": "Novitas Solutions is MAC for PR (J12). Medicare Part B.",
+    },
+    {
+        "name": "Envolve Vision of Puerto Rico",
+        "payer_id": "ENVOLVE",
+        "payer_type": PayerType.VISION,
+        "submission_method": SubmissionMethod.STEDI,
+        "stedi_payer_id": "WSXQY",
+        "address_line1": "PO Box 17367",
+        "city": "Richmond",
+        "state": "VA",
+        "zip_code": "23226",
+        "phone": "800-282-3232",
+        "timely_filing_days": 365,
+        "notes": "Vision carve-out TPA. Availity clearinghouse. Payer ID 56190. ~35% TPA fee.",
     },
     {
         "name": "Molina Healthcare of Puerto Rico",
@@ -79,7 +123,20 @@ PR_PAYERS = [
         "zip_code": "00929",
         "phone": "787-474-8300",
         "timely_filing_days": 365,
-        "notes": "Medicaid managed care; use Inmediata for EDI",
+        "notes": "Medicaid managed care. Use Inmediata for EDI submission.",
+    },
+    {
+        "name": "Plan de Salud del Gobierno (ASES/GHP)",
+        "payer_id": "ASES",
+        "payer_type": PayerType.MEDICAID,
+        "submission_method": SubmissionMethod.INMEDIATA,
+        "inmediata_payer_id": "ASES1",
+        "address_line1": "PO Box 195009",
+        "city": "San Juan",
+        "zip_code": "00919",
+        "phone": "787-474-3300",
+        "timely_filing_days": 365,
+        "notes": "Government Health Plan. Via Inmediata clearinghouse.",
     },
     {
         "name": "PMC Medicare Choice",
@@ -91,101 +148,50 @@ PR_PAYERS = [
         "city": "San Juan",
         "zip_code": "00919",
         "phone": "787-993-3000",
-        "timely_filing_days": 90,
-    },
-    {
-        "name": "VSP Vision Care",
-        "payer_id": "VSP",
-        "payer_type": PayerType.VISION,
-        "submission_method": SubmissionMethod.STEDI,
-        "stedi_payer_id": "39026",
-        "address_line1": "3333 Quality Drive",
-        "city": "Rancho Cordova",
-        "zip_code": "95670",
-        "phone": "800-877-7195",
         "timely_filing_days": 365,
-    },
-    {
-        "name": "EyeMed Vision Care",
-        "payer_id": "EYEMED",
-        "payer_type": PayerType.VISION,
-        "submission_method": SubmissionMethod.STEDI,
-        "stedi_payer_id": "EYEMED",
-        "address_line1": "4000 Luxottica Place",
-        "city": "Mason",
-        "state": "OH",
-        "zip_code": "45040",
-        "phone": "888-581-3648",
-        "timely_filing_days": 365,
-    },
-    {
-        "name": "Medicare / Novitas Solutions",
-        "payer_id": "MEDICARE",
-        "payer_type": PayerType.MEDICARE,
-        "submission_method": SubmissionMethod.STEDI,
-        "stedi_payer_id": "12B18",
-        "address_line1": "PO Box 3080",
-        "city": "Mechanicsburg",
-        "state": "PA",
-        "zip_code": "17055",
-        "phone": "855-252-8782",
-        "timely_filing_days": 365,
-        "notes": "Novitas Solutions is MAC for PR (J12)",
-    },
-    {
-        "name": "Medicaid / Plan de Salud del Gobierno (GHP)",
-        "payer_id": "ASES",
-        "payer_type": PayerType.MEDICAID,
-        "submission_method": SubmissionMethod.INMEDIATA,
-        "inmediata_payer_id": "ASES1",
-        "address_line1": "PO Box 195009",
-        "city": "San Juan",
-        "zip_code": "00919",
-        "phone": "787-474-3300",
-        "timely_filing_days": 365,
-        "notes": "Government Health Plan administered through managed care organizations",
+        "notes": "PMC Medicare Choice PR",
     },
 ]
 
 PR_PROVIDERS = [
     {
-        "npi": "1234567890",
+        "npi": "1234567893",  # Valid Luhn NPI
+        "first_name": "José",
+        "last_name": "Martínez",
+        "specialty": "Optometry",
+        "taxonomy_code": "152W00000X",
+        "license_number": "OD-PR-1042",
+        "address_line1": "Centro Médico Oftalmo, Suite 201",
+        "city": "San Juan",
+        "zip_code": "00918",
+        "phone": "787-722-4000",
+        "ein": "66-0654321",
+    },
+    {
+        "npi": "1234567901",  # Valid Luhn NPI
         "first_name": "Carmen",
         "last_name": "Rodríguez",
-        "specialty": "Internal Medicine",
-        "taxonomy_code": "207R00000X",
-        "license_number": "PR-21234",
-        "address_line1": "400 Av. Hostos",
+        "specialty": "Ophthalmology",
+        "taxonomy_code": "207W00000X",
+        "license_number": "MD-PR-5512",
+        "address_line1": "400 Av. Hostos, Edif. B",
         "city": "San Juan",
         "zip_code": "00918",
         "phone": "787-764-3000",
         "ein": "66-0123456",
     },
     {
-        "npi": "0987654321",
-        "first_name": "José",
-        "last_name": "Martínez",
+        "npi": "1234567919",  # Valid Luhn NPI
+        "first_name": "Miguel",
+        "last_name": "Santos",
         "specialty": "Optometry",
         "taxonomy_code": "152W00000X",
-        "license_number": "PR-OD-0056",
-        "address_line1": "200 Calle Fortaleza",
-        "city": "San Juan",
-        "zip_code": "00901",
-        "phone": "787-722-4000",
-        "ein": "66-0654321",
-    },
-    {
-        "npi": "1122334455",
-        "first_name": "Ana",
-        "last_name": "González",
-        "specialty": "Psychology",
-        "taxonomy_code": "103TC0700X",
-        "license_number": "PR-PSYC-1234",
-        "address_line1": "Centro Médico, Edif. A",
-        "city": "Río Piedras",
-        "zip_code": "00921",
-        "phone": "787-758-2000",
-        "ein": "66-0789012",
+        "license_number": "OD-PR-2201",
+        "address_line1": "Plaza Carolina Mall, Local 45",
+        "city": "Carolina",
+        "zip_code": "00987",
+        "phone": "787-768-5500",
+        "ein": "66-0987654",
     },
 ]
 
@@ -220,7 +226,7 @@ PR_PATIENTS = [
     {
         "first_name": "Luis",
         "last_name": "González",
-        "dob": date(1955, 11, 8),
+        "dob": date(1952, 11, 8),
         "gender": Gender.M,
         "phone": "787-555-9012",
         "address_line1": "HC-02 Box 15432",
@@ -253,59 +259,102 @@ PR_PATIENTS = [
         "payer_id_ref": "MMM",
         "member_id": "MMM-789012345",
     },
+    {
+        "first_name": "Ana",
+        "last_name": "Ramírez",
+        "dob": date(1960, 1, 19),
+        "gender": Gender.F,
+        "phone": "787-555-2233",
+        "address_line1": "Calle Loíza 1845, Apt 3",
+        "city": "San Juan",
+        "zip_code": "00911",
+        "payer_id_ref": "HUMPR",
+        "member_id": "HUM-PR-334455",
+    },
+    {
+        "first_name": "Pedro",
+        "last_name": "Torres",
+        "dob": date(1985, 9, 5),
+        "gender": Gender.M,
+        "phone": "787-555-6677",
+        "address_line1": "Urb. Caparra Heights, Calle E-5",
+        "city": "Guaynabo",
+        "zip_code": "00968",
+        "payer_id_ref": "FMHP",
+        "member_id": "FMHP-556677",
+    },
+    {
+        "first_name": "Isabel",
+        "last_name": "Morales",
+        "dob": date(1972, 12, 3),
+        "gender": Gender.F,
+        "phone": "787-555-8899",
+        "address_line1": "Residencial Buen Consejo, Edif 12 Apt 4",
+        "city": "San Juan",
+        "zip_code": "00926",
+        "payer_id_ref": "ENVOLVE",
+        "member_id": "ENV-PR-998877",
+    },
 ]
 
 SAMPLE_CLAIMS = [
+    # ── PAID claims with payment ──────────────────────────────────────────────
     {
         "patient_idx": 0,
         "provider_idx": 0,
         "payer_id_ref": "TSS",
-        "service_date_from": date(2025, 3, 10),
-        "diagnosis_codes": ["J06.9", "J30.1"],
+        "service_date_from": date(2025, 1, 8),
+        "diagnosis_codes": ["H52.11", "H52.223"],  # Myopia + Compound astigmatism
         "place_of_service": "11",
         "status": ClaimStatus.PAID,
         "service_lines": [
-            {"cpt": "99213", "desc": "Office visit, established patient", "billed": 150.00, "paid": 120.00},
-            {"cpt": "94640", "desc": "Inhalation treatment", "billed": 85.00, "paid": 70.00},
+            {"cpt": "92004", "desc": "Comprehensive ophthalmological exam, new patient", "billed": 195.00, "paid": 155.00},
+            {"cpt": "92015", "desc": "Determination of refractive state", "billed": 55.00, "paid": 45.00},
         ],
+        "payment": {"check": "TSS-CHK-44521", "days_after": 28, "method": "eft"},
     },
     {
         "patient_idx": 1,
         "provider_idx": 0,
         "payer_id_ref": "MCS",
-        "service_date_from": date(2025, 3, 15),
-        "diagnosis_codes": ["E11.9", "I10"],
+        "service_date_from": date(2025, 1, 15),
+        "diagnosis_codes": ["H40.1130", "H40.1131"],  # Open-angle glaucoma
         "place_of_service": "11",
-        "status": ClaimStatus.SUBMITTED,
+        "status": ClaimStatus.PAID,
         "service_lines": [
-            {"cpt": "99214", "desc": "Office visit, established, moderate complexity", "billed": 200.00},
-            {"cpt": "82947", "desc": "Glucose; quantitative, blood (except reagent strip)", "billed": 28.00},
-            {"cpt": "85025", "desc": "Blood count; complete (CBC)", "billed": 45.00},
+            {"cpt": "92014", "desc": "Comprehensive ophthalmological exam, established patient", "billed": 145.00, "paid": 118.00},
+            {"cpt": "92083", "desc": "Visual field examination, bilateral", "billed": 180.00, "paid": 148.00},
+            {"cpt": "92250", "desc": "Fundus photography with interpretation", "billed": 95.00, "paid": 78.00},
         ],
+        "payment": {"check": "MCS-EFT-88921", "days_after": 32, "method": "eft"},
     },
     {
         "patient_idx": 2,
-        "provider_idx": 0,
+        "provider_idx": 1,
         "payer_id_ref": "MEDICARE",
-        "service_date_from": date(2025, 3, 8),
-        "diagnosis_codes": ["I10", "E78.5", "Z87.39"],
+        "service_date_from": date(2025, 1, 22),
+        "diagnosis_codes": ["E11.3519", "H36.0"],  # Diabetic retinopathy
         "place_of_service": "11",
-        "status": ClaimStatus.DENIED,
+        "status": ClaimStatus.PAID,
         "service_lines": [
-            {"cpt": "99215", "desc": "Office visit, high complexity", "billed": 280.00},
-            {"cpt": "93000", "desc": "Electrocardiogram, routine", "billed": 95.00},
+            {"cpt": "92014", "desc": "Comprehensive ophthalmological exam, established", "billed": 145.00, "paid": 105.00},
+            {"cpt": "92228", "desc": "Remote imaging for diabetic retinopathy detection", "billed": 155.00, "paid": 112.00},
+            {"cpt": "92250", "desc": "Fundus photography", "billed": 95.00, "paid": 68.00},
         ],
+        "payment": {"check": "NOV-CHK-77342", "days_after": 45, "method": "check"},
     },
+    # ── SUBMITTED claims ──────────────────────────────────────────────────────
     {
         "patient_idx": 3,
-        "provider_idx": 2,
+        "provider_idx": 0,
         "payer_id_ref": "ASES",
-        "service_date_from": date(2025, 3, 20),
-        "diagnosis_codes": ["F41.1", "F32.1"],
+        "service_date_from": date(2025, 3, 5),
+        "diagnosis_codes": ["H52.223", "H10.013"],  # Astigmatism + conjunctivitis
         "place_of_service": "11",
-        "status": ClaimStatus.DRAFT,
+        "status": ClaimStatus.SUBMITTED,
         "service_lines": [
-            {"cpt": "90837", "desc": "Psychotherapy, 60 minutes", "billed": 175.00},
+            {"cpt": "92012", "desc": "Ophthalmological exam, established patient, intermediate", "billed": 95.00},
+            {"cpt": "92015", "desc": "Determination of refractive state", "billed": 55.00},
         ],
     },
     {
@@ -313,11 +362,109 @@ SAMPLE_CLAIMS = [
         "provider_idx": 1,
         "payer_id_ref": "MMM",
         "service_date_from": date(2025, 3, 12),
-        "diagnosis_codes": ["H52.4", "H52.13"],
+        "diagnosis_codes": ["H26.001", "H26.002"],  # Cataract
+        "place_of_service": "11",
+        "status": ClaimStatus.SUBMITTED,
+        "service_lines": [
+            {"cpt": "92004", "desc": "Comprehensive ophthalmological exam, new patient", "billed": 195.00},
+            {"cpt": "92083", "desc": "Visual field examination", "billed": 180.00},
+        ],
+    },
+    # ── DENIED claim ──────────────────────────────────────────────────────────
+    {
+        "patient_idx": 2,
+        "provider_idx": 1,
+        "payer_id_ref": "MEDICARE",
+        "service_date_from": date(2025, 2, 3),
+        "diagnosis_codes": ["Z01.00"],  # Eye exam without complaint — will trigger denial for 92015
+        "place_of_service": "11",
+        "status": ClaimStatus.DENIED,
+        "service_lines": [
+            {"cpt": "92015", "desc": "Determination of refractive state", "billed": 55.00},
+            {"cpt": "92310", "desc": "Fitting of contact lens, aphakia, one eye", "billed": 145.00},
+        ],
+        "denial": {
+            "code": "CO-96",
+            "reason": "Non-covered charge: Routine refraction and contact lens fitting not covered by Medicare",
+            "carc": "96",
+            "rarc": "N130",
+        },
+    },
+    # ── DRAFT claim ───────────────────────────────────────────────────────────
+    {
+        "patient_idx": 5,
+        "provider_idx": 0,
+        "payer_id_ref": "HUMPR",
+        "service_date_from": date(2025, 3, 20),
+        "diagnosis_codes": ["H35.30", "H35.31"],  # Age-related macular degeneration
+        "place_of_service": "11",
+        "status": ClaimStatus.DRAFT,
+        "service_lines": [
+            {"cpt": "92250", "desc": "Fundus photography", "billed": 95.00},
+            {"cpt": "92134", "desc": "Scanning computerized ophthalmic diagnostic imaging, posterior", "billed": 175.00},
+        ],
+    },
+    # ── ACCEPTED claim ────────────────────────────────────────────────────────
+    {
+        "patient_idx": 6,
+        "provider_idx": 2,
+        "payer_id_ref": "FMHP",
+        "service_date_from": date(2025, 3, 15),
+        "diagnosis_codes": ["H52.10", "H52.223"],  # Myopia
         "place_of_service": "11",
         "status": ClaimStatus.ACCEPTED,
         "service_lines": [
-            {"cpt": "92004", "desc": "Ophthalmological examination, new patient", "billed": 210.00},
+            {"cpt": "92004", "desc": "Comprehensive ophthalmological exam, new patient", "billed": 195.00},
+            {"cpt": "92015", "desc": "Determination of refractive state", "billed": 55.00},
+            {"cpt": "92310", "desc": "Fitting of spectacle lenses", "billed": 85.00},
+        ],
+    },
+    # ── Vision (Envolve) claim ────────────────────────────────────────────────
+    {
+        "patient_idx": 7,
+        "provider_idx": 0,
+        "payer_id_ref": "ENVOLVE",
+        "service_date_from": date(2025, 3, 10),
+        "diagnosis_codes": ["H52.11", "H52.211"],  # Myopia + regular astigmatism
+        "place_of_service": "11",
+        "status": ClaimStatus.SUBMITTED,
+        "service_lines": [
+            {"cpt": "92004", "desc": "Comprehensive vision exam, new patient", "billed": 150.00},
+            {"cpt": "92015", "desc": "Determination of refractive state", "billed": 45.00},
+            {"cpt": "92310", "desc": "Contact lens fitting", "billed": 95.00},
+        ],
+    },
+    # ── REJECTED claim that needs correction ─────────────────────────────────
+    {
+        "patient_idx": 0,
+        "provider_idx": 0,
+        "payer_id_ref": "TSS",
+        "service_date_from": date(2025, 2, 20),
+        "diagnosis_codes": ["H40.10X0"],  # Glaucoma
+        "place_of_service": "11",
+        "status": ClaimStatus.REJECTED,
+        "service_lines": [
+            {"cpt": "92083", "desc": "Visual field examination", "billed": 180.00},
+            {"cpt": "92133", "desc": "Scanning laser ophthalmoscopy, anterior", "billed": 165.00},
+        ],
+        "denial": {
+            "code": "PR-22",
+            "reason": "Missing prior authorization number for this service",
+            "carc": "22",
+            "rarc": "N56",
+        },
+    },
+    # ── Aging claim (>30 days submitted, no response) ─────────────────────────
+    {
+        "patient_idx": 1,
+        "provider_idx": 0,
+        "payer_id_ref": "MCS",
+        "service_date_from": date(2025, 1, 30),
+        "diagnosis_codes": ["H52.4", "H53.10"],  # Presbyopia + unspecified visual disturbance
+        "place_of_service": "11",
+        "status": ClaimStatus.SUBMITTED,
+        "service_lines": [
+            {"cpt": "92014", "desc": "Comprehensive ophthalmological exam, established", "billed": 145.00},
             {"cpt": "92015", "desc": "Determination of refractive state", "billed": 55.00},
         ],
     },
@@ -349,9 +496,10 @@ async def seed():
         # Payers
         payer_map = {}
         for p in PR_PAYERS:
+            state = p.pop("state", "PR")
             existing = await db.execute(select(Payer).where(Payer.payer_id == p["payer_id"]))
             if not existing.scalar_one_or_none():
-                payer = Payer(**{k: v for k, v in p.items() if k != "state"}, state=p.get("state", "PR"))
+                payer = Payer(**p, state=state)
                 db.add(payer)
                 await db.flush()
                 payer_map[p["payer_id"]] = payer.id
@@ -359,6 +507,7 @@ async def seed():
             else:
                 res = await db.execute(select(Payer).where(Payer.payer_id == p["payer_id"]))
                 payer_map[p["payer_id"]] = res.scalar_one().id
+            p["state"] = state  # restore
 
         # Providers
         provider_ids = []
@@ -418,11 +567,12 @@ async def seed():
                     )
                 )
                 patient_ids.append(res.scalar_one().id)
+            pat_data["payer_id_ref"] = payer_ref
+            pat_data["member_id"] = member_id
 
         await db.commit()
 
         # Claims
-        import string
         for claim_data in SAMPLE_CLAIMS:
             pat_id = patient_ids[claim_data["patient_idx"]] if claim_data["patient_idx"] < len(patient_ids) else patient_ids[0]
             prov_id = provider_ids[claim_data["provider_idx"]] if claim_data["provider_idx"] < len(provider_ids) else provider_ids[0]
@@ -434,6 +584,14 @@ async def seed():
 
             total_billed = sum(sl["billed"] for sl in claim_data["service_lines"])
             total_paid = sum(sl.get("paid", 0.0) for sl in claim_data["service_lines"])
+            sub_date = datetime.utcnow() if claim_data["status"] != ClaimStatus.DRAFT else None
+
+            # For aging claims, backdate the submission
+            if claim_data["service_date_from"] < date(2025, 2, 15):
+                sub_date = datetime.combine(
+                    claim_data["service_date_from"] + timedelta(days=3),
+                    datetime.min.time()
+                )
 
             claim = Claim(
                 claim_number=claim_num,
@@ -446,7 +604,7 @@ async def seed():
                 total_billed=total_billed,
                 total_paid=total_paid,
                 status=claim_data["status"],
-                date_of_submission=datetime.utcnow() if claim_data["status"] != ClaimStatus.DRAFT else None,
+                date_of_submission=sub_date,
                 source="seed",
             )
             db.add(claim)
@@ -467,34 +625,54 @@ async def seed():
                 )
                 db.add(line)
 
-            # Add payment for paid claims
+            # Payments for paid claims
             if claim_data["status"] == ClaimStatus.PAID and total_paid > 0:
+                pmt_data = claim_data.get("payment", {})
                 payment = Payment(
                     claim_id=claim.id,
-                    check_number=f"CHK-{random.randint(100000, 999999)}",
-                    check_date=claim_data["service_date_from"] + timedelta(days=25),
+                    check_number=pmt_data.get("check", f"CHK-{random.randint(100000, 999999)}"),
+                    check_date=claim_data["service_date_from"] + timedelta(days=pmt_data.get("days_after", 28)),
                     payment_amount=total_paid,
-                    adjustment_amount=total_billed - total_paid,
-                    payment_method="eft",
+                    adjustment_amount=round(total_billed - total_paid, 2),
+                    payment_method=pmt_data.get("method", "eft"),
+                    notes="Payment from seed data",
                 )
                 db.add(payment)
 
-            # Add denial for denied claims
-            if claim_data["status"] == ClaimStatus.DENIED:
+            # Denials for denied/rejected claims
+            if claim_data["status"] in (ClaimStatus.DENIED, ClaimStatus.REJECTED):
+                denial_data = claim_data.get("denial", {
+                    "code": "CO-96",
+                    "reason": "Non-covered service",
+                    "carc": "96",
+                    "rarc": "N130",
+                })
                 denial = Denial(
                     claim_id=claim.id,
-                    denial_code="CO-4",
-                    denial_reason="El servicio/procedimiento/equipo no está cubierto",
+                    denial_code=denial_data["code"],
+                    denial_reason=denial_data["reason"],
                     denial_date=claim_data["service_date_from"] + timedelta(days=15),
-                    carc_code="4",
-                    rarc_code="N130",
+                    carc_code=denial_data.get("carc"),
+                    rarc_code=denial_data.get("rarc"),
                 )
                 db.add(denial)
 
-            print(f"  ✓ Reclamación: {claim_num} ({claim_data['status']})")
+            # Seed audit log entry
+            audit = AuditLog(
+                entity_type="claim",
+                entity_id=claim.id,
+                claim_id=claim.id,
+                action="created",
+                new_value=str(claim_data["status"]),
+                notes="Seed data",
+                created_at=datetime.combine(claim_data["service_date_from"], datetime.min.time()),
+            )
+            db.add(audit)
+
+            print(f"  ✓ Reclamación: {claim_num} ({claim_data['status']}) — {claim_data['payer_id_ref']}")
 
         await db.commit()
-        print("\n✅ Base de datos iniciada con datos de Puerto Rico")
+        print("\n✅ Base de datos iniciada con datos de optometría PR")
 
 
 if __name__ == "__main__":

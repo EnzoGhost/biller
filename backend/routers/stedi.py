@@ -10,10 +10,11 @@ from sqlalchemy import select
 
 from config import settings
 from database import get_db
-from models import Claim, ClaimStatus
+from models import Claim, ClaimStatus, EligibilityCheck
 from schemas import EligibilityRequest, EligibilityResponse
 from auth import get_current_user
 from models import User
+from routers.audit import log_action
 
 router = APIRouter(prefix="/stedi", tags=["stedi"])
 
@@ -259,7 +260,7 @@ async def check_eligibility(
             except (ValueError, KeyError):
                 pass
 
-    return EligibilityResponse(
+    response = EligibilityResponse(
         is_eligible=is_active,
         payer_name=data.get("payer", {}).get("name", "") or payer_display_name,
         member_id=body.member_id,
@@ -272,6 +273,28 @@ async def check_eligibility(
         out_of_pocket_met=find_benefit_amount("GB"),
         raw_response=data,
     )
+
+    # Store result in DB for reference
+    check = EligibilityCheck(
+        payer_id=body.payer_id,
+        member_id=body.member_id,
+        patient_first_name=body.patient_first_name,
+        patient_last_name=body.patient_last_name,
+        is_eligible=is_active,
+        copay=response.copay,
+        deductible=response.deductible,
+        deductible_met=response.deductible_met,
+        out_of_pocket_max=response.out_of_pocket_max,
+        out_of_pocket_met=response.out_of_pocket_met,
+        coverage_start=coverage_start,
+        coverage_end=coverage_end,
+        payer_name=response.payer_name,
+        raw_response=data,
+    )
+    db.add(check)
+    await db.commit()
+
+    return response
 
 
 # ── Claim Submission ──────────────────────────────────────────────────────────
@@ -301,9 +324,16 @@ async def submit_claim_to_stedi(
     if not settings.STEDI_API_KEY:
         # Simulate submission in dev
         claim.stedi_transaction_id = f"STEDI-DEV-{claim_id:08d}"
+        old_status = claim.status
         claim.status = ClaimStatus.SUBMITTED
         from datetime import datetime
         claim.date_of_submission = datetime.utcnow()
+        await log_action(
+            db, "claim", claim_id, "submitted_stedi",
+            claim_id=claim_id, old_value=str(old_status),
+            new_value=f"submitted (demo) tx={claim.stedi_transaction_id}",
+            user=_,
+        )
         await db.commit()
         return {"status": "submitted", "transaction_id": claim.stedi_transaction_id, "demo": True}
 

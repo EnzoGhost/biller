@@ -12,6 +12,7 @@ from models import Claim, ServiceLine, ClaimStatus, Patient, Provider, Payer
 from schemas import ClaimOut, ClaimCreate, ClaimUpdate, PaymentOut, PaymentCreate, ServiceLineCreate
 from auth import get_current_user
 from models import User, Payment
+from routers.audit import log_action
 
 router = APIRouter(prefix="/claims", tags=["claims"])
 
@@ -149,14 +150,36 @@ async def update_claim(
     claim_id: int,
     body: ClaimUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(select(Claim).where(Claim.id == claim_id))
     claim = result.scalar_one_or_none()
     if not claim:
         raise HTTPException(404, "Reclamación no encontrada")
-    for field, value in body.model_dump(exclude_none=True).items():
+
+    updates = body.model_dump(exclude_none=True)
+    old_status = claim.status
+
+    for field, value in updates.items():
         setattr(claim, field, value)
+
+    # Audit status changes
+    if "status" in updates and updates["status"] != str(old_status):
+        await log_action(
+            db, "claim", claim_id, "status_change",
+            claim_id=claim_id,
+            old_value=str(old_status),
+            new_value=updates["status"],
+            user=current_user,
+        )
+    elif updates:
+        await log_action(
+            db, "claim", claim_id, "updated",
+            claim_id=claim_id,
+            new_value=str(list(updates.keys())),
+            user=current_user,
+        )
+
     await db.commit()
     result = await db.execute(
         select(Claim).options(*claim_with_relations()).where(Claim.id == claim_id)
@@ -168,7 +191,7 @@ async def update_claim(
 async def submit_claim(
     claim_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Mark claim as submitted — actual Stedi submission in /stedi/submit."""
     result = await db.execute(select(Claim).where(Claim.id == claim_id))
@@ -177,8 +200,41 @@ async def submit_claim(
         raise HTTPException(404, "Reclamación no encontrada")
     if claim.status not in (ClaimStatus.DRAFT, ClaimStatus.READY):
         raise HTTPException(400, f"No se puede someter una reclamación en estado '{claim.status}'")
+    old_status = claim.status
     claim.status = ClaimStatus.SUBMITTED
     claim.date_of_submission = datetime.utcnow()
+    await log_action(
+        db, "claim", claim_id, "status_change",
+        claim_id=claim_id, old_value=str(old_status),
+        new_value=ClaimStatus.SUBMITTED, user=current_user,
+    )
+    await db.commit()
+    result = await db.execute(
+        select(Claim).options(*claim_with_relations()).where(Claim.id == claim_id)
+    )
+    return ClaimOut.model_validate(result.scalar_one())
+
+
+@router.post("/{claim_id}/resubmit", response_model=ClaimOut)
+async def resubmit_claim(
+    claim_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Reset a denied/rejected claim back to ready for resubmission."""
+    result = await db.execute(select(Claim).where(Claim.id == claim_id))
+    claim = result.scalar_one_or_none()
+    if not claim:
+        raise HTTPException(404, "Reclamación no encontrada")
+    old_status = claim.status
+    claim.status = ClaimStatus.READY
+    claim.stedi_transaction_id = None
+    await log_action(
+        db, "claim", claim_id, "resubmit",
+        claim_id=claim_id, old_value=str(old_status),
+        new_value=ClaimStatus.READY, user=current_user,
+        notes="Claim reset for resubmission",
+    )
     await db.commit()
     result = await db.execute(
         select(Claim).options(*claim_with_relations()).where(Claim.id == claim_id)
@@ -190,13 +246,19 @@ async def submit_claim(
 async def void_claim(
     claim_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(select(Claim).where(Claim.id == claim_id))
     claim = result.scalar_one_or_none()
     if not claim:
         raise HTTPException(404, "Reclamación no encontrada")
+    old_status = claim.status
     claim.status = ClaimStatus.VOID
+    await log_action(
+        db, "claim", claim_id, "status_change",
+        claim_id=claim_id, old_value=str(old_status),
+        new_value=ClaimStatus.VOID, user=current_user,
+    )
     await db.commit()
     result = await db.execute(
         select(Claim).options(*claim_with_relations()).where(Claim.id == claim_id)

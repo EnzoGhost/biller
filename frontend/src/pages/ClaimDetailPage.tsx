@@ -7,10 +7,11 @@ import {
   ChevronDown, ChevronUp, AlertTriangle, RefreshCw, Check, X,
   FileCode, Upload, Zap, CheckCircle, Clock, XCircle,
   MessageSquare, RotateCcw, FileText, Copy,
+  ClipboardCheck, Eye, DollarSign, History,
 } from 'lucide-react';
 import api from '../lib/api';
 import { formatDateShort, formatDate } from '../lib/dates';
-import type { Claim, Denial, Appeal } from '../types';
+import type { Claim, Denial, Appeal, ValidationResult, AuditLogEntry, Payment } from '../types';
 import StatusBadge from '../components/ui/Badge';
 
 // ── Routing indicator ─────────────────────────────────────────────────────────
@@ -127,6 +128,19 @@ export default function ClaimDetailPage() {
   // Resubmit state
   const [resubmitting, setResubmitting] = useState(false);
 
+  // Validation state
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
+  const [validating, setValidating] = useState(false);
+
+  // Payment posting state
+  const [showPostPayment, setShowPostPayment] = useState(false);
+  const [pmtAmount, setPmtAmount] = useState('');
+  const [pmtCheck, setPmtCheck] = useState('');
+  const [pmtAdjust, setPmtAdjust] = useState('');
+  const [pmtPatientResp, setPmtPatientResp] = useState('');
+  const [pmtMethod, setPmtMethod] = useState('eft');
+  const [postingPayment, setPostingPayment] = useState(false);
+
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 4000);
@@ -146,6 +160,18 @@ export default function ClaimDetailPage() {
   const { data: appeals } = useQuery<Appeal[]>({
     queryKey: ['claim-appeals', id],
     queryFn: () => api.get(`/claims/${id}/appeals`).then(r => r.data),
+    enabled: !!id,
+  });
+
+  const { data: payments, refetch: refetchPayments } = useQuery<Payment[]>({
+    queryKey: ['claim-payments', id],
+    queryFn: () => api.get(`/claims/${id}/payments`).then(r => r.data),
+    enabled: !!id,
+  });
+
+  const { data: auditLog, refetch: refetchAudit } = useQuery<AuditLogEntry[]>({
+    queryKey: ['claim-audit', id],
+    queryFn: () => api.get(`/audit/claims/${id}`).then(r => r.data),
     enabled: !!id,
   });
 
@@ -274,6 +300,46 @@ export default function ClaimDetailPage() {
     }
   };
 
+  // ── Validation ──────────────────────────────────────────────────────────────
+  const handleValidate = async () => {
+    setValidating(true);
+    try {
+      const { data } = await api.post(`/validation/claims/${id}`);
+      setValidationResult(data);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      showToast(e?.response?.data?.detail ?? t('common.error'), false);
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  // ── Post payment ──────────────────────────────────────────────────────────
+  const handlePostPayment = async () => {
+    if (!pmtAmount) return;
+    setPostingPayment(true);
+    try {
+      await api.post(`/payments/claims/${id}`, {
+        payment_amount: parseFloat(pmtAmount),
+        adjustment_amount: parseFloat(pmtAdjust || '0'),
+        patient_responsibility: parseFloat(pmtPatientResp || '0'),
+        check_number: pmtCheck || undefined,
+        payment_method: pmtMethod,
+      });
+      showToast(t('payments.post_success'));
+      qc.invalidateQueries({ queryKey: ['claim', id] });
+      refetchPayments();
+      refetchAudit();
+      setShowPostPayment(false);
+      setPmtAmount(''); setPmtCheck(''); setPmtAdjust(''); setPmtPatientResp('');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      showToast(e?.response?.data?.detail ?? t('common.error'), false);
+    } finally {
+      setPostingPayment(false);
+    }
+  };
+
   // ── Appeal letter ─────────────────────────────────────────────────────────
 
   const handleGenerateAppealLetter = async () => {
@@ -359,6 +425,14 @@ export default function ClaimDetailPage() {
         <div className="flex flex-wrap gap-2 justify-end">
           {(claim.status === 'draft' || claim.status === 'ready') && (
             <>
+              <button
+                onClick={handleValidate}
+                disabled={validating}
+                className="flex items-center gap-1.5 px-3 py-2 border border-emerald-200 text-sm rounded-lg hover:bg-emerald-50 text-emerald-700"
+              >
+                <ClipboardCheck className="w-4 h-4" />
+                {validating ? t('validation.running') : t('validation.run')}
+              </button>
               <button
                 onClick={handleScrub}
                 disabled={scrubbing}
@@ -685,6 +759,181 @@ export default function ClaimDetailPage() {
               {a.outcome && <span className="text-xs text-amber-600 ml-2">{t('claims.outcome')}: {a.outcome}</span>}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Validation Results */}
+      {validationResult && (
+        <div className={`rounded-xl border p-4 mb-4 ${
+          validationResult.is_valid ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'
+        }`}>
+          <div className="flex items-center gap-2 mb-3">
+            <ClipboardCheck className={`w-4 h-4 ${validationResult.is_valid ? 'text-emerald-600' : 'text-rose-600'}`} />
+            <span className="text-sm font-semibold">
+              {validationResult.is_valid ? t('validation.valid') : t('validation.invalid')}
+            </span>
+            <span className="ml-auto text-xs text-slate-500">
+              {validationResult.error_count > 0 && <span className="text-red-600 mr-2">{validationResult.error_count} {t('validation.errors')}</span>}
+              {validationResult.warning_count > 0 && <span className="text-amber-600 mr-2">{validationResult.warning_count} {t('validation.warnings')}</span>}
+            </span>
+          </div>
+          {validationResult.issues.length === 0 && (
+            <p className="text-sm text-emerald-700">{t('validation.no_issues')}</p>
+          )}
+          <div className="space-y-1.5">
+            {validationResult.issues.map((issue, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
+                  issue.severity === 'error' ? 'text-red-500' :
+                  issue.severity === 'warning' ? 'text-amber-500' : 'text-sky-500'
+                }`} />
+                <div>
+                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded mr-2 ${
+                    issue.severity === 'error' ? 'bg-red-100 text-red-700' :
+                    issue.severity === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'
+                  }`}>{issue.severity}</span>
+                  <span className="text-sm text-slate-700">{issue.message}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Envolve routing suggestion */}
+          {validationResult.envolve_routing?.suggestion && (
+            <div className="mt-3 pt-3 border-t border-current border-opacity-20 flex items-start gap-2">
+              <Eye className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-purple-700 mb-0.5">{t('validation.envolve_routing')}</p>
+                <p className="text-sm text-purple-800">{validationResult.envolve_routing.suggestion}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Payment History & Post Payment */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <DollarSign className="w-4 h-4 text-slate-400" />
+            {t('payments.history')}
+          </h2>
+          <button
+            onClick={() => setShowPostPayment(v => !v)}
+            className="flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-800 px-2 py-1 border border-emerald-200 rounded"
+          >
+            <DollarSign className="w-3.5 h-3.5" />
+            {t('payments.post_payment')}
+          </button>
+        </div>
+
+        {/* Post payment form */}
+        {showPostPayment && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">{t('payments.payment_amount')}</label>
+                <input type="number" step="0.01" value={pmtAmount} onChange={e => setPmtAmount(e.target.value)}
+                  placeholder="0.00" className="w-full px-2 py-1 border border-slate-200 rounded text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">{t('payments.adjustment')}</label>
+                <input type="number" step="0.01" value={pmtAdjust} onChange={e => setPmtAdjust(e.target.value)}
+                  placeholder="0.00" className="w-full px-2 py-1 border border-slate-200 rounded text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">{t('payments.patient_resp')}</label>
+                <input type="number" step="0.01" value={pmtPatientResp} onChange={e => setPmtPatientResp(e.target.value)}
+                  placeholder="0.00" className="w-full px-2 py-1 border border-slate-200 rounded text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">{t('payments.check_number')}</label>
+                <input value={pmtCheck} onChange={e => setPmtCheck(e.target.value)}
+                  placeholder="EFT/CHK#" className="w-full px-2 py-1 border border-slate-200 rounded text-sm" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <select value={pmtMethod} onChange={e => setPmtMethod(e.target.value)}
+                className="text-sm px-2 py-1 border border-slate-200 rounded bg-white">
+                <option value="eft">EFT</option>
+                <option value="check">Check</option>
+                <option value="virtual_card">Virtual Card</option>
+              </select>
+              <button onClick={handlePostPayment} disabled={postingPayment || !pmtAmount}
+                className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium rounded disabled:opacity-50">
+                {postingPayment ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                Post
+              </button>
+              <button onClick={() => setShowPostPayment(false)} className="text-xs text-slate-500 hover:text-slate-700">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Payment list */}
+        {payments && payments.length > 0 ? (
+          <table className="w-full text-xs">
+            <thead className="border-b border-slate-100">
+              <tr>
+                <th className="text-left pb-1.5 font-semibold text-slate-500">{t('payments.check_number')}</th>
+                <th className="text-left pb-1.5 font-semibold text-slate-500">{t('payments.check_date')}</th>
+                <th className="text-right pb-1.5 font-semibold text-slate-500">{t('payments.payment_amount')}</th>
+                <th className="text-right pb-1.5 font-semibold text-slate-500">{t('payments.adjustment')}</th>
+                <th className="text-right pb-1.5 font-semibold text-slate-500">{t('payments.patient_resp')}</th>
+                <th className="text-left pb-1.5 font-semibold text-slate-500">Method</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {payments.map(p => (
+                <tr key={p.id}>
+                  <td className="py-1.5 font-mono">{p.check_number ?? '—'}</td>
+                  <td className="py-1.5 text-slate-500">{p.check_date ? formatDate(p.check_date) : '—'}</td>
+                  <td className={`py-1.5 text-right font-semibold ${p.payment_amount >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    ${p.payment_amount.toFixed(2)}
+                  </td>
+                  <td className="py-1.5 text-right text-amber-700">${p.adjustment_amount.toFixed(2)}</td>
+                  <td className="py-1.5 text-right text-sky-700">${p.patient_responsibility.toFixed(2)}</td>
+                  <td className="py-1.5"><span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase">{p.payment_method}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-sm text-slate-400">{t('payments.no_payments')}</p>
+        )}
+      </div>
+
+      {/* Audit Trail */}
+      {auditLog && auditLog.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
+          <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+            <History className="w-4 h-4 text-slate-400" />
+            {t('audit.title')}
+          </h2>
+          <div className="space-y-2">
+            {auditLog.map(entry => (
+              <div key={entry.id} className="flex items-start gap-3 text-xs">
+                <div className="w-1.5 h-1.5 rounded-full bg-sky-400 mt-1.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-slate-700 capitalize">{entry.action.replace(/_/g, ' ')}</span>
+                    {entry.old_value && entry.new_value && (
+                      <span className="text-slate-400">
+                        <span className="text-slate-500">{entry.old_value}</span>
+                        {' → '}
+                        <span className="font-medium text-slate-700">{entry.new_value}</span>
+                      </span>
+                    )}
+                    {entry.user_email && (
+                      <span className="text-slate-400">{t('audit.by')} {entry.user_email}</span>
+                    )}
+                  </div>
+                  {entry.notes && <p className="text-slate-400 mt-0.5">{entry.notes}</p>}
+                </div>
+                <span className="text-slate-400 shrink-0 whitespace-nowrap">{formatDateShort(entry.created_at)}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

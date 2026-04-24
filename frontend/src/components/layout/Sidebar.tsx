@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, FileText, Users, Building2,
   CheckCircle, Upload, BarChart3, Settings,
-  ChevronLeft, ChevronRight, LogOut, Stethoscope, RefreshCw,
+  ChevronLeft, ChevronRight, LogOut, Stethoscope, RefreshCw, CreditCard,
 } from 'lucide-react';
 import { useAuthStore } from '../../hooks/useAuth';
 import clsx from 'clsx';
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { to: '/import',     icon: Upload,          labelKey: 'nav.import' },
   { to: '/reports',    icon: BarChart3,       labelKey: 'nav.reports' },
   { to: '/era',        icon: RefreshCw,       labelKey: 'inmediata.era_dashboard' },
+  { to: '/payments',   icon: CreditCard,      labelKey: 'nav.payments' },
   { to: '/settings',   icon: Settings,        labelKey: 'nav.settings' },
 ];
 

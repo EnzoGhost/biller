@@ -10,6 +10,7 @@ from config import settings
 from database import init_db
 
 from routers import auth, claims, patients, payers, providers, denials, stedi, ai, imports, dashboard, inmediata
+from routers import validation, payments, audit
 
 
 @asynccontextmanager
@@ -45,6 +46,9 @@ app.include_router(ai.router)
 app.include_router(imports.router)
 app.include_router(dashboard.router)
 app.include_router(inmediata.router)
+app.include_router(validation.router)
+app.include_router(payments.router)
+app.include_router(audit.router)
 
 
 @app.get("/health")

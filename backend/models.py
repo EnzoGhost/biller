@@ -226,6 +226,7 @@ class Claim(Base):
     payments: Mapped[list["Payment"]] = relationship("Payment", back_populates="claim")
     denials: Mapped[list["Denial"]] = relationship("Denial", back_populates="claim")
     appeals: Mapped[list["Appeal"]] = relationship("Appeal", back_populates="claim")
+    audit_logs: Mapped[list["AuditLog"]] = relationship("AuditLog", back_populates="claim", foreign_keys="AuditLog.claim_id")
 
 
 class ServiceLine(Base):
@@ -287,6 +288,50 @@ class Denial(Base):
 
     claim: Mapped["Claim"] = relationship("Claim", back_populates="denials")
     appeals: Mapped[list["Appeal"]] = relationship("Appeal", back_populates="denial")
+
+
+# ── Audit Log ────────────────────────────────────────────────────────────────
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(Integer, ForeignKey("claims.id"), nullable=True, index=True)
+    entity_type: Mapped[str] = mapped_column(String(50), nullable=False, default="claim")
+    entity_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(80), nullable=False)
+    old_value: Mapped[str] = mapped_column(Text, nullable=True)
+    new_value: Mapped[str] = mapped_column(Text, nullable=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    user_email: Mapped[str] = mapped_column(String(255), nullable=True)
+    notes: Mapped[str] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    claim: Mapped["Claim"] = relationship("Claim", back_populates="audit_logs", foreign_keys=[claim_id])
+
+
+# ── Eligibility Checks ────────────────────────────────────────────────────────
+
+class EligibilityCheck(Base):
+    __tablename__ = "eligibility_checks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    patient_id: Mapped[int] = mapped_column(Integer, ForeignKey("patients.id"), nullable=True)
+    payer_id: Mapped[int] = mapped_column(Integer, ForeignKey("payers.id"), nullable=True)
+    member_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    patient_first_name: Mapped[str] = mapped_column(String(100), nullable=True)
+    patient_last_name: Mapped[str] = mapped_column(String(100), nullable=True)
+    is_eligible: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    copay: Mapped[float] = mapped_column(Float, nullable=True)
+    deductible: Mapped[float] = mapped_column(Float, nullable=True)
+    deductible_met: Mapped[float] = mapped_column(Float, nullable=True)
+    out_of_pocket_max: Mapped[float] = mapped_column(Float, nullable=True)
+    out_of_pocket_met: Mapped[float] = mapped_column(Float, nullable=True)
+    coverage_start: Mapped[date] = mapped_column(Date, nullable=True)
+    coverage_end: Mapped[date] = mapped_column(Date, nullable=True)
+    payer_name: Mapped[str] = mapped_column(String(255), nullable=True)
+    raw_response: Mapped[dict] = mapped_column(JSON, nullable=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
 class Appeal(Base):
