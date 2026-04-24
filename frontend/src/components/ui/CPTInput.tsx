@@ -92,7 +92,7 @@ export default function CPTInput({ value, onChange, onSelect, placeholder, requi
       </div>
 
       {open && results.length > 0 && (
-        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white rounded-xl border border-slate-200 shadow-xl max-h-64 overflow-y-auto">
+        <div className="absolute z-50 top-full mt-1 left-0 min-w-[340px] bg-white rounded-xl border border-slate-200 shadow-xl max-h-64 overflow-y-auto">
           {results.map((code, i) => (
             <button
               key={code.code}

@@ -1,7 +1,7 @@
 from datetime import datetime, date, timedelta
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, case
 
 from database import get_db
 from models import Claim, ClaimStatus, Denial, Appeal, User, Payer, Payment
@@ -143,7 +143,7 @@ async def get_stats(
             Payer.id, Payer.name,
             func.count(Claim.id).label("total"),
             func.sum(
-                func.cast(Claim.status == ClaimStatus.DENIED, func.Integer)
+                case((Claim.status == ClaimStatus.DENIED, 1), else_=0)
             ).label("denied"),
             func.coalesce(func.sum(Claim.total_paid), 0.0).label("paid"),
             func.coalesce(func.sum(Claim.total_billed), 0.0).label("billed"),

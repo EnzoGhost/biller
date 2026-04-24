@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 
 from database import get_db
@@ -60,6 +60,14 @@ async def list_claims(
         filters.append(Claim.service_date_from >= date_from)
     if date_to:
         filters.append(Claim.service_date_from <= date_to)
+    if search:
+        search_filter = or_(
+            Claim.claim_number.ilike(f"%{search}%"),
+            Claim.patient.has(Patient.first_name.ilike(f"%{search}%")),
+            Claim.patient.has(Patient.last_name.ilike(f"%{search}%")),
+            Claim.payer.has(Payer.name.ilike(f"%{search}%")),
+        )
+        filters.append(search_filter)
     if filters:
         q = q.where(and_(*filters))
 
