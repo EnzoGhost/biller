@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from config import settings
 from database import init_db
 
-from routers import auth, claims, patients, payers, providers, denials, stedi, ai, imports, dashboard
+from routers import auth, claims, patients, payers, providers, denials, stedi, ai, imports, dashboard, inmediata
 
 
 @asynccontextmanager
@@ -44,6 +44,7 @@ app.include_router(stedi.router)
 app.include_router(ai.router)
 app.include_router(imports.router)
 app.include_router(dashboard.router)
+app.include_router(inmediata.router)
 
 
 @app.get("/health")

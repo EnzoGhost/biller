@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     INMEDIATA_SFTP_HOST: str = "sftp.inmediata.com"
     INMEDIATA_SFTP_USER: str = ""
     INMEDIATA_SFTP_PASSWORD: str = ""
+    INMEDIATA_SFTP_UPLOAD_DIR: str = "/UPLOAD/837"
+    INMEDIATA_SFTP_DOWNLOAD_DIR: str = "/DOWNLOAD/835"
     INMEDIATA_SUBMITTER_ID: str = ""
 
     TWILIO_ACCOUNT_SID: str = ""
