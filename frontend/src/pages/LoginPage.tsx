@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Shield, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '../hooks/useAuth';
 
 export default function LoginPage() {
@@ -32,9 +32,11 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-sky-500 flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <Shield className="w-7 h-7 text-white" />
-          </div>
+          <img
+            src="/someteopr-logo.jpg"
+            alt="SometeoPR"
+            className="h-16 mx-auto mb-4 object-contain"
+          />
           <h1 className="text-2xl font-bold text-slate-900">{t('auth.login_title')}</h1>
           <p className="text-sm text-slate-500 mt-1">{t('auth.login_subtitle')}</p>
         </div>
@@ -85,7 +87,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-4">
-          Medical Biller PR • Puerto Rico
+          SometeoPR • Facturación Médica • Puerto Rico
         </p>
       </div>
     </div>

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, FileText, Users, Building2,
-  Shield, CheckCircle, Upload, BarChart3, Settings,
+  CheckCircle, Upload, BarChart3, Settings,
   ChevronLeft, ChevronRight, LogOut, Stethoscope, RefreshCw,
 } from 'lucide-react';
 import { useAuthStore } from '../../hooks/useAuth';
@@ -49,9 +49,11 @@ export default function Sidebar() {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-slate-100">
-        <div className="w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center shrink-0">
-          <Shield className="w-4 h-4 text-white" />
-        </div>
+        <img
+          src="/someteopr-logo.jpg"
+          alt="SometeoPR"
+          className={clsx('shrink-0 object-contain', collapsed ? 'w-8 h-8' : 'w-8 h-8')}
+        />
         <AnimatePresence>
           {!collapsed && (
             <motion.div
@@ -61,8 +63,8 @@ export default function Sidebar() {
               transition={{ duration: 0.15 }}
               className="overflow-hidden"
             >
-              <span className="font-bold text-slate-900 text-sm whitespace-nowrap">Biller PR</span>
-              <p className="text-xs text-slate-400 whitespace-nowrap">Medical Billing</p>
+              <span className="font-bold text-slate-900 text-sm whitespace-nowrap">SometeoPR</span>
+              <p className="text-xs text-slate-400 whitespace-nowrap">Facturación Médica</p>
             </motion.div>
           )}
         </AnimatePresence>
