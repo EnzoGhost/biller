@@ -28,17 +28,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50 to-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <img
-            src="/someteopr-logo.png"
-            alt="SometeoPR"
-            className="h-20 mx-auto mb-6 object-contain"
-          />
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-sky-50 to-slate-100 flex flex-col items-center justify-center p-4">
+      {/* Logo — big and commanding */}
+      <img
+        src="/someteopr-logo.png"
+        alt="SometeoPR"
+        className="w-80 max-w-[90vw] object-contain mb-8"
+      />
 
+      <div className="w-full max-w-sm">
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -85,7 +83,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-4">
-          SometeoPR • Facturación Médica • Puerto Rico
+          Puerto Rico
         </p>
       </div>
     </div>

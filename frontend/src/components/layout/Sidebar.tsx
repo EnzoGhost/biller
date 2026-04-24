@@ -48,11 +48,11 @@ export default function Sidebar() {
       className="relative flex flex-col bg-white border-r border-slate-200 h-screen shrink-0 overflow-hidden"
     >
       {/* Logo */}
-      <div className="flex items-center px-3 py-4 border-b border-slate-100">
+      <div className="flex items-center justify-center px-2 py-5 border-b border-slate-100">
         <img
           src="/someteopr-logo.png"
           alt="SometeoPR"
-          className={clsx('object-contain', collapsed ? 'h-8 w-auto' : 'h-10 w-auto max-w-full')}
+          className={clsx('object-contain', collapsed ? 'h-8 w-auto' : 'w-full h-auto px-1')}
         />
       </div>
 

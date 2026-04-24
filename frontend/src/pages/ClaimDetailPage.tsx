@@ -9,7 +9,7 @@ import {
   MessageSquare, RotateCcw, FileText, Copy,
 } from 'lucide-react';
 import api from '../lib/api';
-import { formatDateShort } from '../lib/dates';
+import { formatDateShort, formatDate } from '../lib/dates';
 import type { Claim, Denial, Appeal } from '../types';
 import StatusBadge from '../components/ui/Badge';
 
@@ -476,7 +476,7 @@ export default function ClaimDetailPage() {
             <div className="space-y-1 text-sm">
               <p className="font-medium text-slate-900">{claim.patient.first_name} {claim.patient.last_name}</p>
               <p className="text-slate-500">{t('patients.mrn')}: {claim.patient.mrn}</p>
-              <p className="text-slate-500">{t('patients.dob_abbr')}: {claim.patient.dob}</p>
+              <p className="text-slate-500">{t('patients.dob_abbr')}: {formatDate(claim.patient.dob)}</p>
               {claim.patient.phone && <p className="text-slate-500">{claim.patient.phone}</p>}
             </div>
           ) : <p className="text-slate-400 text-sm">{t('claims.patient')} #{claim.patient_id}</p>}

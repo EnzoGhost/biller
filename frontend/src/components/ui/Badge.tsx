@@ -1,4 +1,5 @@
 import clsx from 'clsx';
+import { useTranslation } from 'react-i18next';
 import type { ClaimStatus } from '../../types';
 
 const STATUS_STYLES: Record<ClaimStatus, string> = {
@@ -13,25 +14,13 @@ const STATUS_STYLES: Record<ClaimStatus, string> = {
   void:      'bg-slate-50 text-slate-400',
 };
 
-const STATUS_LABELS_ES: Record<ClaimStatus, string> = {
-  draft:     'Borrador',
-  ready:     'Lista',
-  submitted: 'Sometida',
-  accepted:  'Aceptada',
-  rejected:  'Rechazada',
-  paid:      'Pagada',
-  denied:    'Denegada',
-  appealed:  'Apelada',
-  void:      'Anulada',
-};
-
 interface Props {
   status: ClaimStatus;
-  lang?: 'es' | 'en';
 }
 
-export default function StatusBadge({ status, lang = 'es' }: Props) {
-  const label = lang === 'es' ? STATUS_LABELS_ES[status] : status.charAt(0).toUpperCase() + status.slice(1);
+export default function StatusBadge({ status }: Props) {
+  const { t } = useTranslation();
+  const label = t(`status.${status}`);
   return (
     <span className={clsx('inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium', STATUS_STYLES[status])}>
       {label}

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Search, Users, Phone, FileText, Plus, X, Check, Trash2 } from 'lucide-react';
 import api from '../lib/api';
+import { formatDate } from '../lib/dates';
 import type { Patient, Payer, PaginatedResponse, Gender } from '../types';
 
 const GENDERS: Gender[] = ['M', 'F', 'U'];
@@ -253,7 +254,7 @@ export default function PatientsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{patient.dob}</td>
+                    <td className="px-4 py-3 text-slate-600">{formatDate(patient.dob)}</td>
                     <td className="px-4 py-3 text-slate-600">
                       {patient.phone ? (
                         <div className="flex items-center gap-1">
