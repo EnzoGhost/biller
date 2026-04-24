@@ -48,26 +48,12 @@ export default function Sidebar() {
       className="relative flex flex-col bg-white border-r border-slate-200 h-screen shrink-0 overflow-hidden"
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-slate-100">
+      <div className="flex items-center px-3 py-4 border-b border-slate-100">
         <img
-          src="/someteopr-logo.jpg"
+          src="/someteopr-logo.png"
           alt="SometeoPR"
-          className={clsx('shrink-0 object-contain', collapsed ? 'w-8 h-8' : 'w-8 h-8')}
+          className={clsx('object-contain', collapsed ? 'h-8 w-auto' : 'h-10 w-auto max-w-full')}
         />
-        <AnimatePresence>
-          {!collapsed && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="overflow-hidden"
-            >
-              <span className="font-bold text-slate-900 text-sm whitespace-nowrap">SometeoPR</span>
-              <p className="text-xs text-slate-400 whitespace-nowrap">Facturación Médica</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* Nav */}

@@ -33,12 +33,10 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <img
-            src="/someteopr-logo.jpg"
+            src="/someteopr-logo.png"
             alt="SometeoPR"
-            className="h-16 mx-auto mb-4 object-contain"
+            className="h-20 mx-auto mb-6 object-contain"
           />
-          <h1 className="text-2xl font-bold text-slate-900">{t('auth.login_title')}</h1>
-          <p className="text-sm text-slate-500 mt-1">{t('auth.login_subtitle')}</p>
         </div>
 
         {/* Card */}
