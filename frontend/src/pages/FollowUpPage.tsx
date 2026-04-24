@@ -27,6 +27,19 @@ const ACTION_ICONS: Record<string, React.ElementType> = {
   'Void':         FileX,
 };
 
+// Map backend action strings to i18n keys
+const ACTION_I18N_KEYS: Record<string, string> = {
+  'Check Status': 'followup.action_check_status',
+  'Call Payer':   'followup.action_call_payer',
+  'Appeal':       'followup.action_appeal',
+  'Resubmit':     'followup.action_resubmit',
+  'Review':       'followup.action_review',
+  'Renew Auth':   'followup.action_renew_auth',
+  'Submit':       'followup.action_submit',
+  'Submit Claim': 'followup.action_submit_claim',
+  'Void':         'followup.action_void',
+};
+
 function ReasonIcon({ reason }: { reason: string }) {
   if (reason.includes('no payment') || reason.includes('no response')) return <Clock className="w-4 h-4 text-amber-500" />;
   if (reason.includes('balance') || reason.includes('Partially')) return <DollarSign className="w-4 h-4 text-emerald-600" />;
@@ -78,16 +91,16 @@ export default function FollowUpPage() {
               onChange={e => setDaysFilter(Number(e.target.value))}
               className="text-sm px-2 py-1 border border-slate-200 rounded bg-white"
             >
-              <option value={7}>7 days</option>
-              <option value={14}>14 days</option>
-              <option value={21}>21 days</option>
-              <option value={30}>30 days</option>
+              <option value={7}>{t('followup.days_7')}</option>
+              <option value={14}>{t('followup.days_14')}</option>
+              <option value={21}>{t('followup.days_21')}</option>
+              <option value={30}>{t('followup.days_30')}</option>
             </select>
           </div>
           <button
             onClick={() => refetch()}
             className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"
-            title="Refresh"
+            title={t('followup.refresh')}
           >
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -99,15 +112,15 @@ export default function FollowUpPage() {
         <div className="grid grid-cols-3 gap-3 mb-5">
           <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-center">
             <p className="text-2xl font-bold text-rose-700">{highCount}</p>
-            <p className="text-xs text-rose-500 font-medium">{t('followup.high')} Priority</p>
+            <p className="text-xs text-rose-500 font-medium">{t('followup.high')} {t('followup.priority')}</p>
           </div>
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
             <p className="text-2xl font-bold text-amber-700">{medCount}</p>
-            <p className="text-xs text-amber-500 font-medium">{t('followup.medium')} Priority</p>
+            <p className="text-xs text-amber-500 font-medium">{t('followup.medium')} {t('followup.priority')}</p>
           </div>
           <div className="bg-sky-50 border border-sky-200 rounded-xl p-3 text-center">
             <p className="text-2xl font-bold text-sky-700">{items.length}</p>
-            <p className="text-xs text-sky-500 font-medium">Total Items</p>
+            <p className="text-xs text-sky-500 font-medium">{t('followup.total_items')}</p>
           </div>
         </div>
       )}
@@ -168,7 +181,7 @@ export default function FollowUpPage() {
                     {item.days_since_submission && (
                       <>
                         <span>•</span>
-                        <span>{item.days_since_submission}d since submission</span>
+                        <span>{t('followup.days_since_submission', { days: item.days_since_submission })}</span>
                       </>
                     )}
                   </div>
@@ -178,7 +191,7 @@ export default function FollowUpPage() {
                 <div className="text-right shrink-0 hidden sm:block">
                   <p className="text-sm font-semibold text-slate-900">{fmt(item.total_billed)}</p>
                   {item.balance > 0 && (
-                    <p className="text-xs text-rose-600 font-medium">{fmt(item.balance)} owed</p>
+                    <p className="text-xs text-rose-600 font-medium">{fmt(item.balance)} {t('followup.owed')}</p>
                   )}
                   {item.total_paid > 0 && item.balance === 0 && (
                     <p className="text-xs text-emerald-600">{fmt(item.total_paid)} paid</p>
@@ -214,7 +227,7 @@ export default function FollowUpPage() {
                         }`}
                       >
                         <Icon className="w-3.5 h-3.5" />
-                        {action}
+                        {t(ACTION_I18N_KEYS[action] ?? 'followup.action_review', { defaultValue: action })}
                       </button>
                     );
                   })}
@@ -223,7 +236,7 @@ export default function FollowUpPage() {
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border bg-white hover:bg-slate-100 text-slate-700 border-slate-200"
                   >
                     <Eye className="w-3.5 h-3.5" />
-                    View Claim
+                    {t('followup.view_claim')}
                   </Link>
                 </div>
               )}

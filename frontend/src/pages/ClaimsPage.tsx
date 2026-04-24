@@ -16,6 +16,16 @@ export default function ClaimsPage() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<ClaimStatus | ''>('' );
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search input 350ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1); // Reset to first page on new search
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Sync status from URL ?status=xxx
   useEffect(() => {
@@ -25,10 +35,10 @@ export default function ClaimsPage() {
 
   const params = new URLSearchParams({ page: String(page), per_page: '25' });
   if (status) params.set('status', status);
-  if (search) params.set('search', search);
+  if (debouncedSearch) params.set('search', debouncedSearch);
 
   const { data, isLoading } = useQuery<PaginatedResponse<Claim>>({
-    queryKey: ['claims', page, status, search],
+    queryKey: ['claims', page, status, debouncedSearch],
     queryFn: () => api.get(`/claims?${params}`).then(r => r.data),
   });
 
@@ -63,6 +73,7 @@ export default function ClaimsPage() {
         <select
           value={status}
           onChange={e => { setStatus(e.target.value as ClaimStatus | ''); setPage(1); }}
+          /* page already reset by status change above */
           className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
         >
           <option value="">{t('common.all')}</option>
@@ -104,7 +115,14 @@ export default function ClaimsPage() {
                   <td className="px-4 py-3 text-slate-700">
                     {claim.patient ? `${claim.patient.last_name}, ${claim.patient.first_name}` : `#${claim.patient_id}`}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{claim.payer?.name ?? `#${claim.payer_id}`}</td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {claim.payer?.name ?? `#${claim.payer_id}`}
+                    {claim.payer?.is_reforma && (
+                      <span className="ml-2 text-xs font-medium bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
+                        {t('routing.manual_stedi_portal')}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-slate-600">{formatDateShort(claim.service_date_from)}</td>
                   <td className="px-4 py-3 text-right font-medium text-slate-900">{fmt(claim.total_billed)}</td>
                   <td className="px-4 py-3 text-right font-medium text-emerald-700">{fmt(claim.total_paid)}</td>

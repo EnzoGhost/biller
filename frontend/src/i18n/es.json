@@ -33,7 +33,9 @@
     "recent_claims": "Reclamaciones Recientes",
     "claims_by_status": "Por Estado",
     "top_denials": "Principales Denegaciones",
-    "no_denials": "Sin denegaciones 🎉"
+    "no_denials": "Sin denegaciones 🎉",
+    "bulk_submitted": "{{count}} reclamación(es) sometida(s) exitosamente",
+    "bulk_partial": "{{success}} sometidas, {{failed}} fallaron"
   },
   "claims": {
     "title": "Reclamaciones",
@@ -107,6 +109,7 @@
   },
   "denials": {
     "title": "Denegaciones",
+    "no_denial_to_appeal": "No se encontró denegación para apelar",
     "no_denials": "No hay denegaciones",
     "pending": "Pendientes",
     "resolved": "Resueltas",
@@ -160,6 +163,15 @@
     "clinic_name": "Nombre de la Clínica",
     "address": "Dirección",
     "stedi": "Stedi (Clearinghouse)",
+    "stedi_portal": "Stedi — Reclamaciones Reforma",
+    "stedi_portal_desc": "Para reclamaciones de First Medical VITAL / Reforma (<100/mes), use el portal de Stedi directamente en stedi.com. El plan Básico gratuito es suficiente para pagadores Reforma de bajo volumen.",
+    "stedi_portal_link": "Abrir Portal Stedi",
+    "stedi_portal_payers": "Pagadores Reforma (usar portal):",
+    "stedi_portal_note": "Las reclamaciones de estos pagadores mostrarán \"Exportar para Portal Stedi\" en vez de somisión directa por API.",
+    "availity": "Availity (Envolve)",
+    "availity_client_id": "Availity Client ID",
+    "availity_client_secret": "Availity Client Secret",
+    "availity_desc": "Requerido para someter reclamaciones de Envolve Visión vía Availity. Solicite credenciales en availity.com.",
     "environment": "Entorno",
     "sandbox": "Sandbox (Pruebas)",
     "production": "Producción",
@@ -311,10 +323,12 @@
     "uploading": "Subiendo...",
     "check_era": "Ver ERA",
     "edi_preview": "Vista Previa EDI",
+    "edi_hide": "Ocultar EDI",
     "edi_generated": "EDI generado",
     "edi_uploaded": "Archivo subido a Inmediata",
     "sftp_not_configured": "SFTP no configurado",
     "era_dashboard": "Panel ERA",
+    "sftp_desc": "Genere un archivo EDI para someter esta reclamación vía SFTP de Inmediata.",
     "sftp_host": "Host SFTP",
     "sftp_user": "Usuario SFTP",
     "sftp_password": "Contraseña SFTP",
@@ -369,7 +383,9 @@
     "stedi": "Stedi",
     "inmediata": "Inmediata",
     "manual": "Manual/Fax",
-    "route_via": "Ruta via"
+    "route_via": "Ruta via",
+    "manual_stedi_portal": "📋 Manual (Portal Stedi)",
+    "export_stedi_portal": "Exportar para Portal Stedi"
   },
   "payments": {
     "title": "Pagos",
@@ -415,7 +431,21 @@
     "envolve_routing": "Ruta Envolve",
     "route_standard": "Ruta estándar",
     "route_envolve": "Ruta vía Envolve",
-    "route_medical_bypass": "Bypass Envolve — facturar médico"
+    "route_medical_bypass": "Bypass Envolve — facturar médico",
+    "cpt_required": "Códigos CPT requeridos. Agregue al menos un código de procedimiento.",
+    "msg": {
+      "invalid_npi": "NPI '{{npi}}' falla la validación Luhn. Verifique el número.",
+      "missing_tax_id": "EIN/Tax ID faltante o formato incorrecto (debe ser XX-XXXXXXX).",
+      "no_service_lines": "La reclamación no tiene líneas de servicio (códigos CPT).",
+      "no_diagnosis": "La reclamación no tiene códigos de diagnóstico (ICD-10).",
+      "no_patient": "No hay paciente asignado a esta reclamación.",
+      "zero_billed": "El monto facturado es $0. Verifique las líneas de servicio.",
+      "timely_filing_exceeded": "Han pasado {{days}} días desde la fecha de servicio. El límite de {{payer}} es {{limit}} días. Esta reclamación puede ser denegada por presentación tardía.",
+      "timely_filing_warning": "Advertencia: {{days}} días desde la fecha de servicio. El límite es {{limit}} días — quedan {{remaining}} días.",
+      "possible_duplicate": "Posible reclamación duplicada detectada: {{claims}}. Mismo paciente, pagador y fecha de servicio.",
+      "prior_auth_required": "CPT {{cpt}} puede requerir autorización previa de {{payer}}. Verifique si hay auth y añádala antes de someter.",
+      "cpt_dx_mismatch": "CPT {{cpt}} requiere un código de diagnóstico compatible."
+    }
   },
   "audit": {
     "title": "Historial de Auditoría",
@@ -475,6 +505,7 @@
     "manage": "Administrar Plantillas"
   },
   "prior_auth": {
+    "none_on_file": "No hay autorizaciones previas para esta reclamación.",
     "title": "Autorización Previa",
     "required": "Auth. Previa Requerida",
     "add": "Agregar # Auth",
@@ -510,7 +541,26 @@
     "review": "Revisar",
     "submit": "Someter",
     "void": "Anular",
-    "days_without_response": "Días sin respuesta"
+    "days_without_response": "Días sin respuesta",
+    "total_items": "Total Items",
+    "view_claim": "Ver Reclamación",
+    "owed": "pendiente",
+    "refresh": "Actualizar",
+    "days_7": "7 días",
+    "days_14": "14 días",
+    "days_21": "21 días",
+    "days_30": "30 días",
+    "priority": "Prioridad",
+    "days_since_submission": "{{days}}d desde someter",
+    "action_check_status": "Ver Estado",
+    "action_call_payer": "Llamar Pagador",
+    "action_appeal": "Apelar",
+    "action_resubmit": "Resometer",
+    "action_review": "Revisar",
+    "action_renew_auth": "Renovar Auth",
+    "action_submit": "Someter",
+    "action_submit_claim": "Someter Reclamación",
+    "action_void": "Anular"
   },
   "wizard": {
     "title": "Configuración de Clínica",

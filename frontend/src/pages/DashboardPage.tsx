@@ -85,9 +85,9 @@ export default function DashboardPage() {
       qc.invalidateQueries({ queryKey: ['claims'] });
       setTimeout(() => setBulkProgress(null), 4000);
       if (failed.length === 0) {
-        alert(`✅ ${count} claim(s) submitted successfully`);
+        alert(`✅ ${t('dashboard.bulk_submitted', { count })}`);
       } else {
-        alert(`✅ ${count} submitted\n❌ ${failed.length} failed: ${failed.join(', ')}`);
+        alert(`✅ ${t('dashboard.bulk_partial', { success: count, failed: failed.length })}\n❌ ${failed.join(', ')}`);
       }
     },
   });
@@ -231,7 +231,7 @@ export default function DashboardPage() {
               </div>
             </>
           ) : (
-            <p className="text-sm text-slate-400">No trend data</p>
+            <p className="text-sm text-slate-400">{t('reports.no_data')}</p>
           )}
         </div>
 
@@ -251,7 +251,11 @@ export default function DashboardPage() {
                   <span className="text-xs font-bold text-rose-600 bg-rose-50 rounded px-1.5 py-0.5 shrink-0">
                     {d.count}
                   </span>
-                  <p className="text-sm text-slate-700 leading-snug">{d.reason}</p>
+                  <p className="text-sm text-slate-700 leading-snug">
+                    {d.denial_code
+                      ? t(`denials.carc_codes.${d.denial_code}`, { defaultValue: d.reason ?? '' })
+                      : d.reason}
+                  </p>
                   <ChevronRight className="w-3.5 h-3.5 text-slate-300 ml-auto shrink-0 mt-0.5" />
                 </Link>
               ))}
@@ -264,14 +268,14 @@ export default function DashboardPage() {
         {/* Payer performance */}
         {s.payer_performance && s.payer_performance.length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <h2 className="text-sm font-semibold text-slate-700 mb-4">Payer Performance</h2>
+            <h2 className="text-sm font-semibold text-slate-700 mb-4">{t('reports.denial_rate')}</h2>
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <th className="text-left pb-2 font-semibold text-slate-500">Payer</th>
-                  <th className="text-center pb-2 font-semibold text-slate-500">Claims</th>
-                  <th className="text-center pb-2 font-semibold text-slate-500">Denial %</th>
-                  <th className="text-center pb-2 font-semibold text-slate-500">Collection %</th>
+                  <th className="text-left pb-2 font-semibold text-slate-500">{t('reports.payer')}</th>
+                  <th className="text-center pb-2 font-semibold text-slate-500">{t('reports.claims')}</th>
+                  <th className="text-center pb-2 font-semibold text-slate-500">{t('reports.denial_rate_pct')}</th>
+                  <th className="text-center pb-2 font-semibold text-slate-500">{t('dashboard.collection_rate')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">

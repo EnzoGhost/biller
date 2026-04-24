@@ -106,8 +106,11 @@ export default function NewClaimPage() {
     setLines(prev => prev.map((l, idx) => idx === i ? { ...l, ...patch } : l));
   };
 
+  const hasValidCptCodes = lines.some(l => l.cpt_code.trim().length > 0);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasValidCptCodes) return; // guarded by button disabled too
     mutation.mutate({
       patient_id:       Number(patientId),
       provider_id:      Number(providerId),
@@ -379,11 +382,18 @@ export default function NewClaimPage() {
         </div>
 
         {/* Actions */}
+        {!hasValidCptCodes && (
+          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-amber-800 text-sm">
+            <span className="font-semibold">⚠️</span>
+            {t('validation.cpt_required')}
+          </div>
+        )}
         <div className="flex items-center gap-3">
           <button
             type="submit"
-            disabled={mutation.isPending}
-            className="bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white text-sm font-medium px-6 py-2.5 rounded-lg transition-colors"
+            disabled={mutation.isPending || !hasValidCptCodes}
+            title={!hasValidCptCodes ? t('validation.cpt_required') : undefined}
+            className="bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-6 py-2.5 rounded-lg transition-colors"
           >
             {mutation.isPending ? t('common.loading') : t('claims.create')}
           </button>

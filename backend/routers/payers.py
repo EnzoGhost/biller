@@ -29,7 +29,7 @@ async def list_payers(
     q = q.order_by(Payer.name).offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(q)
     return {
-        "items": [PayerOut.model_validate(p) for p in result.scalars().all()],
+        "items": [PayerOut.from_orm_with_reforma(p) for p in result.scalars().all()],
         "total": total, "page": page, "per_page": per_page,
         "pages": max(1, (total + per_page - 1) // per_page),
     }

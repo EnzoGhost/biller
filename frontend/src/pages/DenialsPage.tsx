@@ -155,7 +155,9 @@ export default function DenialsPage() {
                     <span className="font-mono text-xs font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded">
                       {denial.denial_code}
                     </span>
-                    <span className="text-sm text-slate-700 truncate">{denial.denial_reason}</span>
+                    <span className="text-sm text-slate-700 truncate">
+                      {t(`denials.carc_codes.${denial.denial_code}`, { defaultValue: denial.denial_reason ?? '' })}
+                    </span>
                   </div>
                 </div>
 

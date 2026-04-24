@@ -181,6 +181,8 @@ async def validate_claim(claim_id: int, db: AsyncSession) -> dict:
                 "severity": "error",
                 "code": "INVALID_NPI",
                 "field": "provider.npi",
+                "message_key": "validation.msg.invalid_npi",
+                "message_params": {"npi": claim.provider.npi},
                 "message": f"NPI '{claim.provider.npi}' falla la validación Luhn. Verifique el número.",
             })
 
@@ -191,6 +193,7 @@ async def validate_claim(claim_id: int, db: AsyncSession) -> dict:
                 "severity": "warning",
                 "code": "MISSING_TAX_ID",
                 "field": "provider.ein",
+                "message_key": "validation.msg.missing_tax_id",
                 "message": "EIN/Tax ID faltante o formato incorrecto (debe ser XX-XXXXXXX).",
             })
 
@@ -200,6 +203,7 @@ async def validate_claim(claim_id: int, db: AsyncSession) -> dict:
             "severity": "error",
             "code": "NO_SERVICE_LINES",
             "field": "service_lines",
+            "message_key": "validation.msg.no_service_lines",
             "message": "La reclamación no tiene líneas de servicio (CPT codes).",
         })
 
@@ -208,6 +212,7 @@ async def validate_claim(claim_id: int, db: AsyncSession) -> dict:
             "severity": "error",
             "code": "NO_DIAGNOSIS",
             "field": "diagnosis_codes",
+            "message_key": "validation.msg.no_diagnosis",
             "message": "La reclamación no tiene códigos de diagnóstico (ICD-10).",
         })
 
@@ -216,6 +221,7 @@ async def validate_claim(claim_id: int, db: AsyncSession) -> dict:
             "severity": "error",
             "code": "NO_PATIENT",
             "field": "patient_id",
+            "message_key": "validation.msg.no_patient",
             "message": "No hay paciente asignado a esta reclamación.",
         })
 
@@ -224,6 +230,7 @@ async def validate_claim(claim_id: int, db: AsyncSession) -> dict:
             "severity": "error",
             "code": "ZERO_BILLED",
             "field": "total_billed",
+            "message_key": "validation.msg.zero_billed",
             "message": "El monto facturado es $0. Verifique las líneas de servicio.",
         })
 
@@ -242,6 +249,8 @@ async def validate_claim(claim_id: int, db: AsyncSession) -> dict:
                         "severity": rule["severity"],
                         "code": f"CPT_DX_MISMATCH_{cpt}",
                         "field": "diagnosis_codes",
+                        "message_key": f"validation.msg.cpt_{cpt.lower()}_dx",
+                        "message_params": {"cpt": cpt},
                         "message": rule["desc"],
                     })
 
@@ -256,6 +265,8 @@ async def validate_claim(claim_id: int, db: AsyncSession) -> dict:
                 "severity": "error",
                 "code": "TIMELY_FILING_EXCEEDED",
                 "field": "service_date_from",
+                "message_key": "validation.msg.timely_filing_exceeded",
+                "message_params": {"days": days_since, "payer": claim.payer.name, "limit": filing_limit},
                 "message": (
                     f"Han pasado {days_since} días desde la fecha de servicio. "
                     f"El límite de {claim.payer.name} es {filing_limit} días. "
@@ -267,6 +278,8 @@ async def validate_claim(claim_id: int, db: AsyncSession) -> dict:
                 "severity": "warning",
                 "code": "TIMELY_FILING_WARNING",
                 "field": "service_date_from",
+                "message_key": "validation.msg.timely_filing_warning",
+                "message_params": {"days": days_since, "limit": filing_limit, "remaining": filing_limit - days_since},
                 "message": (
                     f"Advertencia: {days_since} días desde la fecha de servicio. "
                     f"El límite es {filing_limit} días — quedan {filing_limit - days_since} días."
@@ -293,6 +306,8 @@ async def validate_claim(claim_id: int, db: AsyncSession) -> dict:
                 "severity": "warning",
                 "code": "POSSIBLE_DUPLICATE",
                 "field": "claim",
+                "message_key": "validation.msg.possible_duplicate",
+                "message_params": {"claims": dup_nums},
                 "message": (
                     f"Posible reclamación duplicada detectada: {dup_nums}. "
                     "Mismo paciente, pagador y fecha de servicio."
@@ -309,6 +324,8 @@ async def validate_claim(claim_id: int, db: AsyncSession) -> dict:
                     "severity": "warning",
                     "code": f"PRIOR_AUTH_REQUIRED_{cpt}",
                     "field": "prior_auth_number",
+                    "message_key": "validation.msg.prior_auth_required",
+                    "message_params": {"cpt": cpt, "payer": claim.payer.name},
                     "message": (
                         f"CPT {cpt} puede requerir autorización previa de {claim.payer.name}. "
                         "Verifique si hay auth y añádala antes de someter."

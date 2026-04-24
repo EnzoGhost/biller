@@ -50,6 +50,7 @@ export interface Payer {
   timely_filing_days: number;
   is_active: boolean;
   notes?: string;
+  is_reforma?: boolean;
 }
 
 export interface PatientInsurance {
@@ -188,6 +189,8 @@ export interface ValidationIssue {
   code: string;
   field: string;
   message: string;
+  message_key?: string;
+  message_params?: Record<string, string | number>;
 }
 
 export interface EnvolveRouting {
@@ -214,7 +217,7 @@ export interface DashboardStats {
   total_paid_mtd: number;
   collection_rate: number;
   pending_appeals: number;
-  top_denial_reasons: Array<{ reason: string; count: number }>;
+  top_denial_reasons: Array<{ denial_code?: string; reason: string; count: number }>;
   recent_claims: Array<{
     id: number;
     claim_number: string;

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Save, CheckCircle, Building2, Shield, Cpu, Globe, Zap } from 'lucide-react';
+import { Save, CheckCircle, Building2, Shield, Cpu, Globe, Zap, ExternalLink, Users } from 'lucide-react';
 import api from '../lib/api';
 
 export default function SettingsPage() {
@@ -18,6 +18,10 @@ export default function SettingsPage() {
   // Stedi
   const [stediKey,   setStediKey]   = useState('');
   const [stediEnv,   setStediEnv]   = useState<'sandbox' | 'production'>('sandbox');
+
+  // Availity
+  const [availityClientId,     setAvailityClientId]     = useState('');
+  const [availityClientSecret, setAvailityClientSecret] = useState('');
 
   // AI
   const [aiKey,      setAiKey]      = useState('');
@@ -61,11 +65,13 @@ export default function SettingsPage() {
   const labelClass = 'block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1';
 
   const SECTIONS = [
-    { key: 'clinic',     labelKey: 'settings.clinic_info', icon: Building2 },
-    { key: 'stedi',      labelKey: 'settings.stedi',       icon: Shield },
-    { key: 'inmediata',  labelKey: 'inmediata.title',      icon: Zap },
-    { key: 'ai',         labelKey: 'settings.ai',          icon: Cpu },
-    { key: 'lang',       labelKey: 'settings.language',    icon: Globe },
+    { key: 'clinic',       labelKey: 'settings.clinic_info',  icon: Building2 },
+    { key: 'stedi',        labelKey: 'settings.stedi',         icon: Shield },
+    { key: 'stedi_portal', labelKey: 'settings.stedi_portal',  icon: ExternalLink },
+    { key: 'availity',     labelKey: 'settings.availity',      icon: Users },
+    { key: 'inmediata',    labelKey: 'inmediata.title',        icon: Zap },
+    { key: 'ai',           labelKey: 'settings.ai',            icon: Cpu },
+    { key: 'lang',         labelKey: 'settings.language',      icon: Globe },
   ];
 
   return (
@@ -151,6 +157,78 @@ export default function SettingsPage() {
               </div>
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
                 {t('settings.sandbox_warning')}
+              </div>
+            </div>
+          )}
+
+          {/* Stedi Portal Info */}
+          {active === 'stedi_portal' && (
+            <div className="space-y-4">
+              <h2 className="font-semibold text-slate-800 mb-4">{t('settings.stedi_portal')}</h2>
+              <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 space-y-3">
+                <p className="text-sm text-sky-900">{t('settings.stedi_portal_desc')}</p>
+                <a
+                  href="https://www.stedi.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  {t('settings.stedi_portal_link')}
+                </a>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-xl p-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                  {t('settings.stedi_portal_payers')}
+                </p>
+                <ul className="space-y-2">
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                    <span className="font-medium">First Medical VITAL</span>
+                    <span className="text-slate-400 text-xs">— Reforma / ASES</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                    <span className="font-medium">ASES / GHP (Gobierno)</span>
+                    <span className="text-slate-400 text-xs">— Reforma</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                {t('settings.stedi_portal_note')}
+              </div>
+            </div>
+          )}
+
+          {/* Availity (Envolve) */}
+          {active === 'availity' && (
+            <div className="space-y-4">
+              <h2 className="font-semibold text-slate-800 mb-4">{t('settings.availity')}</h2>
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-sm text-indigo-900 mb-2">
+                {t('settings.availity_desc')}
+              </div>
+              <div>
+                <label className={labelClass}>{t('settings.availity_client_id')}</label>
+                <input
+                  value={availityClientId}
+                  onChange={e => setAvailityClientId(e.target.value)}
+                  className={inputClass}
+                  placeholder="availity-client-xxx"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>{t('settings.availity_client_secret')}</label>
+                <input
+                  type="password"
+                  value={availityClientSecret}
+                  onChange={e => setAvailityClientSecret(e.target.value)}
+                  className={inputClass}
+                  placeholder="••••••••"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  {t('settings.get_api_key_at')}{' '}
+                  <a href="https://developer.availity.com" target="_blank" rel="noreferrer" className="text-sky-600 hover:underline">developer.availity.com</a>
+                </p>
               </div>
             </div>
           )}

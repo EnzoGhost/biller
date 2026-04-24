@@ -45,13 +45,14 @@ async def get_stats(
 
     # Top denial reasons
     denial_result = await db.execute(
-        select(Denial.denial_reason, func.count(Denial.id))
-        .group_by(Denial.denial_reason)
+        select(Denial.denial_code, Denial.denial_reason, func.count(Denial.id))
+        .group_by(Denial.denial_code, Denial.denial_reason)
         .order_by(func.count(Denial.id).desc())
         .limit(5)
     )
     top_denials = [
-        {"reason": row[0], "count": row[1]} for row in denial_result.fetchall()
+        {"denial_code": row[0], "reason": row[1], "count": row[2]}
+        for row in denial_result.fetchall()
     ]
 
     # Recent claims (last 10)

@@ -361,7 +361,7 @@ export default function ClaimDetailPage() {
 
   const handleGenerateAppealLetter = async () => {
     if (!denials || denials.length === 0) {
-      showToast('No denial found to appeal', false);
+      showToast(t('denials.no_denial_to_appeal', { defaultValue: 'No denial found to appeal' }), false);
       return;
     }
     setGeneratingLetter(true);
@@ -748,8 +748,9 @@ export default function ClaimDetailPage() {
       {(claim.status === 'draft' || claim.status === 'ready') && (() => {
         const route = detectRouting();
         const medicalDx = hasMedicalDx();
+        const isReforma = claim.payer?.is_reforma === true;
         const isEnvolve = route === 'envolve';
-        const isStedi   = route === 'stedi';
+        const isStedi   = route === 'stedi' && !isReforma;
         const isInm     = route === 'inmediata';
 
         return (
@@ -785,6 +786,21 @@ export default function ClaimDetailPage() {
                     : <Send className="w-4 h-4" />}
                   {t('submit_section.via_stedi')}
                 </button>
+              )}
+
+              {/* Reforma / Stedi Portal Export */}
+              {isReforma && (
+                <a
+                  href={`/claims/${claim.id}`}
+                  onClick={e => {
+                    e.preventDefault();
+                    window.print();
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg"
+                >
+                  <span className="text-base">📋</span>
+                  {t('routing.export_stedi_portal')}
+                </a>
               )}
 
               {/* Inmediata buttons */}
@@ -835,7 +851,7 @@ export default function ClaimDetailPage() {
                   className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-slate-100"
                 >
                   <FileCode className="w-4 h-4" />
-                  {showEDIPreview ? 'Hide EDI' : t('inmediata.edi_preview')}
+                  {showEDIPreview ? t('inmediata.edi_hide') : t('inmediata.edi_preview')}
                 </button>
               )}
             </div>
@@ -977,7 +993,7 @@ export default function ClaimDetailPage() {
             )}
 
             {!priorAuths?.length && !showPriorAuthForm && (
-              <p className="text-xs text-purple-400">No prior auths on file for this claim.</p>
+              <p className="text-xs text-purple-400">{t('prior_auth.none_on_file')}</p>
             )}
           </div>
         );
@@ -989,7 +1005,8 @@ export default function ClaimDetailPage() {
           <h2 className="text-sm font-semibold text-rose-700 mb-2">{t('denials.title')}</h2>
           {denials.map(d => (
             <div key={d.id} className="text-sm text-rose-800">
-              <span className="font-mono font-medium">{d.denial_code}</span> — {d.denial_reason}
+              <span className="font-mono font-medium">{d.denial_code}</span> —{' '}
+              {t(`denials.carc_codes.${d.denial_code}`, { defaultValue: d.denial_reason ?? '' })}
               <span className="text-xs text-rose-500 ml-2">({formatDateShort(d.denial_date)})</span>
             </div>
           ))}
@@ -1040,7 +1057,11 @@ export default function ClaimDetailPage() {
                     issue.severity === 'error' ? 'bg-red-100 text-red-700' :
                     issue.severity === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'
                   }`}>{issue.severity}</span>
-                  <span className="text-sm text-slate-700">{issue.message}</span>
+                  <span className="text-sm text-slate-700">
+                    {issue.message_key
+                      ? t(issue.message_key, { ...issue.message_params, defaultValue: issue.message })
+                      : issue.message}
+                  </span>
                 </div>
               </div>
             ))}

@@ -33,7 +33,9 @@
     "recent_claims": "Recent Claims",
     "claims_by_status": "By Status",
     "top_denials": "Top Denial Reasons",
-    "no_denials": "No denials 🎉"
+    "no_denials": "No denials 🎉",
+    "bulk_submitted": "{{count}} claim(s) submitted successfully",
+    "bulk_partial": "{{success}} submitted, {{failed}} failed"
   },
   "claims": {
     "title": "Claims",
@@ -107,6 +109,7 @@
   },
   "denials": {
     "title": "Denials",
+    "no_denial_to_appeal": "No denial found to appeal",
     "no_denials": "No denials found",
     "pending": "Pending",
     "resolved": "Resolved",
@@ -160,6 +163,15 @@
     "clinic_name": "Clinic Name",
     "address": "Address",
     "stedi": "Stedi (Clearinghouse)",
+    "stedi_portal": "Stedi — Reforma Claims",
+    "stedi_portal_desc": "For First Medical VITAL / Reforma claims (<100/month), use the Stedi portal directly at stedi.com. The Free Basic plan is sufficient for low-volume Reforma payers.",
+    "stedi_portal_link": "Open Stedi Portal",
+    "stedi_portal_payers": "Reforma Payers (use portal):",
+    "stedi_portal_note": "Claims for these payers will show \"Export for Stedi Portal\" instead of direct API submission.",
+    "availity": "Availity (Envolve)",
+    "availity_client_id": "Availity Client ID",
+    "availity_client_secret": "Availity Client Secret",
+    "availity_desc": "Required for Envolve Vision claim submission via Availity. Apply at availity.com for client credentials.",
     "environment": "Environment",
     "sandbox": "Sandbox (Testing)",
     "production": "Production",
@@ -311,10 +323,12 @@
     "uploading": "Uploading...",
     "check_era": "Check ERA",
     "edi_preview": "EDI Preview",
+    "edi_hide": "Hide EDI",
     "edi_generated": "EDI generated",
     "edi_uploaded": "File uploaded to Inmediata",
     "sftp_not_configured": "SFTP not configured",
     "era_dashboard": "ERA Dashboard",
+    "sftp_desc": "Generate an EDI file to submit this claim via Inmediata SFTP.",
     "sftp_host": "SFTP Host",
     "sftp_user": "SFTP Username",
     "sftp_password": "SFTP Password",
@@ -369,7 +383,9 @@
     "stedi": "Stedi",
     "inmediata": "Inmediata",
     "manual": "Manual/Fax",
-    "route_via": "Route via"
+    "route_via": "Route via",
+    "manual_stedi_portal": "📋 Manual (Stedi Portal)",
+    "export_stedi_portal": "Export for Stedi Portal"
   },
   "payments": {
     "title": "Payments",
@@ -415,7 +431,21 @@
     "envolve_routing": "Envolve Routing",
     "route_standard": "Standard route",
     "route_envolve": "Route via Envolve",
-    "route_medical_bypass": "Bypass Envolve — bill medical"
+    "route_medical_bypass": "Bypass Envolve — bill medical",
+    "cpt_required": "CPT codes required. Add at least one procedure code.",
+    "msg": {
+      "invalid_npi": "NPI '{{npi}}' failed Luhn validation. Please verify the number.",
+      "missing_tax_id": "EIN/Tax ID missing or incorrect format (must be XX-XXXXXXX).",
+      "no_service_lines": "Claim has no service lines (CPT codes).",
+      "no_diagnosis": "Claim has no diagnosis codes (ICD-10).",
+      "no_patient": "No patient assigned to this claim.",
+      "zero_billed": "Billed amount is $0. Check the service lines.",
+      "timely_filing_exceeded": "{{days}} days have passed since service date. {{payer}} limit is {{limit}} days. This claim may be denied for late filing.",
+      "timely_filing_warning": "Warning: {{days}} days since service date. Limit is {{limit}} days — {{remaining}} days remaining.",
+      "possible_duplicate": "Possible duplicate claim detected: {{claims}}. Same patient, payer and service date.",
+      "prior_auth_required": "CPT {{cpt}} may require prior authorization from {{payer}}. Verify and add auth before submitting.",
+      "cpt_dx_mismatch": "CPT {{cpt}} requires a compatible diagnosis code."
+    }
   },
   "audit": {
     "title": "Audit Trail",
@@ -480,6 +510,7 @@
     "manage": "Manage Templates"
   },
   "prior_auth": {
+    "none_on_file": "No prior auths on file for this claim.",
     "title": "Prior Authorization",
     "required": "Prior Auth Required",
     "add": "Add Auth #",
@@ -515,7 +546,26 @@
     "review": "Review",
     "submit": "Submit",
     "void": "Void",
-    "days_without_response": "Days without response"
+    "days_without_response": "Days without response",
+    "total_items": "Total Items",
+    "view_claim": "View Claim",
+    "owed": "owed",
+    "refresh": "Refresh",
+    "days_7": "7 days",
+    "days_14": "14 days",
+    "days_21": "21 days",
+    "days_30": "30 days",
+    "priority": "Priority",
+    "days_since_submission": "{{days}}d since submission",
+    "action_check_status": "Check Status",
+    "action_call_payer": "Call Payer",
+    "action_appeal": "Appeal",
+    "action_resubmit": "Resubmit",
+    "action_review": "Review",
+    "action_renew_auth": "Renew Auth",
+    "action_submit": "Submit",
+    "action_submit_claim": "Submit Claim",
+    "action_void": "Void"
   },
   "wizard": {
     "title": "Clinic Setup",
