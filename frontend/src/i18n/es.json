@@ -454,6 +454,8 @@
     "route_envolve": "Ruta vía Envolve",
     "route_medical_bypass": "Bypass Envolve — facturar médico",
     "cpt_required": "Códigos CPT requeridos. Agregue al menos un código de procedimiento.",
+    "cpt_required_outside_rx": "Receta externa — Códigos CPT requeridos",
+    "cpt_required_outside_rx_detail": "Esta reclamación no vino de Wink. Debe añadir al menos un código CPT (línea de servicio) antes de poder someterla.",
     "msg": {
       "invalid_npi": "NPI '{{npi}}' falla la validación Luhn. Verifique el número.",
       "missing_tax_id": "EIN/Tax ID faltante o formato incorrecto (debe ser XX-XXXXXXX).",

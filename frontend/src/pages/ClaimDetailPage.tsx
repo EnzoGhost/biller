@@ -754,6 +754,12 @@ export default function ClaimDetailPage() {
         const isStedi   = route === 'stedi' && !isReforma;
         const isInm     = route === 'inmediata';
 
+        // ── CPT enforcement for outside prescriptions (Ruth safety) ───────
+        // Outside Rx (source != wink) MUST have CPT codes to submit
+        const isOutsideRx = claim.source !== 'wink';
+        const hasCptCodes = claim.service_lines && claim.service_lines.length > 0;
+        const cptBlocked = isOutsideRx && !hasCptCodes;
+
         return (
           <div className={`rounded-xl border p-4 mb-4 ${
             isEnvolve ? 'bg-blue-50 border-blue-200' :
@@ -774,12 +780,27 @@ export default function ClaimDetailPage() {
               </span>
             </h2>
 
+            {/* ⚠️ CPT required warning for outside Rx */}
+            {cptBlocked && (
+              <div className="flex items-start gap-2 p-3 mb-3 bg-red-50 border border-red-300 rounded-lg text-sm">
+                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-red-700">
+                    ⛔ {t('validation.cpt_required_outside_rx', 'Receta externa — Códigos CPT requeridos')}
+                  </p>
+                  <p className="text-red-600 mt-1">
+                    {t('validation.cpt_required_outside_rx_detail', 'Esta reclamación no vino de Wink. Debe añadir al menos un código CPT (línea de servicio) antes de poder someterla.')}
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2 mb-3">
               {/* Stedi button */}
               {isStedi && (
                 <button
                   onClick={() => submitMutation.mutate()}
-                  disabled={submitMutation.isPending}
+                  disabled={submitMutation.isPending || cptBlocked}
                   className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg disabled:opacity-60"
                 >
                   {submitMutation.isPending
@@ -809,7 +830,7 @@ export default function ClaimDetailPage() {
                 <>
                   <button
                     onClick={handleGenerateEDI}
-                    disabled={generatingEDI}
+                    disabled={generatingEDI || cptBlocked}
                     className="flex items-center gap-1.5 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded-lg disabled:opacity-60"
                   >
                     {generatingEDI
@@ -836,7 +857,7 @@ export default function ClaimDetailPage() {
               {(isEnvolve || medicalDx) && (
                 <button
                   onClick={handleAvailitySubmit}
-                  disabled={availitySubmitting}
+                  disabled={availitySubmitting || cptBlocked}
                   className="flex items-center gap-1.5 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg disabled:opacity-60"
                 >
                   {availitySubmitting

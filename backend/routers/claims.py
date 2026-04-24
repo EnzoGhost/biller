@@ -202,12 +202,26 @@ async def submit_claim(
     current_user: User = Depends(get_current_user),
 ):
     """Mark claim as submitted — actual Stedi submission in /stedi/submit."""
-    result = await db.execute(select(Claim).where(Claim.id == claim_id))
+    result = await db.execute(
+        select(Claim).options(selectinload(Claim.service_lines)).where(Claim.id == claim_id)
+    )
     claim = result.scalar_one_or_none()
     if not claim:
         raise HTTPException(404, "Reclamación no encontrada")
     if claim.status not in (ClaimStatus.DRAFT, ClaimStatus.READY):
         raise HTTPException(400, f"No se puede someter una reclamación en estado '{claim.status}'")
+
+    # ── CPT enforcement for outside prescriptions (Ruth safety) ───────────
+    # If the claim did NOT originate from Wink, CPT codes are REQUIRED.
+    # No CPT = blocked submission. This prevents billing errors on walk-in Rx.
+    if claim.source != "wink":
+        has_cpt = any(sl.cpt_code for sl in claim.service_lines)
+        if not has_cpt:
+            raise HTTPException(
+                400,
+                "Reclamación de receta externa requiere códigos CPT antes de someter. "
+                "Añada al menos un código CPT (línea de servicio) para continuar."
+            )
     old_status = claim.status
     claim.status = ClaimStatus.SUBMITTED
     claim.date_of_submission = datetime.utcnow()
@@ -326,6 +340,14 @@ async def batch_submit_claims(
 
     for claim in ready_claims:
         try:
+            # ── CPT enforcement for outside prescriptions (Ruth safety) ───
+            if claim.source != "wink" and not any(sl.cpt_code for sl in claim.service_lines):
+                failed_list.append({
+                    "claim_id": claim.id,
+                    "claim_number": claim.claim_number,
+                    "error": "Receta externa sin códigos CPT — bloqueada",
+                })
+                continue
             old_status = claim.status
             claim.status = ClaimStatus.SUBMITTED
             claim.date_of_submission = datetime.utcnow()
