@@ -35,7 +35,13 @@
     "top_denials": "Principales Denegaciones",
     "no_denials": "Sin denegaciones 🎉",
     "bulk_submitted": "{{count}} reclamación(es) sometida(s) exitosamente",
-    "bulk_partial": "{{success}} sometidas, {{failed}} fallaron"
+    "bulk_partial": "{{success}} sometidas, {{failed}} fallaron",
+    "submitted_today": "Sometidas Hoy",
+    "attention_claims": "Reclamaciones que Requieren Atención ({{count}})",
+    "weekly_trends": "Tendencias Semanales",
+    "check_eligibility": "Verificar Elegibilidad",
+    "submit_all_ready": "Someter Todas Listas",
+    "submitting_progress": "Sometiendo {{done}}/{{total}}..."
   },
   "claims": {
     "title": "Reclamaciones",
@@ -403,6 +409,7 @@
   },
   "payments": {
     "title": "Pagos",
+    "post": "Registrar",
     "post_payment": "Registrar Pago",
     "batch_post": "Lote ERA",
     "check_number": "# Cheque / EFT",
@@ -487,7 +494,12 @@
     "generating_letter": "Generando...",
     "copy_letter": "Copiar",
     "copied": "¡Copiado!",
-    "appeal_letter_title": "Borrador de Carta de Apelación"
+    "appeal_letter_title": "Borrador de Carta de Apelación",
+    "step_created": "Creada",
+    "step_scrubbed": "Verificada",
+    "step_submitted": "Sometida",
+    "step_acknowledged": "Acusada",
+    "step_paid": "Pagada"
   },
   "import_preview": {
     "column_mapping": "Mapeo de Columnas",
@@ -522,6 +534,7 @@
     "none_on_file": "No hay autorizaciones previas para esta reclamación.",
     "title": "Autorización Previa",
     "required": "Auth. Previa Requerida",
+    "required_hint": "agregue # auth antes de someter",
     "add": "Agregar # Auth",
     "auth_number": "Número de Autorización",
     "status": "Estado",

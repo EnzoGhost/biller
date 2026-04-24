@@ -35,7 +35,13 @@
     "top_denials": "Top Denial Reasons",
     "no_denials": "No denials 🎉",
     "bulk_submitted": "{{count}} claim(s) submitted successfully",
-    "bulk_partial": "{{success}} submitted, {{failed}} failed"
+    "bulk_partial": "{{success}} submitted, {{failed}} failed",
+    "submitted_today": "Submitted Today",
+    "attention_claims": "Claims Requiring Attention ({{count}})",
+    "weekly_trends": "Weekly Trends",
+    "check_eligibility": "Check Eligibility",
+    "submit_all_ready": "Submit All Ready",
+    "submitting_progress": "Submitting {{done}}/{{total}}..."
   },
   "claims": {
     "title": "Claims",
@@ -403,6 +409,7 @@
   },
   "payments": {
     "title": "Payments",
+    "post": "Post",
     "post_payment": "Post Payment",
     "batch_post": "Batch Post (ERA)",
     "check_number": "Check / EFT #",
@@ -487,7 +494,12 @@
     "generating_letter": "Generating...",
     "copy_letter": "Copy",
     "copied": "Copied!",
-    "appeal_letter_title": "Appeal Letter Draft"
+    "appeal_letter_title": "Appeal Letter Draft",
+    "step_created": "Created",
+    "step_scrubbed": "Scrubbed",
+    "step_submitted": "Submitted",
+    "step_acknowledged": "Acknowledged",
+    "step_paid": "Paid"
   },
   "import_preview": {
     "column_mapping": "Column Mapping",
@@ -527,6 +539,7 @@
     "none_on_file": "No prior auths on file for this claim.",
     "title": "Prior Authorization",
     "required": "Prior Auth Required",
+    "required_hint": "add auth # before submitting",
     "add": "Add Auth #",
     "auth_number": "Auth Number",
     "status": "Status",

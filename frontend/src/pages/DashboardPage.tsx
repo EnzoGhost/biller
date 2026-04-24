@@ -114,7 +114,7 @@ export default function DashboardPage() {
             className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600"
           >
             <Zap className="w-3.5 h-3.5 text-amber-500" />
-            Check Eligibility
+            {t('dashboard.check_eligibility')}
           </button>
           <button
             onClick={() => submitAllMutation.mutate()}
@@ -125,8 +125,8 @@ export default function DashboardPage() {
               ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               : <Send className="w-3.5 h-3.5" />}
             {bulkProgress && submitAllMutation.isPending
-              ? `Submitting ${bulkProgress.done}/${bulkProgress.total}...`
-              : 'Submit All Ready'}
+              ? t('dashboard.submitting_progress', { done: bulkProgress.done, total: bulkProgress.total })
+              : t('dashboard.submit_all_ready')}
           </button>
         </div>
       </div>
@@ -144,7 +144,7 @@ export default function DashboardPage() {
           color="bg-amber-500"
         />
         <StatCard
-          label="Submitted Today"
+          label={t('dashboard.submitted_today')}
           value={String(s.submitted_today ?? 0)}
           icon={Send}
           color="bg-indigo-500"
@@ -157,7 +157,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 mb-3">
             <TriangleAlert className="w-4 h-4 text-rose-500" />
             <h2 className="text-sm font-semibold text-rose-700">
-              Claims Requiring Attention ({s.attention_claims.length})
+              {t('dashboard.attention_claims', { count: s.attention_claims.length })}
             </h2>
           </div>
           <div className="space-y-2">
@@ -210,11 +210,11 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
               <BarChart2 className="w-4 h-4 text-slate-400" />
-              Weekly Trends
+              {t('dashboard.weekly_trends')}
             </h2>
             <div className="flex items-center gap-3 text-xs text-slate-400">
-              <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-slate-400 inline-block" /> Billed</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block" /> Paid</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-slate-400 inline-block" /> {t('claims.billed')}</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block" /> {t('claims.paid')}</span>
             </div>
           </div>
           {s.weekly_trends && s.weekly_trends.length > 0 ? (
@@ -224,7 +224,7 @@ export default function DashboardPage() {
                 {s.weekly_trends.slice(-4).map(w => (
                   <div key={w.week} className="flex items-center justify-between text-xs">
                     <span className="text-slate-500">{w.week}</span>
-                    <span className="text-slate-700">{w.claims} claims</span>
+                    <span className="text-slate-700">{w.claims} {t('nav.claims').toLowerCase()}</span>
                     <span className="text-emerald-600 font-medium">{fmt(w.paid)}</span>
                   </div>
                 ))}

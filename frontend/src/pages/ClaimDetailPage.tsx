@@ -37,11 +37,11 @@ function RoutingBadge({ method }: { method: string }) {
 // ── Status timeline ───────────────────────────────────────────────────────────
 
 const TIMELINE_STEPS = [
-  { key: 'draft',     label: 'Created',      icon: FileText },
-  { key: 'ready',     label: 'Scrubbed',     icon: ShieldCheck },
-  { key: 'submitted', label: 'Submitted',    icon: Send },
-  { key: 'accepted',  label: 'Acknowledged', icon: Check },
-  { key: 'paid',      label: 'Paid',         icon: CheckCircle },
+  { key: 'draft',     labelKey: 'lifecycle.step_created',      icon: FileText },
+  { key: 'ready',     labelKey: 'lifecycle.step_scrubbed',     icon: ShieldCheck },
+  { key: 'submitted', labelKey: 'lifecycle.step_submitted',    icon: Send },
+  { key: 'accepted',  labelKey: 'lifecycle.step_acknowledged', icon: Check },
+  { key: 'paid',      labelKey: 'lifecycle.step_paid',         icon: CheckCircle },
 ] as const;
 
 const STATUS_ORDER = ['draft', 'ready', 'submitted', 'accepted', 'paid'];
@@ -74,7 +74,7 @@ function StatusTimeline({ status }: { status: string }) {
                   isActive ? 'text-emerald-600' :
                   'text-slate-400'
                 }`}>
-                  {step.label}
+                  {t(step.labelKey)}
                 </span>
               </div>
               {i < TIMELINE_STEPS.length - 1 && (
@@ -89,7 +89,7 @@ function StatusTimeline({ status }: { status: string }) {
               <XCircle className="w-3.5 h-3.5" />
             </div>
             <span className="text-xs text-rose-600 font-semibold">
-              {status === 'appealed' ? 'Appealed' : 'Denied'}
+              {status === 'appealed' ? t('status.appealed') : t('status.denied')}
             </span>
           </div>
         )}
@@ -927,7 +927,7 @@ export default function ClaimDetailPage() {
             {paRequired && !claim.prior_auth_number && (
               <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs mb-2">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                <span className="text-amber-800">⚠️ {t('prior_auth.required')} — add auth # before submitting.</span>
+                <span className="text-amber-800">⚠️ {t('prior_auth.required')} — {t('prior_auth.required_hint')}</span>
               </div>
             )}
 
@@ -941,12 +941,12 @@ export default function ClaimDetailPage() {
                       pa.status === 'pending'  ? 'bg-amber-100 text-amber-700' :
                       pa.status === 'expired'  ? 'bg-slate-100 text-slate-500' :
                                                   'bg-rose-100 text-rose-700'
-                    }`}>{pa.status}</span>
+                    }`}>{t(`prior_auth.${pa.status}`, { defaultValue: pa.status })}</span>
                     {pa.auth_number && (
                       <span className="font-mono font-medium text-slate-800">{pa.auth_number}</span>
                     )}
                     {pa.expiry_date && (
-                      <span className="text-slate-400">Expires: {pa.expiry_date}</span>
+                      <span className="text-slate-400">{t('prior_auth.expiry_date')}: {pa.expiry_date}</span>
                     )}
                     {pa.cpt_codes?.length > 0 && (
                       <span className="text-slate-400">{pa.cpt_codes.join(', ')}</span>
@@ -1130,10 +1130,10 @@ export default function ClaimDetailPage() {
               <button onClick={handlePostPayment} disabled={postingPayment || !pmtAmount}
                 className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium rounded disabled:opacity-50">
                 {postingPayment ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                Post
+                {t('payments.post')}
               </button>
               <button onClick={() => setShowPostPayment(false)} className="text-xs text-slate-500 hover:text-slate-700">
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -1149,7 +1149,7 @@ export default function ClaimDetailPage() {
                 <th className="text-right pb-1.5 font-semibold text-slate-500">{t('payments.payment_amount')}</th>
                 <th className="text-right pb-1.5 font-semibold text-slate-500">{t('payments.adjustment')}</th>
                 <th className="text-right pb-1.5 font-semibold text-slate-500">{t('payments.patient_resp')}</th>
-                <th className="text-left pb-1.5 font-semibold text-slate-500">Method</th>
+                <th className="text-left pb-1.5 font-semibold text-slate-500">{t('payments.payment_method')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
