@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, LayoutTemplate } from 'lucide-react';
 import api from '../lib/api';
 import DatePicker from '../components/ui/DatePicker';
 import SearchableSelect from '../components/ui/SearchableSelect';
 import ICD10Input from '../components/ui/ICD10Input';
 import CPTInput from '../components/ui/CPTInput';
 import type { CPTCode } from '../lib/cpt';
-import type { Patient, Provider, Payer } from '../types';
+import type { Patient, Provider, Payer, ClaimTemplate } from '../types';
 
 interface ServiceLineForm {
   cpt_code: string;
@@ -47,6 +47,41 @@ export default function NewClaimPage() {
   const [priorAuth,    setPriorAuth]    = useState('');
   const [lines,        setLines]        = useState<ServiceLineForm[]>([defaultLine()]);
   const [notes,        setNotes]        = useState('');
+
+  const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [templateApplied, setTemplateApplied] = useState(false);
+
+  const { data: templates = [] } = useQuery<ClaimTemplate[]>({
+    queryKey: ['templates'],
+    queryFn: () => api.get('/templates/').then(r => r.data),
+  });
+
+  const applyTemplate = (templateId: string) => {
+    const tmpl = templates.find(t => String(t.id) === templateId);
+    if (!tmpl) return;
+    // Set diagnosis codes
+    if (tmpl.diagnosis_codes.length > 0) {
+      setDiagCodes(tmpl.diagnosis_codes.join(', '));
+    }
+    // Set POS
+    if (tmpl.place_of_service) {
+      setPlaceOfService(tmpl.place_of_service);
+    }
+    // Set service lines
+    if (tmpl.cpt_codes.length > 0) {
+      setLines(tmpl.cpt_codes.map(c => ({
+        cpt_code: c.code,
+        description: c.desc || '',
+        units: c.units || 1,
+        billed_amount: c.amount || 0,
+        place_of_service: tmpl.place_of_service || '11',
+        modifiers: '',
+      })));
+    }
+    setTemplateApplied(true);
+    setTimeout(() => setTemplateApplied(false), 2000);
+    setSelectedTemplate(templateId);
+  };
 
   // Reference data
   const { data: patients } = useQuery<{ items: Patient[] }>({
@@ -129,6 +164,27 @@ export default function NewClaimPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Template Selector */}
+        {templates.length > 0 && (
+          <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 flex items-center gap-3">
+            <LayoutTemplate className="w-4 h-4 text-sky-600 shrink-0" />
+            <label className="text-sm font-medium text-sky-700">{t('templates.select')}</label>
+            <select
+              value={selectedTemplate}
+              onChange={e => applyTemplate(e.target.value)}
+              className="flex-1 px-3 py-1.5 text-sm border border-sky-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+            >
+              <option value="">{t('templates.placeholder')}</option>
+              {templates.map(t => (
+                <option key={t.id} value={String(t.id)}>{t.name}</option>
+              ))}
+            </select>
+            {templateApplied && (
+              <span className="text-xs text-emerald-600 font-medium">✔ {t('templates.applied')}</span>
+            )}
+          </div>
+        )}
+
         {/* Patient / Provider / Payer */}
         <div className="bg-white rounded-xl border border-slate-200 p-6">
           <h2 className="font-semibold text-slate-800 mb-4">{t('claims.general_info')}</h2>

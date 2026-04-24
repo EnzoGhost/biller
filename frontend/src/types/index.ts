@@ -247,6 +247,76 @@ export interface DashboardStats {
   }>;
 }
 
+export type PriorAuthStatus = 'pending' | 'approved' | 'denied' | 'expired';
+
+export interface PriorAuth {
+  id: number;
+  claim_id?: number;
+  payer_id?: number;
+  payer_name?: string;
+  auth_number?: string;
+  cpt_codes: string[];
+  status: PriorAuthStatus;
+  requested_date?: string;
+  approved_date?: string;
+  expiry_date?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CPTCodeItem {
+  code: string;
+  desc: string;
+  units: number;
+  amount: number;
+}
+
+export interface ClaimTemplate {
+  id: number;
+  name: string;
+  description?: string;
+  cpt_codes: CPTCodeItem[];
+  diagnosis_codes: string[];
+  place_of_service: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FollowUpItem {
+  claim_id: number;
+  claim_number: string;
+  status: string;
+  patient_name: string;
+  payer_name: string;
+  service_date: string;
+  total_billed: number;
+  total_paid: number;
+  balance: number;
+  days_since_submission?: number;
+  reason: string;
+  priority: 'high' | 'medium' | 'low';
+  actions: string[];
+}
+
+export interface ClinicSettings {
+  id: number;
+  clinic_name?: string;
+  address_line1?: string;
+  city?: string;
+  state: string;
+  zip_code?: string;
+  phone?: string;
+  tax_id?: string;
+  npi_org?: string;
+  payer_enrollments: Array<{ payer_id: string; payer_name: string }>;
+  has_inmediata: boolean;
+  has_stedi: boolean;
+  has_availity: boolean;
+  setup_complete: boolean;
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;

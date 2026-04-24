@@ -8,10 +8,11 @@ import {
   FileCode, Upload, Zap, CheckCircle, Clock, XCircle,
   MessageSquare, RotateCcw, FileText, Copy,
   ClipboardCheck, Eye, DollarSign, History,
+  ShieldAlert, Plus,
 } from 'lucide-react';
 import api from '../lib/api';
 import { formatDateShort, formatDate } from '../lib/dates';
-import type { Claim, Denial, Appeal, ValidationResult, AuditLogEntry, Payment } from '../types';
+import type { Claim, Denial, Appeal, ValidationResult, AuditLogEntry, Payment, PriorAuth } from '../types';
 import StatusBadge from '../components/ui/Badge';
 
 // ── Routing indicator ─────────────────────────────────────────────────────────
@@ -132,6 +133,16 @@ export default function ClaimDetailPage() {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [validating, setValidating] = useState(false);
 
+  // Prior auth state
+  const [showPriorAuthForm, setShowPriorAuthForm] = useState(false);
+  const [paAuthNumber, setPaAuthNumber] = useState('');
+  const [paExpiry, setPaExpiry] = useState('');
+  const [savingPa, setSavingPa] = useState(false);
+
+  // Availity/Envolve state
+  const [availitySubmitting, setAvailitySubmitting] = useState(false);
+  const [availityChecking, setAvailityChecking] = useState(false);
+
   // Payment posting state
   const [showPostPayment, setShowPostPayment] = useState(false);
   const [pmtAmount, setPmtAmount] = useState('');
@@ -172,6 +183,12 @@ export default function ClaimDetailPage() {
   const { data: auditLog, refetch: refetchAudit } = useQuery<AuditLogEntry[]>({
     queryKey: ['claim-audit', id],
     queryFn: () => api.get(`/audit/claims/${id}`).then(r => r.data),
+    enabled: !!id,
+  });
+
+  const { data: priorAuths, refetch: refetchPriorAuths } = useQuery<PriorAuth[]>({
+    queryKey: ['claim-prior-auths', id],
+    queryFn: () => api.get(`/prior-auth/claims/${id}`).then(r => r.data),
     enabled: !!id,
   });
 
@@ -377,6 +394,87 @@ export default function ClaimDetailPage() {
     }
   };
 
+  // ── Availity/Envolve submit ─────────────────────────────────────────────
+
+  const handleAvailitySubmit = async () => {
+    setAvailitySubmitting(true);
+    try {
+      await api.post(`/availity/submit/${id}`);
+      qc.invalidateQueries({ queryKey: ['claim', id] });
+      showToast(t('availity.submit_success'));
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      showToast(e?.response?.data?.detail ?? t('common.error'), false);
+    } finally {
+      setAvailitySubmitting(false);
+    }
+  };
+
+  const handleAvailityStatus = async () => {
+    setAvailityChecking(true);
+    try {
+      await api.get(`/availity/status/${id}`);
+      qc.invalidateQueries({ queryKey: ['claim', id] });
+      showToast(t('availity.check_status'));
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      showToast(e?.response?.data?.detail ?? t('common.error'), false);
+    } finally {
+      setAvailityChecking(false);
+    }
+  };
+
+  // ── Prior Auth ────────────────────────────────────────────────────────────
+
+  const handleSavePriorAuth = async () => {
+    if (!paAuthNumber.trim()) return;
+    setSavingPa(true);
+    try {
+      await api.post('/prior-auth/', {
+        claim_id: Number(id),
+        payer_name: claim?.payer?.name,
+        auth_number: paAuthNumber,
+        cpt_codes: claim?.service_lines.map(sl => sl.cpt_code) ?? [],
+        status: 'approved',
+        requested_date: new Date().toISOString().split('T')[0],
+        approved_date: new Date().toISOString().split('T')[0],
+        expiry_date: paExpiry || undefined,
+      });
+      qc.invalidateQueries({ queryKey: ['claim', id] });
+      refetchPriorAuths();
+      showToast(t('prior_auth.saved'));
+      setShowPriorAuthForm(false);
+      setPaAuthNumber('');
+      setPaExpiry('');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      showToast(e?.response?.data?.detail ?? t('common.error'), false);
+    } finally {
+      setSavingPa(false);
+    }
+  };
+
+  // ── Routing detection ─────────────────────────────────────────────────────
+
+  const detectRouting = () => {
+    if (!claim) return 'standard';
+    const payerName = (claim.payer?.name ?? '').toLowerCase();
+    const method = claim.payer?.submission_method ?? 'inmediata';
+    const isEnvolve = payerName.includes('envolve') || payerName.includes('vision');
+    const envolveRoute = validationResult?.envolve_routing?.route;
+    if (isEnvolve || envolveRoute === 'envolve') return 'envolve';
+    if (method === 'stedi') return 'stedi';
+    return 'inmediata';
+  };
+
+  const hasMedicalDx = () => {
+    if (!claim) return false;
+    const MEDICAL_DX_PREFIXES = ['E11.3', 'E13.3', 'E10.3', 'H40', 'H35', 'H47', 'G91', 'H30', 'H31'];
+    return claim.diagnosis_codes.some(dx =>
+      MEDICAL_DX_PREFIXES.some(pfx => dx.startsWith(pfx))
+    );
+  };
+
   // ─────────────────────────────────────────────────────────────────────────
 
   const fmt = (n: number) =>
@@ -444,7 +542,8 @@ export default function ClaimDetailPage() {
               <button
                 onClick={() => submitMutation.mutate()}
                 disabled={submitMutation.isPending}
-                className="flex items-center gap-1.5 px-3 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm rounded-lg disabled:opacity-60"
+                className="flex items-center gap-1.5 px-3 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm rounded-lg disabled:opacity-60 hidden"
+                aria-hidden="true"
               >
                 {submitMutation.isPending
                   ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -645,95 +744,244 @@ export default function ClaimDetailPage() {
         </div>
       </div>
 
-      {/* Inmediata section */}
-      <div className="bg-indigo-50 rounded-xl border border-indigo-200 p-4 mb-4">
-        <h2 className="text-sm font-semibold text-indigo-700 mb-3 flex items-center gap-2">
-          <Zap className="w-4 h-4" />
-          {t('inmediata.title')}
-        </h2>
-        <div className="flex flex-wrap gap-2 mb-3">
-          <button
-            onClick={handleGenerateEDI}
-            disabled={generatingEDI}
-            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg disabled:opacity-60"
-          >
-            {generatingEDI
-              ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              : <FileCode className="w-4 h-4" />}
-            {generatingEDI ? t('inmediata.generating') : t('inmediata.generate_edi')}
-          </button>
-          {ediContent && (
-            <>
-              <button
-                onClick={handleUploadEDI}
-                disabled={uploadingEDI}
-                className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm rounded-lg disabled:opacity-60"
-              >
-                {uploadingEDI
-                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <Upload className="w-4 h-4" />}
-                {uploadingEDI ? t('inmediata.uploading') : t('inmediata.upload')}
-              </button>
-              <button
-                onClick={() => setShowEDIPreview(v => !v)}
-                className="flex items-center gap-1.5 px-3 py-2 border border-indigo-200 text-indigo-700 text-sm rounded-lg hover:bg-indigo-100"
-              >
-                <FileCode className="w-4 h-4" />
-                {showEDIPreview ? 'Hide' : t('inmediata.edi_preview')}
-              </button>
-            </>
-          )}
-          <Link
-            to="/era"
-            className="flex items-center gap-1.5 px-3 py-2 border border-indigo-200 text-indigo-700 text-sm rounded-lg hover:bg-indigo-100"
-          >
-            <RefreshCw className="w-4 h-4" />
-            {t('inmediata.era_dashboard')}
-          </Link>
-        </div>
-        {ediContent && showEDIPreview && (
-          <div>
-            <p className="text-xs font-semibold text-indigo-600 mb-1">{t('inmediata.edi_preview')}</p>
-            <pre className="text-xs text-indigo-800 bg-white border border-indigo-100 rounded-lg p-3 overflow-x-auto max-h-48 font-mono">
-              {ediContent.substring(0, 2000)}{ediContent.length > 2000 ? '...' : ''}
-            </pre>
-          </div>
-        )}
-        {!ediContent && (
-          <p className="text-xs text-indigo-500">Generate an EDI file to submit this claim via Inmediata SFTP.</p>
-        )}
-      </div>
+      {/* ── Unified Submit Claim Section ── */}
+      {(claim.status === 'draft' || claim.status === 'ready') && (() => {
+        const route = detectRouting();
+        const medicalDx = hasMedicalDx();
+        const isEnvolve = route === 'envolve';
+        const isStedi   = route === 'stedi';
+        const isInm     = route === 'inmediata';
 
-      {/* Stedi Transaction Info */}
-      {claim.stedi_transaction_id && (
-        <div className="bg-sky-50 rounded-xl border border-sky-200 p-4 mb-4">
-          <h2 className="text-sm font-semibold text-sky-700 mb-2">{t('stedi.transaction_info')}</h2>
-          <div className="text-sm text-sky-800 space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="text-sky-500">{t('stedi.transaction_id')}:</span>
-              <span className="font-mono font-medium">{claim.stedi_transaction_id}</span>
+        return (
+          <div className={`rounded-xl border p-4 mb-4 ${
+            isEnvolve ? 'bg-blue-50 border-blue-200' :
+            isStedi   ? 'bg-emerald-50 border-emerald-200' :
+                        'bg-indigo-50 border-indigo-200'
+          }`}>
+            <h2 className={`text-sm font-semibold mb-3 flex items-center gap-2 ${
+              isEnvolve ? 'text-blue-700' : isStedi ? 'text-emerald-700' : 'text-indigo-700'
+            }`}>
+              <Send className="w-4 h-4" />
+              {t('submit_section.title')}
+              <span className={`ml-auto text-xs font-normal px-2 py-0.5 rounded-full border ${
+                isEnvolve ? 'bg-blue-100 text-blue-600 border-blue-200' :
+                isStedi   ? 'bg-emerald-100 text-emerald-600 border-emerald-200' :
+                            'bg-indigo-100 text-indigo-600 border-indigo-200'
+              }`}>
+                {t('submit_section.routing_label')} {isEnvolve ? 'Envolve/Availity' : isStedi ? 'Stedi' : 'Inmediata'}
+              </span>
+            </h2>
+
+            <div className="flex flex-wrap gap-2 mb-3">
+              {/* Stedi button */}
+              {isStedi && (
+                <button
+                  onClick={() => submitMutation.mutate()}
+                  disabled={submitMutation.isPending}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg disabled:opacity-60"
+                >
+                  {submitMutation.isPending
+                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <Send className="w-4 h-4" />}
+                  {t('submit_section.via_stedi')}
+                </button>
+              )}
+
+              {/* Inmediata buttons */}
+              {isInm && (
+                <>
+                  <button
+                    onClick={handleGenerateEDI}
+                    disabled={generatingEDI}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded-lg disabled:opacity-60"
+                  >
+                    {generatingEDI
+                      ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : <FileCode className="w-4 h-4" />}
+                    {t('submit_section.via_inmediata')}
+                  </button>
+                  {ediContent && (
+                    <button
+                      onClick={handleUploadEDI}
+                      disabled={uploadingEDI}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm rounded-lg disabled:opacity-60"
+                    >
+                      {uploadingEDI
+                        ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        : <Upload className="w-4 h-4" />}
+                      {t('inmediata.upload')}
+                    </button>
+                  )}
+                </>
+              )}
+
+              {/* Envolve button */}
+              {(isEnvolve || medicalDx) && (
+                <button
+                  onClick={handleAvailitySubmit}
+                  disabled={availitySubmitting}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg disabled:opacity-60"
+                >
+                  {availitySubmitting
+                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <Eye className="w-4 h-4" />}
+                  {medicalDx ? t('submit_section.via_envolve_vision') : t('submit_section.via_envolve')}
+                </button>
+              )}
+
+              {ediContent && (
+                <button
+                  onClick={() => setShowEDIPreview(v => !v)}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-slate-100"
+                >
+                  <FileCode className="w-4 h-4" />
+                  {showEDIPreview ? 'Hide EDI' : t('inmediata.edi_preview')}
+                </button>
+              )}
             </div>
-            {claim.payer_claim_number && (
-              <div className="flex items-center gap-2">
-                <span className="text-sky-500">{t('stedi.payer_claim_number')}:</span>
-                <span className="font-mono">{claim.payer_claim_number}</span>
+
+            {/* Medical dx suggestion card */}
+            {medicalDx && (
+              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-amber-800">
+                  💡 {t('submit_section.medical_suggestion', {
+                    payer: claim.payer?.name ?? 'medical insurer',
+                  })}
+                </p>
               </div>
             )}
-            {claim.date_of_submission && (
-              <div className="flex items-center gap-2">
-                <span className="text-sky-500">{t('stedi.submitted_on')}:</span>
-                <span>{formatDateShort(claim.date_of_submission)}</span>
+
+            {/* EDI preview */}
+            {ediContent && showEDIPreview && (
+              <div className="mt-3">
+                <pre className="text-xs text-slate-700 bg-white border border-slate-200 rounded-lg p-3 overflow-x-auto max-h-48 font-mono">
+                  {ediContent.substring(0, 2000)}{ediContent.length > 2000 ? '...' : ''}
+                </pre>
+              </div>
+            )}
+
+            {/* Stedi transaction info */}
+            {claim.stedi_transaction_id && (
+              <div className="mt-3 pt-3 border-t border-current border-opacity-20 text-sm space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">{t('stedi.transaction_id')}:</span>
+                  <span className="font-mono font-medium">{claim.stedi_transaction_id}</span>
+                </div>
+                {claim.date_of_submission && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500">{t('stedi.submitted_on')}:</span>
+                    <span>{formatDateShort(claim.date_of_submission)}</span>
+                  </div>
+                )}
+                {stediStatus && (
+                  <pre className="text-xs text-slate-700 overflow-x-auto mt-2">{JSON.stringify(stediStatus, null, 2)}</pre>
+                )}
               </div>
             )}
           </div>
-          {stediStatus && (
-            <div className="mt-3 pt-3 border-t border-sky-200">
-              <p className="text-xs font-medium text-sky-600 mb-1">{t('stedi.raw_status')}</p>
-              <pre className="text-xs text-sky-800 overflow-x-auto">{JSON.stringify(stediStatus, null, 2)}</pre>
+        );
+      })()}
+
+      {/* Prior Authorization section */}
+      {(() => {
+        const paRequired = validationResult?.issues.some(i => i.code?.startsWith('PRIOR_AUTH_REQUIRED'));
+        return (
+          <div className="bg-purple-50 rounded-xl border border-purple-200 p-4 mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-purple-700 flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4" />
+                {t('prior_auth.title')}
+                {claim.prior_auth_number && (
+                  <span className="ml-1 font-mono text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">
+                    {claim.prior_auth_number}
+                  </span>
+                )}
+              </h2>
+              <button
+                onClick={() => setShowPriorAuthForm(v => !v)}
+                className="flex items-center gap-1 text-xs font-medium text-purple-600 hover:text-purple-800 px-2 py-1 border border-purple-200 rounded"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                {t('prior_auth.add')}
+              </button>
             </div>
-          )}
-        </div>
-      )}
+
+            {paRequired && !claim.prior_auth_number && (
+              <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs mb-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <span className="text-amber-800">⚠️ {t('prior_auth.required')} — add auth # before submitting.</span>
+              </div>
+            )}
+
+            {/* Existing prior auths */}
+            {priorAuths && priorAuths.length > 0 && (
+              <div className="space-y-1 mb-2">
+                {priorAuths.map(pa => (
+                  <div key={pa.id} className="flex items-center gap-3 text-xs bg-white border border-purple-100 rounded-lg px-3 py-2">
+                    <span className={`px-1.5 py-0.5 rounded font-semibold ${
+                      pa.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                      pa.status === 'pending'  ? 'bg-amber-100 text-amber-700' :
+                      pa.status === 'expired'  ? 'bg-slate-100 text-slate-500' :
+                                                  'bg-rose-100 text-rose-700'
+                    }`}>{pa.status}</span>
+                    {pa.auth_number && (
+                      <span className="font-mono font-medium text-slate-800">{pa.auth_number}</span>
+                    )}
+                    {pa.expiry_date && (
+                      <span className="text-slate-400">Expires: {pa.expiry_date}</span>
+                    )}
+                    {pa.cpt_codes?.length > 0 && (
+                      <span className="text-slate-400">{pa.cpt_codes.join(', ')}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add form */}
+            {showPriorAuthForm && (
+              <div className="bg-white border border-purple-200 rounded-lg p-3">
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">{t('prior_auth.auth_number')}</label>
+                    <input
+                      value={paAuthNumber}
+                      onChange={e => setPaAuthNumber(e.target.value)}
+                      placeholder="AUTH-12345"
+                      className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">{t('prior_auth.expiry_date')}</label>
+                    <input
+                      type="date"
+                      value={paExpiry}
+                      onChange={e => setPaExpiry(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSavePriorAuth}
+                    disabled={savingPa || !paAuthNumber}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-xs font-medium rounded disabled:opacity-50"
+                  >
+                    {savingPa ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Save
+                  </button>
+                  <button onClick={() => setShowPriorAuthForm(false)} className="text-xs text-slate-500 hover:text-slate-700">Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {!priorAuths?.length && !showPriorAuthForm && (
+              <p className="text-xs text-purple-400">No prior auths on file for this claim.</p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Denials */}
       {denials && denials.length > 0 && (

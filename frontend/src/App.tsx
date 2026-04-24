@@ -20,6 +20,8 @@ const SettingsPage     = lazy(() => import('./pages/SettingsPage'));
 const ReportsPage      = lazy(() => import('./pages/ReportsPage'));
 const ERADashboardPage = lazy(() => import('./pages/ERADashboardPage'));
 const PaymentsPage     = lazy(() => import('./pages/PaymentsPage'));
+const FollowUpPage     = lazy(() => import('./pages/FollowUpPage'));
+const SetupWizardPage  = lazy(() => import('./pages/SetupWizardPage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -71,6 +73,8 @@ export default function App() {
               <Route path="reports" element={<ReportsPage />} />
               <Route path="era" element={<ERADashboardPage />} />
               <Route path="payments" element={<PaymentsPage />} />
+              <Route path="follow-up" element={<FollowUpPage />} />
+              <Route path="setup" element={<SetupWizardPage />} />
               {/* fallback */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

@@ -334,6 +334,78 @@ class EligibilityCheck(Base):
     checked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
+# ── Prior Auth ───────────────────────────────────────────────────────────────
+
+class PriorAuthStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    EXPIRED = "expired"
+
+
+class PriorAuth(Base):
+    __tablename__ = "prior_auths"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(Integer, ForeignKey("claims.id"), nullable=True)
+    payer_id: Mapped[int] = mapped_column(Integer, ForeignKey("payers.id"), nullable=True)
+    payer_name: Mapped[str] = mapped_column(String(255), nullable=True)
+    auth_number: Mapped[str] = mapped_column(String(100), nullable=True)
+    cpt_codes: Mapped[dict] = mapped_column(JSON, default=list)  # ["92310", "92083"]
+    status: Mapped[PriorAuthStatus] = mapped_column(SAEnum(PriorAuthStatus), default=PriorAuthStatus.PENDING)
+    requested_date: Mapped[date] = mapped_column(Date, nullable=True)
+    approved_date: Mapped[date] = mapped_column(Date, nullable=True)
+    expiry_date: Mapped[date] = mapped_column(Date, nullable=True)
+    notes: Mapped[str] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── Claim Templates ───────────────────────────────────────────────────────────
+
+class ClaimTemplate(Base):
+    __tablename__ = "claim_templates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(String(500), nullable=True)
+    cpt_codes: Mapped[dict] = mapped_column(JSON, default=list)  # [{"code": "92014", "desc": "...", "units": 1, "amount": 0}]
+    diagnosis_codes: Mapped[dict] = mapped_column(JSON, default=list)  # ["Z00.01", ...]
+    place_of_service: Mapped[str] = mapped_column(String(2), default="11")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── Clinic Settings ───────────────────────────────────────────────────────────
+
+class ClinicSettings(Base):
+    __tablename__ = "clinic_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    clinic_name: Mapped[str] = mapped_column(String(255), nullable=True)
+    address_line1: Mapped[str] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[str] = mapped_column(String(100), nullable=True)
+    city: Mapped[str] = mapped_column(String(100), nullable=True)
+    state: Mapped[str] = mapped_column(String(2), default="PR")
+    zip_code: Mapped[str] = mapped_column(String(10), nullable=True)
+    phone: Mapped[str] = mapped_column(String(20), nullable=True)
+    tax_id: Mapped[str] = mapped_column(String(20), nullable=True)  # EIN
+    npi_org: Mapped[str] = mapped_column(String(10), nullable=True)  # Organizational NPI
+    # Payer enrollments (JSON: [{payer_id, name, enrolled_date}])
+    payer_enrollments: Mapped[dict] = mapped_column(JSON, default=list)
+    # Clearinghouse credentials (stored as JSON)
+    inmediata_sftp_host: Mapped[str] = mapped_column(String(255), nullable=True)
+    inmediata_sftp_user: Mapped[str] = mapped_column(String(100), nullable=True)
+    stedi_api_key: Mapped[str] = mapped_column(String(255), nullable=True)
+    availity_client_id: Mapped[str] = mapped_column(String(255), nullable=True)
+    availity_client_secret: Mapped[str] = mapped_column(String(255), nullable=True)
+    # Setup wizard completion
+    setup_complete: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Appeal(Base):
     __tablename__ = "appeals"
 

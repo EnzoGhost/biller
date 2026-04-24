@@ -29,6 +29,12 @@ class Settings(BaseSettings):
 
     WINK_DB_PATH: str = ""
 
+    # Availity / Envolve Vision integration
+    AVAILITY_CLIENT_ID: str = ""
+    AVAILITY_CLIENT_SECRET: str = ""
+    AVAILITY_PAYER_ID: str = "56190"  # Envolve Vision payer ID
+    AVAILITY_BASE_URL: str = "https://api.availity.com"
+
     CORS_ORIGINS: str = "http://localhost:5174,http://127.0.0.1:5174"
 
     @property
