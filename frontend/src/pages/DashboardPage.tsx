@@ -1,73 +1,350 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, Link } from 'react-router-dom';
-import { DollarSign, FileText, TrendingUp, AlertCircle, Clock, Zap, TriangleAlert, Send, ChevronRight, BarChart2, CheckCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Send, Zap, ChevronRight, ChevronDown, ChevronUp,
+  FileText, CheckCircle, Clock, AlertTriangle, CircleDollarSign,
+  Download, X, Loader2,
+} from 'lucide-react';
 import api from '../lib/api';
 import { formatDateShort } from '../lib/dates';
-import type { DashboardStats, ClaimStatus } from '../types';
+import type { ClaimStatus } from '../types';
 import StatusBadge from '../components/ui/Badge';
 
-const STATUS_ORDER: ClaimStatus[] = ['draft', 'ready', 'submitted', 'accepted', 'paid', 'denied', 'appealed'];
+// ── Types ────────────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, sub, icon: Icon, color }: {
-  label: string; value: string; sub?: string;
-  icon: typeof DollarSign; color: string;
-}) {
+interface WorkQueueClaim {
+  id: number;
+  claim_number: string;
+  status: ClaimStatus;
+  patient_name: string;
+  payer_name: string;
+  service_date_from: string | null;
+  total_billed: number;
+  total_paid: number;
+  days_aging: number;
+  date_of_submission: string | null;
+  source: string;
+  notes: string | null;
+  denial_reason?: string;
+}
+
+interface WorkQueueData {
+  new: WorkQueueClaim[];
+  ready: WorkQueueClaim[];
+  submitted: WorkQueueClaim[];
+  attention: WorkQueueClaim[];
+  paid: WorkQueueClaim[];
+  counts: {
+    new_today: number;
+    ready: number;
+    attention: number;
+  };
+}
+
+interface PullResult {
+  patients_found: number;
+  claims_created: number;
+  errors: string[];
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const fmt = (n: number) =>
+  new Intl.NumberFormat('es-PR', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+  }).format(n);
+
+// ── VistaNet Pull Modal ──────────────────────────────────────────────────────
+
+function PullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const { t } = useTranslation();
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [result, setResult] = useState<PullResult | null>(null);
+
+  // Convert YYYY-MM-DD to Spanish format Abril/28/2026
+  const MONTHS_ES: Record<string, string> = {
+    '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
+    '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
+    '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre',
+  };
+
+  const toSpanishDate = (isoDate: string): string => {
+    const [year, month, day] = isoDate.split('-');
+    const monthName = MONTHS_ES[month] || 'Enero';
+    return `${monthName}/${parseInt(day)}/${year}`;
+  };
+
+  const pullMutation = useMutation({
+    mutationFn: async () => {
+      const resp = await api.post('/vistanet/pull-bitacora', {
+        date_from: toSpanishDate(dateFrom),
+        date_to: toSpanishDate(dateTo),
+      });
+      return resp.data as PullResult;
+    },
+    onSuccess: (data) => {
+      setResult(data);
+      onSuccess();
+    },
+  });
+
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 flex items-start gap-4">
-      <div className={`w-10 h-10 rounded-lg ${color} flex items-center justify-center shrink-0`}>
-        <Icon className="w-5 h-5 text-white" />
-      </div>
-      <div>
-        <p className="text-sm text-slate-500">{label}</p>
-        <p className="text-xl font-bold text-slate-900 mt-0.5">{value}</p>
-        {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <h2 className="text-base font-semibold text-slate-900">
+            {t('dashboard.pull_modal_title')}
+          </h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          {!result ? (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {t('dashboard.date_from')}
+                </label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {t('dashboard.date_to')}
+                </label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none"
+                />
+              </div>
+              {pullMutation.isError && (
+                <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 text-sm text-rose-700">
+                  {t('dashboard.pull_error')}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-4">
+              <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                <CheckCircle className="w-6 h-6 text-emerald-500" />
+              </div>
+              <p className="text-sm font-medium text-slate-900 mb-1">
+                {t('dashboard.pull_success', {
+                  patients: result.patients_found,
+                  claims: result.claims_created,
+                })}
+              </p>
+              {result.errors.length > 0 && (
+                <div className="mt-3 text-left bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-h-32 overflow-y-auto">
+                  {result.errors.map((err, i) => (
+                    <p key={i} className="text-xs text-amber-700">{err}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+          {!result ? (
+            <>
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => pullMutation.mutate()}
+                disabled={!dateFrom || !dateTo || pullMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-sky-500 hover:bg-sky-600 text-white rounded-lg disabled:opacity-50"
+              >
+                {pullMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {t('dashboard.pulling')}
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    {t('dashboard.pull')}
+                  </>
+                )}
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium bg-sky-500 hover:bg-sky-600 text-white rounded-lg"
+            >
+              OK
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-// Mini sparkline using SVG
-function MiniChart({ data }: { data: { week: string; billed: number; paid: number }[] }) {
-  if (!data || data.length === 0) return null;
-  const max = Math.max(...data.map(d => d.billed), 1);
-  const W = 160; const H = 40; const pad = 4;
-  const n = data.length;
-  const stepX = (W - pad * 2) / Math.max(n - 1, 1);
+// ── Claim Card ───────────────────────────────────────────────────────────────
 
-  const billedPts = data.map((d, i) => `${pad + i * stepX},${H - pad - ((d.billed / max) * (H - pad * 2))}`).join(' ');
-  const paidPts   = data.map((d, i) => `${pad + i * stepX},${H - pad - ((d.paid   / max) * (H - pad * 2))}`).join(' ');
+function ClaimCard({ claim, showAging = false, showDenialReason = false }: {
+  claim: WorkQueueClaim;
+  showAging?: boolean;
+  showDenialReason?: boolean;
+}) {
+  const navigate = useNavigate();
 
   return (
-    <svg width={W} height={H} className="overflow-visible">
-      <polyline points={billedPts} fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeLinejoin="round" />
-      <polyline points={paidPts}   fill="none" stroke="#10b981" strokeWidth="1.5" strokeLinejoin="round" />
-    </svg>
+    <div
+      onClick={() => navigate(`/claims/${claim.id}`)}
+      className="flex items-center justify-between py-3 px-4 bg-white rounded-xl border border-slate-100 hover:border-slate-200 hover:shadow-sm cursor-pointer transition-all group"
+    >
+      <div className="flex items-center gap-4 min-w-0 flex-1">
+        <StatusBadge status={claim.status} />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-slate-900 truncate">
+            {claim.patient_name || claim.claim_number}
+          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-xs text-slate-400">
+              {formatDateShort(claim.service_date_from)}
+            </span>
+            {claim.payer_name && (
+              <>
+                <span className="text-xs text-slate-300">·</span>
+                <span className="text-xs text-slate-400 truncate max-w-[140px]">
+                  {claim.payer_name}
+                </span>
+              </>
+            )}
+          </div>
+          {showDenialReason && claim.denial_reason && (
+            <p className="text-xs text-rose-500 mt-0.5 truncate">
+              {claim.denial_reason}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 shrink-0">
+        {showAging && claim.days_aging > 0 && (
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+            claim.days_aging > 60 ? 'bg-rose-50 text-rose-600' :
+            claim.days_aging > 30 ? 'bg-amber-50 text-amber-600' :
+            'bg-slate-50 text-slate-500'
+          }`}>
+            {claim.days_aging}d
+          </span>
+        )}
+        <span className="text-sm font-semibold text-slate-900">
+          {fmt(claim.total_billed)}
+        </span>
+        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-400" />
+      </div>
+    </div>
   );
 }
+
+// ── Section ──────────────────────────────────────────────────────────────────
+
+function Section({
+  title, icon: Icon, iconColor, claims, defaultOpen = true,
+  showAging = false, showDenialReason = false, headerAction,
+}: {
+  title: string;
+  icon: typeof FileText;
+  iconColor: string;
+  claims: WorkQueueClaim[];
+  defaultOpen?: boolean;
+  showAging?: boolean;
+  showDenialReason?: boolean;
+  headerAction?: React.ReactNode;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(defaultOpen);
+
+  if (claims.length === 0) return null;
+
+  return (
+    <div className="mb-6">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center justify-between w-full mb-2 group"
+      >
+        <div className="flex items-center gap-2">
+          <Icon className={`w-4 h-4 ${iconColor}`} />
+          <h2 className="text-sm font-semibold text-slate-700">
+            {title}
+          </h2>
+          <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+            {claims.length}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {headerAction}
+          {open ? (
+            <ChevronUp className="w-4 h-4 text-slate-400" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-400" />
+          )}
+        </div>
+      </button>
+      {open && (
+        <div className="space-y-2">
+          {claims.map((claim) => (
+            <ClaimCard
+              key={claim.id}
+              claim={claim}
+              showAging={showAging}
+              showDenialReason={showDenialReason}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const [showPullModal, setShowPullModal] = useState(false);
 
-  const { data: stats, isLoading } = useQuery<DashboardStats>({
-    queryKey: ['dashboard'],
-    queryFn: () => api.get('/dashboard/stats').then(r => r.data),
+  const { data, isLoading } = useQuery<WorkQueueData>({
+    queryKey: ['work-queue'],
+    queryFn: () => api.get('/dashboard/work-queue').then(r => r.data),
     refetchInterval: 60_000,
   });
 
-  // Bulk submit state
-  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; failed: string[] } | null>(null);
+  // Bulk submit
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
-  // Quick-action: submit all ready claims with progress
   const submitAllMutation = useMutation({
     mutationFn: async () => {
       const resp = await api.get('/claims?status=ready&per_page=100');
       const ready: { id: number; claim_number: string }[] = resp.data.items;
-      if (!ready.length) return { count: 0, failed: [] };
-      setBulkProgress({ done: 0, total: ready.length, failed: [] });
+      if (!ready.length) return { count: 0, failed: [] as string[] };
+      setBulkProgress({ done: 0, total: ready.length });
       const failed: string[] = [];
       for (let i = 0; i < ready.length; i++) {
         const c = ready[i];
@@ -76,14 +353,14 @@ export default function DashboardPage() {
         } catch {
           failed.push(c.claim_number || String(c.id));
         }
-        setBulkProgress({ done: i + 1, total: ready.length, failed });
+        setBulkProgress({ done: i + 1, total: ready.length });
       }
       return { count: ready.length - failed.length, failed };
     },
     onSuccess: ({ count, failed }) => {
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['work-queue'] });
       qc.invalidateQueries({ queryKey: ['claims'] });
-      setTimeout(() => setBulkProgress(null), 4000);
+      setTimeout(() => setBulkProgress(null), 3000);
       if (failed.length === 0) {
         alert(`✅ ${t('dashboard.bulk_submitted', { count })}`);
       } else {
@@ -92,23 +369,29 @@ export default function DashboardPage() {
     },
   });
 
-  const fmt = (n: number) =>
-    new Intl.NumberFormat('es-PR', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(n);
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-6 h-6 text-sky-500 animate-spin" />
+      </div>
+    );
+  }
 
-  if (isLoading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
-
-  const s = stats!;
+  const q = data!;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6 max-w-4xl mx-auto">
+      {/* Top Bar */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold text-slate-900">{t('dashboard.title')}</h1>
-        {/* Quick actions */}
+        <h1 className="text-xl font-bold text-slate-900">{t('dashboard.work_queue')}</h1>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowPullModal(true)}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600"
+          >
+            <Download className="w-3.5 h-3.5 text-sky-500" />
+            {t('dashboard.pull_vistanet')}
+          </button>
           <button
             onClick={() => navigate('/eligibility')}
             className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600"
@@ -116,216 +399,120 @@ export default function DashboardPage() {
             <Zap className="w-3.5 h-3.5 text-amber-500" />
             {t('dashboard.check_eligibility')}
           </button>
-          <button
-            onClick={() => submitAllMutation.mutate()}
-            disabled={submitAllMutation.isPending}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg disabled:opacity-50"
-          >
-            {submitAllMutation.isPending
-              ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              : <Send className="w-3.5 h-3.5" />}
-            {bulkProgress && submitAllMutation.isPending
-              ? t('dashboard.submitting_progress', { done: bulkProgress.done, total: bulkProgress.total })
-              : t('dashboard.submit_all_ready')}
-          </button>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <StatCard label={t('dashboard.total_claims')} value={String(s.total_claims)} icon={FileText} color="bg-slate-500" />
-        <StatCard label={t('dashboard.billed_mtd')} value={fmt(s.total_billed_mtd)} icon={DollarSign} color="bg-sky-500" />
-        <StatCard label={t('dashboard.collected_mtd')} value={fmt(s.total_paid_mtd)} icon={TrendingUp} color="bg-emerald-500" />
-        <StatCard
-          label={t('dashboard.collection_rate')}
-          value={`${s.collection_rate.toFixed(1)}%`}
-          sub={`${s.pending_appeals} ${t('dashboard.pending_appeals').toLowerCase()}`}
-          icon={AlertCircle}
-          color="bg-amber-500"
-        />
-        <StatCard
-          label={t('dashboard.submitted_today')}
-          value={String(s.submitted_today ?? 0)}
-          icon={Send}
-          color="bg-indigo-500"
-        />
+      {/* Stats Bar */}
+      <div className="flex items-center gap-4 mb-6 text-sm">
+        <span className="flex items-center gap-1.5 text-slate-500">
+          <span className="w-2 h-2 rounded-full bg-sky-400" />
+          {t('dashboard.new_today', { count: q.counts.new_today })}
+        </span>
+        <span className="text-slate-300">|</span>
+        <span className="flex items-center gap-1.5 text-slate-500">
+          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          {t('dashboard.ready_to_submit', { count: q.counts.ready })}
+        </span>
+        <span className="text-slate-300">|</span>
+        <span className="flex items-center gap-1.5 text-slate-500">
+          <span className="w-2 h-2 rounded-full bg-rose-400" />
+          {t('dashboard.needs_attention', { count: q.counts.attention })}
+        </span>
       </div>
 
-      {/* Attention required */}
-      {s.attention_claims && s.attention_claims.length > 0 && (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <TriangleAlert className="w-4 h-4 text-rose-500" />
-            <h2 className="text-sm font-semibold text-rose-700">
-              {t('dashboard.attention_claims', { count: s.attention_claims.length })}
-            </h2>
-          </div>
-          <div className="space-y-2">
-            {s.attention_claims.slice(0, 5).map(c => (
-              <div
-                key={c.id}
-                onClick={() => navigate(`/claims/${c.id}`)}
-                className="flex items-center justify-between bg-white rounded-lg px-3 py-2 cursor-pointer hover:bg-rose-50 border border-rose-100"
-              >
-                <div className="flex items-center gap-3">
-                  <StatusBadge status={c.status} />
-                  <span className="font-mono text-xs text-slate-700">{c.claim_number}</span>
-                  <span className="text-xs text-slate-500">{c.reason}</span>
-                </div>
-                <div className="flex items-center gap-3 text-right">
-                  <span className="text-xs font-medium text-slate-700">{fmt(c.total_billed)}</span>
-                  <span className="text-xs text-slate-400">{c.days_old}d</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Sections */}
+
+      {/* Needs Attention — shown first if any */}
+      <Section
+        title={t('dashboard.section_attention')}
+        icon={AlertTriangle}
+        iconColor="text-rose-500"
+        claims={q.attention}
+        showDenialReason
+      />
+
+      {/* New / Unprocessed */}
+      <Section
+        title={t('dashboard.section_new')}
+        icon={FileText}
+        iconColor="text-sky-500"
+        claims={q.new}
+      />
+
+      {/* Ready to Submit */}
+      <Section
+        title={t('dashboard.section_ready')}
+        icon={CheckCircle}
+        iconColor="text-emerald-500"
+        claims={q.ready}
+        headerAction={
+          q.ready.length > 0 ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); submitAllMutation.mutate(); }}
+              disabled={submitAllMutation.isPending}
+              className="flex items-center gap-1 text-xs font-medium px-2.5 py-1 bg-sky-500 hover:bg-sky-600 text-white rounded-lg disabled:opacity-50"
+            >
+              {submitAllMutation.isPending ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  {bulkProgress
+                    ? t('dashboard.submitting_progress', { done: bulkProgress.done, total: bulkProgress.total })
+                    : t('dashboard.submit_all_ready')}
+                </>
+              ) : (
+                <>
+                  <Send className="w-3 h-3" />
+                  {t('dashboard.submit_all_ready')}
+                </>
+              )}
+            </button>
+          ) : undefined
+        }
+      />
+
+      {/* Submitted */}
+      <Section
+        title={t('dashboard.section_submitted')}
+        icon={Clock}
+        iconColor="text-amber-500"
+        claims={q.submitted}
+        showAging
+      />
+
+      {/* Recently Paid */}
+      <Section
+        title={t('dashboard.section_paid')}
+        icon={CircleDollarSign}
+        iconColor="text-emerald-500"
+        claims={q.paid}
+        defaultOpen={false}
+      />
+
+      {/* Empty state */}
+      {q.new.length === 0 && q.ready.length === 0 && q.submitted.length === 0 &&
+       q.attention.length === 0 && q.paid.length === 0 && (
+        <div className="text-center py-16">
+          <FileText className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+          <p className="text-sm text-slate-400">
+            {t('dashboard.no_claims_section')}
+          </p>
+          <button
+            onClick={() => setShowPullModal(true)}
+            className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-sky-500 hover:text-sky-600"
+          >
+            <Download className="w-4 h-4" />
+            {t('dashboard.pull_vistanet')}
+          </button>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        {/* Claims by status */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h2 className="text-sm font-semibold text-slate-700 mb-4">{t('dashboard.claims_by_status')}</h2>
-          <div className="space-y-2">
-            {STATUS_ORDER.map(status => {
-              const count = s.claims_by_status[status] ?? 0;
-              if (count === 0) return null;
-              return (
-                <Link
-                  key={status}
-                  to={`/claims?status=${status}`}
-                  className="flex items-center justify-between hover:bg-slate-50 rounded-lg px-2 py-1 -mx-2 transition-colors group"
-                >
-                  <StatusBadge status={status} />
-                  <span className="text-sm font-semibold text-slate-900 group-hover:text-sky-600">{count}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Weekly trends */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-              <BarChart2 className="w-4 h-4 text-slate-400" />
-              {t('dashboard.weekly_trends')}
-            </h2>
-            <div className="flex items-center gap-3 text-xs text-slate-400">
-              <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-slate-400 inline-block" /> {t('claims.billed')}</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block" /> {t('claims.paid')}</span>
-            </div>
-          </div>
-          {s.weekly_trends && s.weekly_trends.length > 0 ? (
-            <>
-              <MiniChart data={s.weekly_trends} />
-              <div className="mt-3 space-y-1">
-                {s.weekly_trends.slice(-4).map(w => (
-                  <div key={w.week} className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500">{w.week}</span>
-                    <span className="text-slate-700">{w.claims} {t('nav.claims').toLowerCase()}</span>
-                    <span className="text-emerald-600 font-medium">{fmt(w.paid)}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-slate-400">{t('reports.no_data')}</p>
-          )}
-        </div>
-
-        {/* Top denials */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h2 className="text-sm font-semibold text-slate-700 mb-4">{t('dashboard.top_denials')}</h2>
-          {s.top_denial_reasons.length === 0 ? (
-            <p className="text-sm text-slate-400">{t('dashboard.no_denials')}</p>
-          ) : (
-            <div className="space-y-3">
-              {s.top_denial_reasons.map((d, i) => (
-                <Link
-                  key={i}
-                  to={`/denials?reason=${encodeURIComponent(d.reason)}`}
-                  className="flex items-start gap-2 hover:bg-rose-50 rounded-lg px-2 py-1 -mx-2 transition-colors"
-                >
-                  <span className="text-xs font-bold text-rose-600 bg-rose-50 rounded px-1.5 py-0.5 shrink-0">
-                    {d.count}
-                  </span>
-                  <p className="text-sm text-slate-700 leading-snug">
-                    {d.denial_code
-                      ? t(`denials.carc_codes.${d.denial_code}`, { defaultValue: d.reason ?? '' })
-                      : d.reason}
-                  </p>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 ml-auto shrink-0 mt-0.5" />
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Payer performance */}
-        {s.payer_performance && s.payer_performance.length > 0 && (
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <h2 className="text-sm font-semibold text-slate-700 mb-4">{t('reports.denial_rate')}</h2>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="text-left pb-2 font-semibold text-slate-500">{t('reports.payer')}</th>
-                  <th className="text-center pb-2 font-semibold text-slate-500">{t('reports.claims')}</th>
-                  <th className="text-center pb-2 font-semibold text-slate-500">{t('reports.denial_rate_pct')}</th>
-                  <th className="text-center pb-2 font-semibold text-slate-500">{t('dashboard.collection_rate')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {s.payer_performance.map(p => (
-                  <tr key={p.payer_id}>
-                    <td className="py-1.5 font-medium text-slate-700 truncate max-w-[140px]">{p.payer_name}</td>
-                    <td className="py-1.5 text-center text-slate-600">{p.total_claims}</td>
-                    <td className="py-1.5 text-center">
-                      <span className={`font-semibold ${p.denial_rate > 20 ? 'text-rose-600' : p.denial_rate > 10 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                        {p.denial_rate}%
-                      </span>
-                    </td>
-                    <td className="py-1.5 text-center">
-                      <span className={`font-semibold ${p.collection_rate > 70 ? 'text-emerald-600' : p.collection_rate > 40 ? 'text-amber-600' : 'text-rose-600'}`}>
-                        {p.collection_rate}%
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Recent claims */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h2 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-slate-400" />
-            {t('dashboard.recent_claims')}
-          </h2>
-          <div className="space-y-2">
-            {s.recent_claims.map(claim => (
-              <div
-                key={claim.id}
-                onClick={() => navigate(`/claims/${claim.id}`)}
-                className="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 px-1 rounded"
-              >
-                <div>
-                  <p className="text-xs font-mono text-slate-700">{claim.claim_number}</p>
-                  <p className="text-xs text-slate-400">{formatDateShort(claim.service_date_from)}</p>
-                </div>
-                <div className="text-right">
-                  <StatusBadge status={claim.status} />
-                  <p className="text-xs text-slate-600 mt-1">{fmt(claim.total_billed)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* Pull Modal */}
+      {showPullModal && (
+        <PullModal
+          onClose={() => setShowPullModal(false)}
+          onSuccess={() => qc.invalidateQueries({ queryKey: ['work-queue'] })}
+        />
+      )}
     </div>
   );
 }

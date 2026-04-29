@@ -4,10 +4,139 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, case
 
 from database import get_db
-from models import Claim, ClaimStatus, Denial, Appeal, User, Payer, Payment
+from models import Claim, ClaimStatus, Denial, Appeal, User, Payer, Payment, Patient
 from auth import get_current_user
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+@router.get("/work-queue")
+async def get_work_queue(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Work queue: claims grouped by status for the dashboard."""
+    today = date.today()
+    seven_days_ago = today - timedelta(days=7)
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    async def fetch_claims(statuses: list, limit: int = 50, order_desc: bool = False):
+        q = (
+            select(Claim)
+            .where(Claim.status.in_(statuses))
+        )
+        if order_desc:
+            q = q.order_by(Claim.updated_at.desc())
+        else:
+            q = q.order_by(Claim.created_at.desc())
+        q = q.limit(limit)
+        result = await db.execute(q)
+        claims = result.scalars().all()
+        out = []
+        for c in claims:
+            patient_name = ""
+            if c.patient_id:
+                p_res = await db.execute(select(Patient).where(Patient.id == c.patient_id))
+                p = p_res.scalar_one_or_none()
+                if p:
+                    patient_name = f"{p.first_name} {p.last_name}"
+            payer_name = ""
+            if c.payer_id:
+                pay_res = await db.execute(select(Payer).where(Payer.id == c.payer_id))
+                pay = pay_res.scalar_one_or_none()
+                if pay:
+                    payer_name = pay.name
+            days_aging = (today - c.service_date_from).days if c.service_date_from else 0
+            out.append({
+                "id": c.id,
+                "claim_number": c.claim_number,
+                "status": c.status,
+                "patient_name": patient_name,
+                "payer_name": payer_name,
+                "service_date_from": c.service_date_from.isoformat() if c.service_date_from else None,
+                "total_billed": c.total_billed,
+                "total_paid": c.total_paid,
+                "days_aging": days_aging,
+                "date_of_submission": c.date_of_submission.isoformat() if c.date_of_submission else None,
+                "source": c.source,
+                "notes": c.notes,
+            })
+        return out
+
+    new_claims = await fetch_claims([ClaimStatus.DRAFT])
+    ready_claims = await fetch_claims([ClaimStatus.READY])
+    submitted_claims = await fetch_claims([ClaimStatus.SUBMITTED, ClaimStatus.ACCEPTED])
+    attention_claims = await fetch_claims([ClaimStatus.DENIED, ClaimStatus.REJECTED])
+
+    for ac in attention_claims:
+        denial_res = await db.execute(
+            select(Denial)
+            .where(Denial.claim_id == ac["id"])
+            .order_by(Denial.created_at.desc())
+            .limit(1)
+        )
+        denial = denial_res.scalar_one_or_none()
+        ac["denial_reason"] = denial.denial_reason if denial else (
+            "Rechazada" if ac["status"] == "rejected" else "Denegada"
+        )
+
+    paid_q = (
+        select(Claim)
+        .where(Claim.status == ClaimStatus.PAID)
+        .where(Claim.updated_at >= datetime.combine(seven_days_ago, datetime.min.time()))
+        .order_by(Claim.updated_at.desc())
+        .limit(20)
+    )
+    paid_result = await db.execute(paid_q)
+    paid_raw = paid_result.scalars().all()
+    paid_claims = []
+    for c in paid_raw:
+        patient_name = ""
+        if c.patient_id:
+            p_res = await db.execute(select(Patient).where(Patient.id == c.patient_id))
+            p = p_res.scalar_one_or_none()
+            if p:
+                patient_name = f"{p.first_name} {p.last_name}"
+        payer_name = ""
+        if c.payer_id:
+            pay_res = await db.execute(select(Payer).where(Payer.id == c.payer_id))
+            pay = pay_res.scalar_one_or_none()
+            if pay:
+                payer_name = pay.name
+        paid_claims.append({
+            "id": c.id,
+            "claim_number": c.claim_number,
+            "status": c.status,
+            "patient_name": patient_name,
+            "payer_name": payer_name,
+            "service_date_from": c.service_date_from.isoformat() if c.service_date_from else None,
+            "total_billed": c.total_billed,
+            "total_paid": c.total_paid,
+            "days_aging": 0,
+            "date_of_submission": c.date_of_submission.isoformat() if c.date_of_submission else None,
+            "source": c.source,
+            "notes": c.notes,
+        })
+
+    new_today_res = await db.execute(
+        select(func.count(Claim.id))
+        .where(Claim.created_at >= today_start)
+        .where(Claim.status == ClaimStatus.DRAFT)
+    )
+    new_today = new_today_res.scalar_one() or 0
+
+    return {
+        "new": new_claims,
+        "ready": ready_claims,
+        "submitted": submitted_claims,
+        "attention": attention_claims,
+        "paid": paid_claims,
+        "counts": {
+            "new_today": new_today,
+            "ready": len(ready_claims),
+            "attention": len(attention_claims),
+        },
+    }
 
 
 @router.get("/stats")
