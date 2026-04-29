@@ -11,6 +11,9 @@ backend/*.sqlite
 frontend/node_modules/
 frontend/dist/
 
+# Tauri build artifacts
+someteopr-app/src-tauri/target/
+
 # General
 .DS_Store
 *.log
