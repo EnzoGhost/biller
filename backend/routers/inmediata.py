@@ -33,7 +33,7 @@ from config import settings
 from database import get_db
 from edi.x12_837p import generate_837p, generate_837p_batch
 from edi.x12_835 import parse_835, match_era_to_claims, ERAResult
-from models import Claim, ClaimStatus, Payment, User
+from models import Claim, ClaimStatus, Payment, User, Patient
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ async def _load_claim(claim_id: int, db: AsyncSession) -> Claim:
     result = await db.execute(
         select(Claim)
         .options(
-            selectinload(Claim.patient).selectinload("insurances"),
+            selectinload(Claim.patient).selectinload(Patient.insurances),
             selectinload(Claim.provider),
             selectinload(Claim.payer),
             selectinload(Claim.service_lines),
