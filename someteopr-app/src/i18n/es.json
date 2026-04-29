@@ -104,7 +104,8 @@
     "service_lines": "Líneas de Servicio",
     "appeals": "Apelaciones",
     "deadline": "Vence",
-    "outcome": "Resultado"
+    "outcome": "Resultado",
+    "office_visit_placeholder": "Visita de oficina..."
   },
   "patients": {
     "title": "Pacientes",
@@ -134,7 +135,8 @@
     "spouse": "Cónyuge",
     "child": "Hijo/a",
     "primary_insurance": "Seguro Principal",
-    "termination_date": "Fecha de Terminación"
+    "termination_date": "Fecha de Terminación",
+    "group_abbr": "Grp"
   },
   "denials": {
     "title": "Denegaciones",
@@ -198,7 +200,17 @@
     "oop_max": "Máximo de Bolsillo",
     "oop_met": "Máximo de Bolsillo Cumplido",
     "coverage_start": "Inicio de Cobertura",
-    "error_checking": "Error al verificar elegibilidad"
+    "error_checking": "Error al verificar elegibilidad",
+    "supported": "✓ Elegibilidad",
+    "enrollment_required": "Requiere Enrollment",
+    "not_supported": "Sin soporte",
+    "show_pr_payers": "Ver pagadores de Puerto Rico",
+    "hide_pr_payers": "Ocultar directorio de pagadores PR",
+    "pr_payer_directory": "Pagadores de Puerto Rico — Directorio",
+    "payers_found": "{{count}} pagadores encontrados",
+    "loading_directory": "Cargando directorio…",
+    "selected_payer": "Pagador Seleccionado",
+    "payer_id_label": "Payer ID"
   },
   "settings": {
     "title": "Configuración",
@@ -233,7 +245,19 @@
     "lang_en": "English",
     "integrations": "Integraciones",
     "save": "Guardar",
-    "saved": "Guardado"
+    "saved": "Guardado",
+    "npi_billing": "NPI (Billing)",
+    "tax_id_ein": "Tax ID / EIN",
+    "api_key": "Clave API",
+    "openai_api_key": "Clave API OpenAI",
+    "saving": "Guardando...",
+    "browse": "Explorar",
+    "implug_title": "ImPlug / Carpetas EDI",
+    "implug_desc": "Configure las carpetas locales para el intercambio de archivos EDI con ImPlug. Al someter una reclamación, el archivo 837P se guardará en la carpeta de salida. Los archivos ERA (835) de la carpeta de entrada se procesan automáticamente.",
+    "implug_outbound": "Carpeta de Salida (archivos 837P)",
+    "implug_inbound": "Carpeta de Entrada (archivos 835 ERA)",
+    "implug_how_it_works": "Cómo funciona:",
+    "implug_how_it_works_desc": "Al someter una reclamación con el botón Someter, SometeoPR genera un archivo 837P X12 y lo guarda en la carpeta de salida. ImPlug lo recoge y lo envía al clearinghouse. Las respuestas ERA 835 se depositan en la carpeta de entrada y SometeoPR las procesa automáticamente."
   },
   "import": {
     "title": "Importar Datos",
@@ -258,7 +282,24 @@
     "errors_label": "Errores:",
     "error_importing": "Error al importar",
     "error_wink": "Error al sincronizar pacientes con Wink",
-    "error_encounters": "Error al importar encuentros de Wink"
+    "error_encounters": "Error al importar encuentros de Wink",
+    "step_upload": "Subir",
+    "step_done": "Listo",
+    "back": "← Atrás",
+    "field_patient_mrn": "MRN Paciente",
+    "field_first_name": "Nombre",
+    "field_last_name": "Apellido",
+    "field_dob": "Fecha de Nacimiento",
+    "field_service_date": "Fecha de Servicio",
+    "field_provider_npi": "NPI Proveedor",
+    "field_payer_id": "ID Pagador",
+    "field_member_id": "ID Miembro",
+    "field_cpt_code": "Código CPT",
+    "field_icd10_1": "ICD-10 #1",
+    "field_icd10_2": "ICD-10 #2",
+    "field_units": "Unidades",
+    "field_billed_amount": "Monto Facturado",
+    "field_pos": "Lugar de Servicio"
   },
   "providers": {
     "new": "Nuevo Proveedor",
@@ -299,7 +340,8 @@
     "medicaid": "Medicaid",
     "vision": "Visión",
     "dental": "Dental",
-    "other": "Otro"
+    "other": "Otro",
+    "stedi_id": "Stedi ID"
   },
   "pos": {
     "11": "11 – Consultorio",
@@ -356,7 +398,9 @@
     "last_name": "Apellido",
     "phone": "Teléfono",
     "select_date": "Seleccionar fecha",
-    "select_placeholder": "— Seleccionar —"
+    "select_placeholder": "— Seleccionar —",
+    "cancel_action": "Cancelar",
+    "ok": "OK"
   },
   "inmediata": {
     "title": "Inmediata",
@@ -400,7 +444,10 @@
     "era_content_placeholder": "Pega el contenido 835 ERA aquí para reconciliar...",
     "paste_era": "Pegar Contenido ERA",
     "reconcile_from_paste": "Reconciliar",
-    "select_file": "Seleccionar archivo ERA de la lista descargada"
+    "select_file": "Seleccionar archivo ERA de la lista descargada",
+    "characters_ready": "{{count}} caracteres listos",
+    "posted_tag": "registrado",
+    "claims_count": "{{count}} reclamaciones"
   },
   "reports": {
     "title": "Reportes",
@@ -420,7 +467,8 @@
     "amount": "Balance",
     "month": "Mes",
     "no_data": "No hay datos disponibles",
-    "days": "días"
+    "days": "días",
+    "claims_count": "{{count}} reclamaciones"
   },
   "routing": {
     "stedi": "Stedi",
@@ -428,7 +476,8 @@
     "manual": "Manual/Fax",
     "route_via": "Ruta via",
     "manual_stedi_portal": "📋 Manual (Portal Stedi)",
-    "export_stedi_portal": "Exportar para Portal Stedi"
+    "export_stedi_portal": "Exportar para Portal Stedi",
+    "envolve_availity": "Envolve/Availity"
   },
   "payments": {
     "title": "Pagos",
@@ -460,7 +509,20 @@
     "total_payments": "Total de Pagos",
     "total_amount": "Total Recibido",
     "total_adjustments": "Total de Ajustes",
-    "total_patient_resp": "Total Responsabilidad del Paciente"
+    "total_patient_resp": "Total Responsabilidad del Paciente",
+    "claim_id": "Claim ID",
+    "payer_name": "Nombre del Pagador",
+    "optional_notes": "Notas opcionales",
+    "add_row": "Agregar Fila",
+    "batch_desc": "Registrar múltiples pagos de reclamaciones de un solo cheque ERA (835) a la vez.",
+    "paid_col": "Pagado",
+    "adj_col": "Ajuste",
+    "pt_resp_col": "Resp. Pac.",
+    "denial_code": "Código Denegación",
+    "method_eft": "EFT",
+    "method_check": "Cheque",
+    "method_virtual_card": "Tarjeta Virtual",
+    "method_cash": "Efectivo"
   },
   "validation": {
     "title": "Validación",
@@ -553,7 +615,12 @@
     "placeholder": "— Seleccionar plantilla —",
     "applied": "Plantilla aplicada",
     "create": "Crear Plantilla",
-    "manage": "Administrar Plantillas"
+    "manage": "Administrar Plantillas",
+    "comprehensive_exam": "Examen Comprensivo de la Vista",
+    "contact_lens": "Adaptación de Lentes de Contacto",
+    "diabetic_exam": "Examen de Vista Diabético",
+    "glaucoma": "Seguimiento de Glaucoma",
+    "medical_exam": "Examen Médico de la Vista"
   },
   "prior_auth": {
     "none_on_file": "No hay autorizaciones previas para esta reclamación.",
@@ -612,7 +679,8 @@
     "action_renew_auth": "Renovar Auth",
     "action_submit": "Someter",
     "action_submit_claim": "Someter Reclamación",
-    "action_void": "Anular"
+    "action_void": "Anular",
+    "paid_amount": "{{amount}} pagado"
   },
   "wizard": {
     "title": "Configuración de Clínica",
@@ -640,7 +708,11 @@
     "back": "Atrás",
     "finish": "Completar Configuración",
     "complete": "¡Configuración completa!",
-    "complete_msg": "Su clínica está configurada y lista para facturar."
+    "complete_msg": "Su clínica está configurada y lista para facturar.",
+    "go_to_dashboard": "Ir al Panel",
+    "keep_existing_key": "Deje en blanco para mantener la clave existente",
+    "availity_envolve_label": "Availity (Envolve Vision — Payer ID 56190)",
+    "inmediata_sftp_label": "Inmediata SFTP"
   },
   "submit_section": {
     "title": "Someter Reclamación",

@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from database import get_db
 from models import (
@@ -477,19 +477,32 @@ async def find_or_create_patient(
     """Find existing patient by record number or create a new one."""
     # Try to find by wink_patient_id (VistaNet record)
     result = await db.execute(
-        select(Patient).where(Patient.wink_patient_id == parsed["record_id"])
+        select(Patient).where(Patient.wink_patient_id == parsed["record_id"]).limit(1)
     )
-    patient = result.scalar_one_or_none()
+    patient = result.scalars().first()
     if patient:
         return patient
 
     # Try by MRN
     result = await db.execute(
-        select(Patient).where(Patient.mrn == parsed["record_num"])
+        select(Patient).where(Patient.mrn == parsed["record_num"]).limit(1)
     )
-    patient = result.scalar_one_or_none()
+    patient = result.scalars().first()
     if patient:
         return patient
+
+    # Try by name + DOB (fuzzy match for patients without record IDs)
+    first_name_q, last_name_q = split_patient_name(parsed["patient_name"])
+    if first_name_q and last_name_q and parsed.get("dob"):
+        result = await db.execute(
+            select(Patient).where(
+                func.upper(Patient.first_name) == first_name_q.upper(),
+                func.upper(Patient.last_name) == last_name_q.upper(),
+            ).limit(1)
+        )
+        patient = result.scalars().first()
+        if patient:
+            return patient
 
     # Create new patient
     first_name, last_name = split_patient_name(parsed["patient_name"])
@@ -525,25 +538,91 @@ async def find_or_create_patient(
     return patient
 
 
+# VistaNet plan name → payer_id mapping
+# VistaNet uses these names in their bitácora dropdowns
+VISTANET_PLAN_ALIASES: dict[str, str] = {
+    # Triple-S family
+    "TRIPLE S PRIVADO": "TSS",
+    "TRIPLE S": "TSS",
+    "TRIPLE-S": "TSS",
+    "TRIPLE S ADVANTAGE": "TSSA",
+    "TRIPLE-S ADVANTAGE": "TSSA",
+    "TRIPLE S VITAL": "TSSV",
+    "TRIPLE-S VITAL": "TSSV",
+    # MCS
+    "MCS": "MCS",
+    "MCS CLASSICARE": "MCSMC",
+    "MCS HEALTHCARE": "MCS",
+    # MMM
+    "MMM": "MMM",
+    "MMM VITAL": "MMMVITAL",
+    "MMM MULTI HEALTH": "MMMVITAL",
+    # First Medical
+    "FIRST MEDICAL": "FMHP",
+    "FIRST MEDICAL VITAL": "FMVITAL",
+    # Medicare
+    "MEDICARE": "MEDICARE",
+    # Humana
+    "HUMANA": "HUMPR",
+    "HUMANA GOLD PLUS": "HUMPR",
+    # Envolve
+    "ENVOLVE": "ENVOLVE",
+    # Plan de Salud Menonita
+    "PLAN DE SALUD MENONITA": "MENONITA",
+    "PLAN DE SALUD MENONITA VITAL": "MENONITAV",
+    "MENONITA": "MENONITA",
+    # MAPFRE
+    "MAPFRE": "MAPFRE",
+    # Molina
+    "MOLINA": "MHPR",
+    # PMC
+    "PMC": "PMC",
+    "PMC MEDICARE CHOICE": "PMC",
+    # GHP/ASES
+    "REFORMA": "ASES",
+    "PROSAM": "TSS",  # PROSAM is Triple-S commercial
+    "PRIVADO": None,  # Generic "private" — can't map without more info
+}
+
+
 async def find_payer_by_plan_name(db: AsyncSession, plan_name: str) -> Optional[Payer]:
-    """Try to match a plan name to an existing payer."""
+    """Try to match a VistaNet plan name to an existing payer."""
     if not plan_name:
         return None
 
-    # Exact match first
+    normalized = plan_name.strip().upper()
+
+    # 1. Check alias table first (most reliable)
+    payer_id = VISTANET_PLAN_ALIASES.get(normalized)
+    if payer_id:
+        result = await db.execute(
+            select(Payer).where(Payer.payer_id == payer_id)
+        )
+        payer = result.scalar_one_or_none()
+        if payer:
+            return payer
+
+    # 2. Exact name match (case-insensitive)
     result = await db.execute(
-        select(Payer).where(Payer.name == plan_name)
+        select(Payer).where(Payer.name.ilike(plan_name))
     )
     payer = result.scalar_one_or_none()
     if payer:
         return payer
 
-    # Fuzzy match: case-insensitive contains
+    # 3. Fuzzy: try matching with normalized (remove dashes, extra spaces)
+    clean = normalized.replace("-", " ").replace("  ", " ")
     result = await db.execute(
-        select(Payer).where(Payer.name.ilike(f"%{plan_name}%"))
+        select(Payer).where(
+            func.replace(func.upper(Payer.name), '-', ' ').ilike(f"%{clean}%")
+        )
     )
-    payer = result.scalar_one_or_none()
-    return payer
+    rows = result.scalars().all()
+    if len(rows) == 1:
+        return rows[0]
+
+    # 4. No match
+    return None
 
 
 async def get_default_provider(db: AsyncSession) -> Optional[Provider]:

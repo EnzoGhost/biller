@@ -194,7 +194,7 @@ export default function FollowUpPage() {
                     <p className="text-xs text-rose-600 font-medium">{fmt(item.balance)} {t('followup.owed')}</p>
                   )}
                   {item.total_paid > 0 && item.balance === 0 && (
-                    <p className="text-xs text-emerald-600">{fmt(item.total_paid)} paid</p>
+                    <p className="text-xs text-emerald-600">{t('followup.paid_amount', { amount: fmt(item.total_paid) })}</p>
                   )}
                 </div>
 

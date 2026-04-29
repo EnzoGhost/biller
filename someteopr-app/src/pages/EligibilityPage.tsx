@@ -114,9 +114,9 @@ export default function EligibilityPage() {
   };
 
   const eligibilityBadge = (status?: string) => {
-    if (status === 'SUPPORTED') return <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">✓ Elegibilidad</span>;
-    if (status === 'ENROLLMENT_REQUIRED') return <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Requiere Enrollment</span>;
-    return <span className="text-xs text-slate-400">Sin soporte</span>;
+    if (status === 'SUPPORTED') return <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{t('eligibility.supported')}</span>;
+    if (status === 'ENROLLMENT_REQUIRED') return <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">{t('eligibility.enrollment_required')}</span>;
+    return <span className="text-xs text-slate-400">{t('eligibility.not_supported')}</span>;
   };
 
   return (
@@ -130,17 +130,17 @@ export default function EligibilityPage() {
           className="flex items-center gap-2 text-sm font-medium text-sky-600 hover:text-sky-700 transition-colors"
         >
           <Globe className="w-4 h-4" />
-          {showPrPayers ? 'Ocultar directorio de pagadores PR' : 'Ver pagadores de Puerto Rico (Stedi)'}
+          {showPrPayers ? t('eligibility.hide_pr_payers') : t('eligibility.show_pr_payers')}
         </button>
 
         {showPrPayers && (
           <div className="mt-3 bg-white border border-slate-200 rounded-xl overflow-hidden">
             <div className="px-4 py-3 bg-sky-50 border-b border-slate-200">
-              <p className="text-sm font-semibold text-sky-800">Pagadores de Puerto Rico — Directorio Stedi</p>
-              {prPayers && <p className="text-xs text-sky-600 mt-0.5">{prPayers.total} pagadores encontrados</p>}
+              <p className="text-sm font-semibold text-sky-800">{t('eligibility.pr_payer_directory')}</p>
+              {prPayers && <p className="text-xs text-sky-600 mt-0.5">{t('eligibility.payers_found', { count: prPayers.total })}</p>}
             </div>
             {loadingPrPayers ? (
-              <div className="p-6 text-center text-sm text-slate-400">Cargando directorio…</div>
+              <div className="p-6 text-center text-sm text-slate-400">{t('eligibility.loading_directory')}</div>
             ) : (
               <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
                 {prPayers?.items.map(p => (
@@ -172,9 +172,9 @@ export default function EligibilityPage() {
           <div className="flex items-center gap-3 bg-sky-50 border border-sky-100 rounded-lg px-4 py-3">
             <Globe className="w-4 h-4 text-sky-500 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-sky-700 uppercase tracking-wide">Stedi Payer Seleccionado</p>
+              <p className="text-xs font-semibold text-sky-700 uppercase tracking-wide">{t('eligibility.selected_payer')}</p>
               <p className="text-sm font-medium text-sky-900 truncate">{selectedStediPayer.displayName}</p>
-              <p className="text-xs text-sky-500">Stedi ID: {selectedStediPayer.stediId} · Payer ID: {selectedStediPayer.primaryPayerId}</p>
+              <p className="text-xs text-sky-500">{selectedStediPayer.stediId} · {t('eligibility.payer_id_label')}: {selectedStediPayer.primaryPayerId}</p>
             </div>
             <button onClick={() => setSelectedStediPayer(null)} className="text-xs text-sky-400 hover:text-sky-600">✕</button>
           </div>

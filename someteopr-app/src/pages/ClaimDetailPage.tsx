@@ -774,7 +774,7 @@ export default function ClaimDetailPage() {
                 isStedi   ? 'bg-emerald-100 text-emerald-600 border-emerald-200' :
                             'bg-indigo-100 text-indigo-600 border-indigo-200'
               }`}>
-                {t('submit_section.routing_label')} {isEnvolve ? 'Envolve/Availity' : isStedi ? 'Stedi' : 'Inmediata'}
+                {t('submit_section.routing_label')} {isEnvolve ? t('routing.envolve_availity') : isStedi ? t('routing.stedi') : t('routing.inmediata')}
               </span>
             </h2>
 

@@ -13,21 +13,21 @@ interface ImportResult {
 
 // ── Column mapping fields ─────────────────────────────────────────────────────
 
-const TARGET_FIELDS = [
-  { key: 'patient_mrn',         label: 'Patient MRN' },
-  { key: 'patient_first_name',  label: 'First Name' },
-  { key: 'patient_last_name',   label: 'Last Name' },
-  { key: 'dob',                 label: 'Date of Birth' },
-  { key: 'service_date',        label: 'Service Date' },
-  { key: 'provider_npi',        label: 'Provider NPI' },
-  { key: 'payer_id',            label: 'Payer ID' },
-  { key: 'member_id',           label: 'Member ID' },
-  { key: 'cpt_code',            label: 'CPT Code' },
-  { key: 'icd10_1',             label: 'ICD-10 #1' },
-  { key: 'icd10_2',             label: 'ICD-10 #2' },
-  { key: 'units',               label: 'Units' },
-  { key: 'billed_amount',       label: 'Billed Amount' },
-  { key: 'place_of_service',    label: 'Place of Service' },
+const TARGET_FIELD_KEYS = [
+  { key: 'patient_mrn',         labelKey: 'import.field_patient_mrn' },
+  { key: 'patient_first_name',  labelKey: 'import.field_first_name' },
+  { key: 'patient_last_name',   labelKey: 'import.field_last_name' },
+  { key: 'dob',                 labelKey: 'import.field_dob' },
+  { key: 'service_date',        labelKey: 'import.field_service_date' },
+  { key: 'provider_npi',        labelKey: 'import.field_provider_npi' },
+  { key: 'payer_id',            labelKey: 'import.field_payer_id' },
+  { key: 'member_id',           labelKey: 'import.field_member_id' },
+  { key: 'cpt_code',            labelKey: 'import.field_cpt_code' },
+  { key: 'icd10_1',             labelKey: 'import.field_icd10_1' },
+  { key: 'icd10_2',             labelKey: 'import.field_icd10_2' },
+  { key: 'units',               labelKey: 'import.field_units' },
+  { key: 'billed_amount',       labelKey: 'import.field_billed_amount' },
+  { key: 'place_of_service',    labelKey: 'import.field_pos' },
 ];
 
 function ResultBadges({ result }: { result: ImportResult }) {
@@ -147,7 +147,7 @@ export default function ImportPage() {
       const autoMap: Record<string, string> = {};
       headers.forEach(h => {
         const lh = h.toLowerCase().replace(/\s+/g, '_');
-        const match = TARGET_FIELDS.find(f => f.key === lh || f.key === h.toLowerCase());
+        const match = TARGET_FIELD_KEYS.find(f => f.key === lh || f.key === h.toLowerCase());
         if (match) autoMap[h] = match.key;
       });
       setColumnMapping(autoMap);
@@ -172,7 +172,7 @@ export default function ImportPage() {
 
   // Build remapped rows for preview / submission
   const buildRemappedCSV = (): string => {
-    const targetCols = TARGET_FIELDS.map(f => f.key);
+    const targetCols = TARGET_FIELD_KEYS.map(f => f.key);
     const header = targetCols.join(',');
     const rows = csvRows.slice(0, 5).map(row => {
       return targetCols.map(targetKey => {
@@ -195,7 +195,7 @@ export default function ImportPage() {
       let fileToUpload = file;
       if (step === 'preview' && Object.keys(columnMapping).length > 0) {
         // Build remapped CSV from all rows
-        const targetCols = TARGET_FIELDS.map(f => f.key);
+        const targetCols = TARGET_FIELD_KEYS.map(f => f.key);
         const header = targetCols.join(',');
         const allRows = csvRows.map(row =>
           targetCols.map(targetKey => {
@@ -254,7 +254,7 @@ export default function ImportPage() {
   };
 
   const downloadTemplate = () => {
-    const headers = TARGET_FIELDS.map(f => f.key);
+    const headers = TARGET_FIELD_KEYS.map(f => f.key);
     const csv = headers.join(',') + '\n';
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -352,7 +352,7 @@ export default function ImportPage() {
                 {i + 1}
               </span>
               <span className={step === s ? 'text-sky-700 font-medium' : 'text-slate-400'}>
-                {s === 'upload' ? 'Upload' : s === 'mapping' ? t('import_preview.column_mapping') : s === 'preview' ? t('import_preview.preview') : 'Done'}
+                {s === 'upload' ? t('import.step_upload') : s === 'mapping' ? t('import_preview.column_mapping') : s === 'preview' ? t('import_preview.preview') : t('import.step_done')}
               </span>
               {i < 3 && <ChevronRight className="w-3 h-3 text-slate-300" />}
             </div>
@@ -421,8 +421,8 @@ export default function ImportPage() {
                           className={inputClass + ' w-full text-xs'}
                         >
                           <option value="">{t('import_preview.ignore')}</option>
-                          {TARGET_FIELDS.map(f => (
-                            <option key={f.key} value={f.key}>{f.label}</option>
+                          {TARGET_FIELD_KEYS.map(f => (
+                            <option key={f.key} value={f.key}>{t(f.labelKey)}</option>
                           ))}
                         </select>
                       </td>
@@ -433,7 +433,7 @@ export default function ImportPage() {
             </div>
             <div className="flex gap-2">
               <button onClick={() => setStep('upload')} className="px-4 py-2 border border-slate-200 text-sm rounded-lg hover:bg-slate-50">
-                ← Back
+                {t('import.back')}
               </button>
               <button
                 onClick={handleProceedToPreview}
@@ -457,7 +457,7 @@ export default function ImportPage() {
                       .filter(([, v]) => v)
                       .map(([col, target]) => (
                         <th key={col} className="px-3 py-2 text-left font-semibold text-slate-500">
-                          {TARGET_FIELDS.find(f => f.key === target)?.label ?? target}
+                          {(() => { const f = TARGET_FIELD_KEYS.find(f => f.key === target); return f ? t(f.labelKey) : target; })()}
                         </th>
                       ))}
                   </tr>
@@ -487,7 +487,7 @@ export default function ImportPage() {
             )}
             <div className="flex gap-2">
               <button onClick={() => setStep('mapping')} className="px-4 py-2 border border-slate-200 text-sm rounded-lg hover:bg-slate-50">
-                ← Back
+                {t('import.back')}
               </button>
               <button
                 onClick={handleCsvImport}

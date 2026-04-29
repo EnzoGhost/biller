@@ -182,7 +182,7 @@ export default function PaymentsPage() {
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                Claim ID
+                {t('payments.claim_id')}
               </label>
               <input
                 value={claimId}
@@ -261,10 +261,10 @@ export default function PaymentsPage() {
                 onChange={e => setPaymentMethod(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none bg-white"
               >
-                <option value="eft">EFT</option>
-                <option value="check">Check</option>
-                <option value="virtual_card">Virtual Card</option>
-                <option value="cash">Cash</option>
+                <option value="eft">{t('payments.method_eft')}</option>
+                <option value="check">{t('payments.method_check')}</option>
+                <option value="virtual_card">{t('payments.method_virtual_card')}</option>
+                <option value="cash">{t('payments.method_cash')}</option>
               </select>
             </div>
             <div>
@@ -274,7 +274,7 @@ export default function PaymentsPage() {
               <input
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                placeholder="Optional notes"
+                placeholder={t('payments.optional_notes')}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none"
               />
             </div>
@@ -328,7 +328,7 @@ export default function PaymentsPage() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                  Payer Name
+                  {t('payments.payer_name')}
                 </label>
                 <input
                   value={batchPayerName}
@@ -343,11 +343,11 @@ export default function PaymentsPage() {
                 <table className="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="px-2 py-2 text-left font-semibold text-slate-500">Claim ID</th>
-                      <th className="px-2 py-2 text-left font-semibold text-slate-500">Paid</th>
-                      <th className="px-2 py-2 text-left font-semibold text-slate-500">Adj.</th>
-                      <th className="px-2 py-2 text-left font-semibold text-slate-500">Pt Resp.</th>
-                      <th className="px-2 py-2 text-left font-semibold text-slate-500">Denial Code</th>
+                      <th className="px-2 py-2 text-left font-semibold text-slate-500">{t('payments.claim_id')}</th>
+                      <th className="px-2 py-2 text-left font-semibold text-slate-500">{t('payments.paid_col')}</th>
+                      <th className="px-2 py-2 text-left font-semibold text-slate-500">{t('payments.adj_col')}</th>
+                      <th className="px-2 py-2 text-left font-semibold text-slate-500">{t('payments.pt_resp_col')}</th>
+                      <th className="px-2 py-2 text-left font-semibold text-slate-500">{t('payments.denial_code')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -365,7 +365,7 @@ export default function PaymentsPage() {
               </div>
               <div className="flex gap-2">
                 <button onClick={addBatchRow} className="flex items-center gap-1 text-xs text-sky-600 hover:text-sky-800 px-2 py-1 border border-sky-200 rounded">
-                  <Plus className="w-3 h-3" /> Add Row
+                  <Plus className="w-3 h-3" /> {t('payments.add_row')}
                 </button>
                 <button
                   onClick={handleBatchPost}
@@ -382,7 +382,7 @@ export default function PaymentsPage() {
           )}
 
           {!showBatch && (
-            <p className="text-xs text-slate-400">Post multiple claim payments from one ERA (835) check at once.</p>
+            <p className="text-xs text-slate-400">{t('payments.batch_desc')}</p>
           )}
         </div>
       </div>
@@ -410,7 +410,7 @@ export default function PaymentsPage() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50">
               <tr>
-                <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500">Claim ID</th>
+                <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500">{t('payments.claim_id')}</th>
                 <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500">{t('payments.check_number')}</th>
                 <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500">{t('payments.check_date')}</th>
                 <th className="text-right px-4 py-2 text-xs font-semibold text-slate-500">{t('payments.payment_amount')}</th>

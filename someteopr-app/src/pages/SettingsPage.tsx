@@ -103,7 +103,7 @@ export default function SettingsPage() {
 
   const SECTIONS = [
     { key: 'clinic',       labelKey: 'settings.clinic_info',  icon: Building2 },
-    { key: 'implug',       labelKey: 'ImPlug / EDI Folders',  icon: FolderOpen },
+    { key: 'implug',       labelKey: 'settings.implug_title', icon: FolderOpen },
     { key: 'stedi',        labelKey: 'settings.stedi',         icon: Shield },
     { key: 'stedi_portal', labelKey: 'settings.stedi_portal',  icon: ExternalLink },
     { key: 'availity',     labelKey: 'settings.availity',      icon: Users },
@@ -147,11 +147,11 @@ export default function SettingsPage() {
                   <input value={clinicName} onChange={e => setClinicName(e.target.value)} className={inputClass} placeholder="Clínica Ejemplo" />
                 </div>
                 <div>
-                  <label className={labelClass}>NPI (Billing)</label>
+                  <label className={labelClass}>{t('settings.npi_billing')}</label>
                   <input value={clinicNpi} onChange={e => setClinicNpi(e.target.value)} className={inputClass} placeholder="1234567890" />
                 </div>
                 <div>
-                  <label className={labelClass}>Tax ID / EIN</label>
+                  <label className={labelClass}>{t('settings.tax_id_ein')}</label>
                   <input value={clinicTax} onChange={e => setClinicTax(e.target.value)} className={inputClass} placeholder="12-3456789" />
                 </div>
                 <div>
@@ -169,15 +169,11 @@ export default function SettingsPage() {
           {/* ImPlug */}
           {active === 'implug' && (
             <div className="space-y-4">
-              <h2 className="font-semibold text-slate-800 mb-2">ImPlug / EDI Folder Integration</h2>
-              <p className="text-sm text-slate-500 mb-4">
-                Configure local folders for ImPlug EDI file exchange. When a claim is submitted, 
-                the 837P file will be written to the <strong>outbound</strong> folder. 
-                ERA (835) files from the <strong>inbound</strong> folder are auto-processed.
-              </p>
+              <h2 className="font-semibold text-slate-800 mb-2">{t('settings.implug_title')}</h2>
+              <p className="text-sm text-slate-500 mb-4">{t('settings.implug_desc')}</p>
               <div className="space-y-4">
                 <div>
-                  <label className={labelClass}>Outbound Folder (837P files)</label>
+                  <label className={labelClass}>{t('settings.implug_outbound')}</label>
                   <div className="flex gap-2">
                     <input
                       value={implugOutbound}
@@ -190,12 +186,12 @@ export default function SettingsPage() {
                       className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm hover:bg-slate-50 text-slate-600"
                     >
                       <Folder className="w-4 h-4" />
-                      Browse
+                      {t('settings.browse')}
                     </button>
                   </div>
                 </div>
                 <div>
-                  <label className={labelClass}>Inbound Folder (835 ERA files)</label>
+                  <label className={labelClass}>{t('settings.implug_inbound')}</label>
                   <div className="flex gap-2">
                     <input
                       value={implugInbound}
@@ -208,15 +204,12 @@ export default function SettingsPage() {
                       className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm hover:bg-slate-50 text-slate-600"
                     >
                       <Folder className="w-4 h-4" />
-                      Browse
+                      {t('settings.browse')}
                     </button>
                   </div>
                 </div>
                 <div className="bg-sky-50 border border-sky-200 rounded-lg p-3 text-xs text-sky-900">
-                  <strong>How it works:</strong> When you submit a claim via the Submit button, 
-                  SometeoPR generates an 837P X12 file and saves it to the outbound folder. 
-                  ImPlug picks it up and submits to the clearinghouse. 835 ERA responses are 
-                  dropped in the inbound folder and SometeoPR auto-processes them.
+                  <strong>{t('settings.implug_how_it_works')}</strong> {t('settings.implug_how_it_works_desc')}
                 </div>
               </div>
             </div>
@@ -227,7 +220,7 @@ export default function SettingsPage() {
             <div className="space-y-4">
               <h2 className="font-semibold text-slate-800 mb-4">{t('settings.stedi')}</h2>
               <div>
-                <label className={labelClass}>API Key</label>
+                <label className={labelClass}>{t('settings.api_key')}</label>
                 <input type="password" value={stediKey} onChange={e => setStediKey(e.target.value)} className={inputClass} placeholder="sk_live_..." />
                 <p className="text-xs text-slate-400 mt-1">
                   {t('settings.get_api_key_at')}{' '}
@@ -320,7 +313,7 @@ export default function SettingsPage() {
                 </button>
               </div>
               <div>
-                <label className={labelClass}>OpenAI API Key</label>
+                <label className={labelClass}>{t('settings.openai_api_key')}</label>
                 <input type="password" value={aiKey} onChange={e => setAiKey(e.target.value)} className={inputClass} placeholder="sk-..." />
               </div>
               <div>
@@ -361,7 +354,7 @@ export default function SettingsPage() {
               <button onClick={handleSave} disabled={saveMutation.isPending}
                 className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
                 <Save className="w-4 h-4" />
-                {saveMutation.isPending ? 'Saving...' : (saved ? t('settings.saved') : t('settings.save'))}
+                {saveMutation.isPending ? t('settings.saving') : (saved ? t('settings.saved') : t('settings.save'))}
               </button>
               {saved && (
                 <div className="flex items-center gap-1.5 text-emerald-600 text-sm">

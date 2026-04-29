@@ -8,11 +8,11 @@ import {
 } from 'lucide-react';
 import api from '../lib/api';
 
-const STEPS = [
-  { id: 'clinic',        label: 'Clinic Info',       icon: Building2 },
-  { id: 'payers',        label: 'Payer Enrollments', icon: Shield },
-  { id: 'clearinghouse', label: 'Clearinghouse',     icon: Zap },
-  { id: 'done',          label: 'Done!',             icon: CheckCircle },
+const STEP_KEYS = [
+  { id: 'clinic',        labelKey: 'wizard.step_clinic',        icon: Building2 },
+  { id: 'payers',        labelKey: 'wizard.step_payers',        icon: Shield },
+  { id: 'clearinghouse', labelKey: 'wizard.step_clearinghouse', icon: Zap },
+  { id: 'done',          labelKey: 'wizard.step_done',          icon: CheckCircle },
 ];
 
 const PR_PAYERS = [
@@ -104,8 +104,6 @@ export default function SetupWizardPage() {
     );
   };
 
-  const currentStepObj = STEPS[step];
-
   return (
     <div className="p-6 max-w-2xl mx-auto">
       {/* Header */}
@@ -116,7 +114,7 @@ export default function SetupWizardPage() {
 
       {/* Step indicator */}
       <div className="flex items-center justify-between mb-8 px-4">
-        {STEPS.map((s, i) => {
+        {STEP_KEYS.map((s, i) => {
           const Icon = s.icon;
           const isActive = i === step;
           const isDone = i < step || step === 3;
@@ -133,10 +131,10 @@ export default function SetupWizardPage() {
                 <span className={`text-xs font-medium whitespace-nowrap ${
                   isActive ? 'text-sky-600' : isDone && i < step ? 'text-emerald-600' : 'text-slate-400'
                 }`}>
-                  {s.label}
+                  {t(s.labelKey)}
                 </span>
               </div>
-              {i < STEPS.length - 1 && (
+              {i < STEP_KEYS.length - 1 && (
                 <div className={`flex-1 h-0.5 mb-5 mx-2 ${i < step ? 'bg-emerald-400' : 'bg-slate-100'}`} />
               )}
             </div>
@@ -232,16 +230,16 @@ export default function SetupWizardPage() {
 
             {/* Stedi */}
             <div>
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Stedi</h3>
+              <h3 className="text-sm font-semibold text-slate-700 mb-2">{t('settings.stedi')}</h3>
               <label className={labelClass}>{t('wizard.stedi_key')}</label>
               <input type="password" value={stediKey} onChange={e => setStediKey(e.target.value)}
                 placeholder="test_..." className={inputClass} />
-              <p className="text-xs text-slate-400 mt-1">Leave blank to keep existing key</p>
+              <p className="text-xs text-slate-400 mt-1">{t('wizard.keep_existing_key')}</p>
             </div>
 
             {/* Availity */}
             <div>
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Availity (Envolve Vision — Payer ID 56190)</h3>
+              <h3 className="text-sm font-semibold text-slate-700 mb-2">{t('wizard.availity_envolve_label')}</h3>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>{t('wizard.availity_client_id')}</label>
@@ -256,7 +254,7 @@ export default function SetupWizardPage() {
 
             {/* Inmediata */}
             <div>
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Inmediata SFTP</h3>
+              <h3 className="text-sm font-semibold text-slate-700 mb-2">{t('wizard.inmediata_sftp_label')}</h3>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>{t('wizard.inmediata_host')}</label>
@@ -283,7 +281,7 @@ export default function SetupWizardPage() {
               onClick={() => navigate('/')}
               className="px-6 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg font-medium"
             >
-              Go to Dashboard
+              {t('wizard.go_to_dashboard')}
             </button>
           </div>
         )}

@@ -230,7 +230,7 @@ export default function ReportsPage() {
                   </span>
                   <div className="flex-1">
                     <div className="flex justify-between text-sm mb-1">
-                      <span className="text-slate-600">{bucket.count} claims</span>
+                      <span className="text-slate-600">{t('reports.claims_count', { count: bucket.count })}</span>
                       <span className="font-medium text-slate-900">{fmt(bucket.amount)}</span>
                     </div>
                     <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">

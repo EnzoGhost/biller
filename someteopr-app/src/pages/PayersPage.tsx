@@ -125,7 +125,7 @@ export default function PayersPage() {
                 </div>
                 {payer.stedi_payer_id && (
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-400">Stedi ID:</span>
+                    <span className="text-slate-400">{t('payers.stedi_id')}:</span>
                     <span className="font-mono">{payer.stedi_payer_id}</span>
                   </div>
                 )}
