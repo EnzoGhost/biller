@@ -756,6 +756,16 @@ async def create_claim_from_parsed(
         db.add(sl)
         line_number += 1
 
+    # Recalculate total_billed from actual service line amounts
+    await db.flush()
+    recalculated_total = sum(
+        sl.billed_amount * (sl.units or 1)
+        for sl in claim.service_lines
+    ) if hasattr(claim, 'service_lines') and claim.service_lines else 0.0
+    # Only override if we got a better number from service lines
+    if recalculated_total > 0:
+        claim.total_billed = recalculated_total
+
     # Create patient insurance record if we have plan info
     if payer and parsed["contract_number"]:
         # Check if insurance already exists

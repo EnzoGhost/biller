@@ -72,6 +72,10 @@ async def scrub_claim(
         issues.append({"type": "error", "field": "diagnosis_codes", "msg_key": "scrub.no_diagnosis", "msg": "No diagnosis codes"})
     if not claim.service_lines:
         issues.append({"type": "error", "field": "service_lines", "msg_key": "scrub.no_service_lines", "msg": "No service lines"})
+    if claim.total_billed <= 0:
+        issues.append({"type": "error", "field": "total_billed", "msg_key": "scrub.zero_total", "msg": "Total billed is $0 — verify service line amounts"})
+    elif claim.total_billed < 20:
+        issues.append({"type": "warning", "field": "total_billed", "msg_key": "scrub.low_total", "msg": f"Total billed is ${claim.total_billed:.2f} — unusually low, verify amounts"})
     for sl in claim.service_lines:
         if not sl.diagnosis_pointers:
             issues.append({
