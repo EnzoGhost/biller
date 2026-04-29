@@ -18,8 +18,8 @@ MISSING_PAYERS = [
     {
         "name": "Triple-S Advantage",
         "payer_id": "TSSA",
-        "payer_type": "medicare",
-        "submission_method": "inmediata",
+        "payer_type": "MEDICARE",
+        "submission_method": "INMEDIATA",
         "is_reforma": False,
         "timely_filing_days": 365,
         "city": "San Juan",
@@ -31,8 +31,8 @@ MISSING_PAYERS = [
     {
         "name": "Triple-S Vital",
         "payer_id": "TSSV",
-        "payer_type": "medicaid",
-        "submission_method": "inmediata",
+        "payer_type": "MEDICAID",
+        "submission_method": "INMEDIATA",
         "is_reforma": True,
         "timely_filing_days": 365,
         "city": "San Juan",
@@ -44,8 +44,8 @@ MISSING_PAYERS = [
     {
         "name": "First Medical Vital",
         "payer_id": "FMVITAL",
-        "payer_type": "medicaid",
-        "submission_method": "inmediata",
+        "payer_type": "MEDICAID",
+        "submission_method": "INMEDIATA",
         "is_reforma": True,
         "timely_filing_days": 365,
         "city": "San Juan",
@@ -57,8 +57,8 @@ MISSING_PAYERS = [
     {
         "name": "MMM Multi Health / MMM Vital",
         "payer_id": "MMMVITAL",
-        "payer_type": "medicaid",
-        "submission_method": "inmediata",
+        "payer_type": "MEDICAID",
+        "submission_method": "INMEDIATA",
         "is_reforma": True,
         "timely_filing_days": 365,
         "city": "San Juan",
@@ -70,8 +70,8 @@ MISSING_PAYERS = [
     {
         "name": "Plan de Salud Menonita",
         "payer_id": "MENONITA",
-        "payer_type": "commercial",
-        "submission_method": "inmediata",
+        "payer_type": "COMMERCIAL",
+        "submission_method": "INMEDIATA",
         "is_reforma": False,
         "timely_filing_days": 180,
         "city": "Aibonito",
@@ -82,8 +82,8 @@ MISSING_PAYERS = [
     {
         "name": "Plan de Salud Menonita Vital",
         "payer_id": "MENONITAV",
-        "payer_type": "medicaid",
-        "submission_method": "inmediata",
+        "payer_type": "MEDICAID",
+        "submission_method": "INMEDIATA",
         "is_reforma": True,
         "timely_filing_days": 365,
         "city": "Aibonito",
@@ -94,8 +94,8 @@ MISSING_PAYERS = [
     {
         "name": "MCS Classicare",
         "payer_id": "MCSMC",
-        "payer_type": "medicare",
-        "submission_method": "inmediata",
+        "payer_type": "MEDICARE",
+        "submission_method": "INMEDIATA",
         "is_reforma": False,
         "timely_filing_days": 365,
         "city": "San Juan",
@@ -107,8 +107,8 @@ MISSING_PAYERS = [
     {
         "name": "MAPFRE / Aetna PR",
         "payer_id": "MAPFRE",
-        "payer_type": "commercial",
-        "submission_method": "inmediata",
+        "payer_type": "COMMERCIAL",
+        "submission_method": "INMEDIATA",
         "is_reforma": False,
         "timely_filing_days": 180,
         "city": "San Juan",
@@ -134,7 +134,7 @@ async def migrate():
         # 2. Update ALL existing payers to submission_method='inmediata' (except Envolve — just update notes)
         await db.execute(text("""
             UPDATE payers
-            SET submission_method = 'inmediata'
+            SET submission_method = 'INMEDIATA'
             WHERE payer_id != 'ENVOLVE'
         """))
         # Update Envolve notes only

@@ -83,7 +83,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-4">
-          Puerto Rico
+          🇵🇷
         </p>
       </div>
     </div>

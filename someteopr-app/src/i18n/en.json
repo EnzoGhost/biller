@@ -229,7 +229,7 @@
     "gpt4_turbo": "GPT-4 Turbo",
     "language": "Language",
     "interface_language": "Interface Language",
-    "lang_es": "Spanish (Puerto Rico)",
+    "lang_es": "Spanish",
     "lang_en": "English",
     "integrations": "Integrations",
     "save": "Save",
@@ -658,7 +658,7 @@
   },
   "auth": {
     "login_title": "Medical Biller PR",
-    "login_subtitle": "Medical billing for Puerto Rico",
+    "login_subtitle": "Medical billing",
     "email": "Email",
     "password": "Password",
     "sign_in": "Sign In",
