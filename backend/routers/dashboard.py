@@ -227,6 +227,12 @@ async def get_stats(
     for c in attention_claims_raw:
         days_old = (date.today() - c.service_date_from).days if c.service_date_from else 0
         if c.status in (ClaimStatus.DENIED, ClaimStatus.REJECTED) or days_old > 30:
+            # Get actual denial reason
+            denial_res = await db.execute(
+                select(Denial).where(Denial.claim_id == c.id).order_by(Denial.created_at.desc()).limit(1)
+            )
+            denial = denial_res.scalar_one_or_none()
+
             attention_claims.append({
                 "id": c.id,
                 "claim_number": c.claim_number,
@@ -234,11 +240,14 @@ async def get_stats(
                 "total_billed": c.total_billed,
                 "service_date_from": c.service_date_from.isoformat() if c.service_date_from else None,
                 "days_old": days_old,
-                "reason": (
-                    "Denied — needs appeal" if c.status == ClaimStatus.DENIED
-                    else "Rejected — needs correction" if c.status == ClaimStatus.REJECTED
-                    else f"Aging {days_old} days — follow up"
+                "reason_key": (
+                    "attention.denied_needs_appeal" if c.status == ClaimStatus.DENIED
+                    else "attention.rejected_needs_correction" if c.status == ClaimStatus.REJECTED
+                    else "attention.aging_follow_up"
                 ),
+                "reason_params": {"days": days_old} if c.status not in (ClaimStatus.DENIED, ClaimStatus.REJECTED) else {},
+                "denial_reason": denial.denial_reason if denial else None,
+                "denial_code": denial.denial_code if denial else None,
             })
 
     # ── Weekly trends (last 8 weeks) ────────────────────────────────────────

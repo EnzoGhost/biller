@@ -667,5 +667,10 @@
     "invalid_billed_amount": "Línea {{line}}: monto facturado inválido",
     "lt_rt_conflict": "Línea {{line}}: no se pueden usar -LT y -RT juntos",
     "mod50_conflict": "Línea {{line}}: modificador -50 no debe combinarse con -LT/-RT"
+  },
+  "attention": {
+    "denied_needs_appeal": "Denegada — necesita apelación",
+    "rejected_needs_correction": "Rechazada — necesita corrección",
+    "aging_follow_up": "Envejecimiento {{days}} días — dar seguimiento"
   }
 }

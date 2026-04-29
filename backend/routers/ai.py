@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from config import settings
 from database import get_db
-from models import Claim, Denial, ServiceLine, User
+from models import Claim, ClaimStatus, Denial, ServiceLine, User
 from schemas import (
     ScrubRequest, ScrubResponse,
     DenialAnalysisRequest, DenialAnalysisResponse,
@@ -144,6 +144,16 @@ Identifica problemas potenciales de facturación y sugiere mejoras. Responde en 
     # Persist scrub results
     claim.scrub_score = score
     claim.scrub_issues = issues
+
+    # Auto-advance to ready if scrub passes
+    if score >= 80 and not any(i.get("type") == "error" for i in issues):
+        if claim.status == ClaimStatus.DRAFT:
+            claim.status = ClaimStatus.READY
+            from routers.audit import log_action
+            await log_action(db, "claim", body.claim_id,  "auto_scrub_ready",
+                            claim_id=body.claim_id, old_value="draft", new_value="ready",
+                            notes=f"Auto-advanced: scrub score {score}")
+
     await db.commit()
 
     return ScrubResponse(claim_id=body.claim_id, score=score, issues=issues, suggestions=suggestions)

@@ -672,5 +672,10 @@
     "invalid_billed_amount": "Line {{line}}: invalid billed amount",
     "lt_rt_conflict": "Line {{line}}: cannot use -LT and -RT together",
     "mod50_conflict": "Line {{line}}: modifier -50 should not combine with -LT/-RT"
+  },
+  "attention": {
+    "denied_needs_appeal": "Denied — needs appeal",
+    "rejected_needs_correction": "Rejected — needs correction",
+    "aging_follow_up": "Aging {{days}} days — follow up"
   }
 }

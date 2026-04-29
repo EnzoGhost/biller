@@ -29,6 +29,7 @@ interface WorkQueueClaim {
   source: string;
   notes: string | null;
   denial_reason?: string;
+  denial_code?: string;
 }
 
 interface WorkQueueData {
@@ -364,6 +365,7 @@ function ClaimCard({ claim, showAging = false, showDenialReason = false }: {
   showDenialReason?: boolean;
 }) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   return (
     <div
@@ -391,7 +393,9 @@ function ClaimCard({ claim, showAging = false, showDenialReason = false }: {
           </div>
           {showDenialReason && claim.denial_reason && (
             <p className="text-xs text-rose-500 mt-0.5 truncate">
-              {claim.denial_reason}
+              {claim.denial_code 
+                ? t(`denials.carc_codes.${claim.denial_code}`, { defaultValue: claim.denial_reason })
+                : claim.denial_reason}
             </p>
           )}
         </div>

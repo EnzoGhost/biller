@@ -79,10 +79,6 @@ class ProviderUpdate(ProviderCreate):
 
 # ── Payers ───────────────────────────────────────────────────────────────────
 
-# Reforma payers route through Stedi portal (manual), not via API
-REFORMA_PAYER_IDS = {"FIRST_MEDICAL_VITAL", "ASES", "GHP", "REFORMA", "FMVITAL"}
-REFORMA_NAME_KEYWORDS = ["primera", "first medical vital", "ases", "ghp", "reforma"]
-
 class PayerOut(BaseModel):
     id: int
     name: str
@@ -102,17 +98,6 @@ class PayerOut(BaseModel):
     notes: Optional[str]
     is_reforma: bool = False
     model_config = {"from_attributes": True}
-
-    @classmethod
-    def from_orm_with_reforma(cls, payer) -> 'PayerOut':
-        obj = cls.model_validate(payer)
-        name_lower = (payer.name or "").lower()
-        pid_upper = (payer.payer_id or "").upper()
-        obj.is_reforma = (
-            pid_upper in REFORMA_PAYER_IDS or
-            any(kw in name_lower for kw in REFORMA_NAME_KEYWORDS)
-        )
-        return obj
 
 class PayerCreate(BaseModel):
     name: str
