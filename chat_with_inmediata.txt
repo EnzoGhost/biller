@@ -1,0 +1,122 @@
+ 
+Disconnected.
+4:14 PM  Connecting...
+4:14 PM  Connected. A support representative will be with you shortly.
+4:14 PM  Support session established with Keishla Diaz Miranda.
+4:14 PM  Keishla Diaz Miranda: 
+Buenas Tardes, Gracias por contactar a Inmediata, Servicio en los que confías para la salud. Mi nombre es Keishla Diaz Miranda del departamento de Contact Center Representative,
+
+Por propósitos de seguridad le estaré realizando varias preguntas:
+
+¿Me puede facilitar el Numero de NPI?
+
+¿Me puede indicar su nombre con ambos apellidos?
+
+¿Me puede indicar número de teléfono, dirección de la facilidad y correo electrónico?
+4:15 PM  Brenda Cubero: 
+1164586079
+4:15 PM  Brenda Cubero: 
+Brenda Cubero Pantoja
+4:15 PM  Brenda Cubero: 
+7878846967
+4:15 PM  Brenda Cubero: 
+A8 Calle Marginal Urb San Salvador, Manati PR, 00674
+4:16 PM  Brenda Cubero: 
+visualzonepr@gmail.com
+4:16 PM  Keishla Diaz Miranda: 
+Gracias por la información, voy a validar si usted es una persona de contacto en la cuenta con Inmediata, por favor permanezca en el CHAT.
+4:16 PM  Keishla Diaz Miranda: 
+Actualmente contamos con la nueva plataforma de Healthway.
+
+
+
+Si tienes alguna duda o/y dificultad o aun no se ha registrado, podemos asistirle con el proceso.
+
+
+
+El portal de Healthway incluye el SUPPORT CENTER, una herramienta que facilita su gestión diaria. Ofrece acceso a InmediataEDU, una plataforma educativa con videos disponibles 24/7 sobre los productos y a la herramienta digital de Formularios de Servicio, para obtener rápidamente los formularios necesarios.
+
+
+
+¡Le invitamos a explorarlo y aprovechar sus beneficios!
+4:16 PM  Keishla Diaz Miranda: 
+¿Proposito de su conexion?
+4:18 PM  Brenda Cubero: 
+Estamos desarrollando un software interno de facturación y necesitamos entender las opciones de integración. Por lo que vi el ImPlug es lo mas que hace sentido, pero me interesaba saber si tienen otras opciones como SFTP, API, etc.
+4:18 PM  Keishla Diaz Miranda: 
+Valido
+4:20 PM  Brenda Cubero: 
+Necesitamos documentación de integracionistas y credenciales de SFTP si esta disponible.
+4:21 PM  Keishla Diaz Miranda: 
+Valido su solicitud, podria enviarnos email con la informacion del Software que estan relacionando y para someterlo al Dep de Desarrollo
+4:21 PM  Keishla Diaz Miranda: 
+nuestro email
+4:21 PM  Keishla Diaz Miranda: 
+servicioalcliente@inmediata.com
+4:22 PM  Keishla Diaz Miranda: 
+numero de caso a colocar en el mismo 01785772
+4:22 PM  Brenda Cubero: 
+Claro, que información necesita especificamente?
+4:24 PM  Keishla Diaz Miranda: 
+Informacion del proveedor de la cuenta, nomnre NPI, informacion del software interno para la facturacion y si adicional del Implug el mismo puede ser compatible con nuestros programas de facturacion como Secure Claim o Secure Track
+4:26 PM  Brenda Cubero: 
+Okay bien someteré todo eso. Y solo por yo saber, si tienen otras opciones asi como SFTP o un API directo? Como para submit archivos 837 desde nuestro software de manera automática? O solo seria instalando lo de ImPlug en una computadora? Y eso tendría un costo adicional de SecureClaim que ya usamos? O seria menos si solo usaremos ImPlug en vez?
+4:29 PM  Keishla Diaz Miranda: 
+El Implug no tiene costo por instalacion, si desea el mismo debe soliciutarlo atraves del Formulariio de instalacion el mismo esta en inmediata.com. Le recomiendo que se valide primero con el Dep de desarrollo para estar seguros si su software sera compatible con alguyno de nuestros programa,
+4:29 PM  Keishla Diaz Miranda: 
+le puedo brindar el enlace directo del formulario
+4:29 PM  Keishla Diaz Miranda: 
+y asi una vez le oriente puede someter la solictud de instalacion de Implug
+4:30 PM  Brenda Cubero: 
+Si gracias! Entonces no hay opciones de SFTP directo verdad?
+4:30 PM  Brenda Cubero: 
+Cual es el enlace?
+4:30 PM  Keishla Diaz Miranda: 
+por el momento seria atravez del Implug.
+4:31 PM  Keishla Diaz Miranda: 
+Enlace directo al Formulario de instalacion de Implug
+https://portal.inmediata.com/resources-2/#forms
+
+Colocar cantidad de computadoras para la instalacion
+Una vez sea completado favor de enviarnoslo a: servicioalcliente@inmediata.com
+Tan pronto se reciba le estaremos brindando email con numero de caso y enlace de conexion al Support Chat.
+Importante conectarse a la Computadora a ser instalado el Implug
+4:31 PM  Keishla Diaz Miranda: 
+Pero Dep de Desarrtollo puede indagar en el software de nuestros programas
+4:32 PM  Brenda Cubero: 
+Okay muy bien! Ya supongo que seria lunes o en la semana que viene?
+4:32 PM  Brenda Cubero: 
+Muchas gracias por toda la info
+4:32 PM  Keishla Diaz Miranda: 
+Para recapitular, ¿Usted se comunicó Validacion de compatibilidad de sotfware para programas de facturacion es correcto? ¿Entiende que aclaramos todas sus dudas o resolvimos su necesidad en esta conección?
+Notificacion
+A partir del 12 de mayo de 2026, para poder continuar con el servicio de verificación de elegibilidad de Medicare, debe realizar la Inscripción de Proveedores Externos en el sistema HIPAA Eligibility Transaction System (HETS) de CMS.
+Para completar este requerimiento, deberá seguir los pasos que se detallan a continuación:
+1.
+Iniciar el proceso de registro accediendo al siguiente enlace:
+https://medicare.fcso.com/edi/hets-edi-enrollment
+2.
+Utilizar el Unique ID del proveedor externo para inscribirlo y vincularlo con su NPI correspondiente dentro del sistema HETS.
+Unique ID: GCFN
+Fecha de Efectividad: Fecha la aceptación del protocolo de Medicare
+
+3.Completar la inscripción dentro del plazo establecido, a fin de evitar interrupciones en los servicios de elegibilidad de Medicare.
+
+
+
+¿Algo adicional en lo que pueda ayudarle?
+4:33 PM  Brenda Cubero: 
+Eso seria todo muchas gracias!
+4:33 PM  Keishla Diaz Miranda: 
+A la orden siempre.
+
+Gracias por utiliza nuestro chat, Inmediata Support, recuerde fue atendido por: Keishla M. Diaz Miranda
+
+Al finalizar tiene la oportunidad de completar una pequeña encuesta, que nos permite continuar mejorando la calidad de nuestros servicios. En Inmediata, Servicio en los que confías para la salud.
+Información de contacto:
+Tel: 787-783-3233
+Chat: https://portal.inmediata.com/chat/
+E-mail: servicioalcliente@inmediata.com
+4:33 PM  Keishla Diaz Miranda would like you to complete a brief Customer Survey. Open Customer Survey
+4:33 PM  Keishla Diaz Miranda has ended the session.
+Keishla Diaz Miranda

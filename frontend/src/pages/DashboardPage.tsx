@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   Send, Zap, ChevronRight, ChevronDown, ChevronUp,
   FileText, CheckCircle, Clock, AlertTriangle, CircleDollarSign,
-  Download, X, Loader2,
+  Download, X, Loader2, ChevronLeft,
+  Calendar,
 } from 'lucide-react';
 import api from '../lib/api';
 import { formatDateShort } from '../lib/dates';
@@ -58,32 +59,195 @@ const fmt = (n: number) =>
     minimumFractionDigits: 0,
   }).format(n);
 
+// ── Helpers: Date formatting ─────────────────────────────────────────────────
+
+const MONTHS_EN = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const MONTHS_ES_FULL = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
+const MONTHS_ES_API = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
+
+function formatDisplayDate(d: Date, lang: string): string {
+  const day = d.getDate();
+  const month = d.getMonth();
+  const year = d.getFullYear();
+  if (lang === 'es') {
+    return `${day} de ${MONTHS_ES_FULL[month]} de ${year}`;
+  }
+  return `${MONTHS_EN[month]} ${day}, ${year}`;
+}
+
+function toApiDate(d: Date): string {
+  return `${MONTHS_ES_API[d.getMonth()]}/${d.getDate()}/${d.getFullYear()}`;
+}
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+// ── DatePicker Component ─────────────────────────────────────────────────────
+
+function DatePicker({
+  label,
+  value,
+  onChange,
+  lang,
+}: {
+  label: string;
+  value: Date;
+  onChange: (d: Date) => void;
+  lang: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [viewYear, setViewYear] = useState(value.getFullYear());
+  const [viewMonth, setViewMonth] = useState(value.getMonth());
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // When value changes, sync view
+  useEffect(() => {
+    setViewYear(value.getFullYear());
+    setViewMonth(value.getMonth());
+  }, [value]);
+
+  const prevMonth = useCallback(() => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  }, [viewMonth]);
+
+  const nextMonth = useCallback(() => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  }, [viewMonth]);
+
+  const days = daysInMonth(viewYear, viewMonth);
+  const firstDow = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
+  const today = new Date();
+
+  const dayHeaders = lang === 'es'
+    ? ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá']
+    : ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+  const monthLabel = lang === 'es'
+    ? `${MONTHS_ES_FULL[viewMonth].charAt(0).toUpperCase() + MONTHS_ES_FULL[viewMonth].slice(1)} ${viewYear}`
+    : `${MONTHS_EN[viewMonth]} ${viewYear}`;
+
+  return (
+    <div className="relative" ref={ref}>
+      <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white hover:border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-colors"
+      >
+        <span className="text-slate-900">{formatDisplayDate(value, lang)}</span>
+        <Calendar className="w-4 h-4 text-slate-400" />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 mt-1 w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-[100] p-3 animate-in fade-in slide-in-from-top-1">
+          {/* Month nav */}
+          <div className="flex items-center justify-between mb-2">
+            <button
+              type="button"
+              onClick={prevMonth}
+              className="p-1 rounded-lg hover:bg-slate-100 text-slate-500"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-semibold text-slate-800">{monthLabel}</span>
+            <button
+              type="button"
+              onClick={nextMonth}
+              className="p-1 rounded-lg hover:bg-slate-100 text-slate-500"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Day headers */}
+          <div className="grid grid-cols-7 mb-1">
+            {dayHeaders.map(dh => (
+              <div key={dh} className="text-center text-xs font-medium text-slate-400 py-1">{dh}</div>
+            ))}
+          </div>
+
+          {/* Day grid */}
+          <div className="grid grid-cols-7">
+            {/* Empty cells before first day */}
+            {Array.from({ length: firstDow }).map((_, i) => (
+              <div key={`e-${i}`} />
+            ))}
+            {Array.from({ length: days }).map((_, i) => {
+              const day = i + 1;
+              const cellDate = new Date(viewYear, viewMonth, day);
+              const selected = isSameDay(cellDate, value);
+              const isToday = isSameDay(cellDate, today);
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => { onChange(cellDate); setOpen(false); }}
+                  className={`
+                    w-9 h-9 mx-auto flex items-center justify-center rounded-lg text-sm transition-colors
+                    ${selected
+                      ? 'bg-sky-500 text-white font-semibold'
+                      : isToday
+                        ? 'bg-sky-50 text-sky-600 font-medium hover:bg-sky-100'
+                        : 'text-slate-700 hover:bg-slate-100'
+                    }
+                  `}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── VistaNet Pull Modal ──────────────────────────────────────────────────────
 
 function PullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const { t } = useTranslation();
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language?.startsWith('es') ? 'es' : 'en';
+
+  // Default: from = yesterday, to = today
+  const now = new Date();
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const [dateFrom, setDateFrom] = useState<Date>(yesterday);
+  const [dateTo, setDateTo] = useState<Date>(todayDate);
   const [result, setResult] = useState<PullResult | null>(null);
-
-  // Convert YYYY-MM-DD to Spanish format Abril/28/2026
-  const MONTHS_ES: Record<string, string> = {
-    '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
-    '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
-    '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre',
-  };
-
-  const toSpanishDate = (isoDate: string): string => {
-    const [year, month, day] = isoDate.split('-');
-    const monthName = MONTHS_ES[month] || 'Enero';
-    return `${monthName}/${parseInt(day)}/${year}`;
-  };
 
   const pullMutation = useMutation({
     mutationFn: async () => {
       const resp = await api.post('/vistanet/pull-bitacora', {
-        date_from: toSpanishDate(dateFrom),
-        date_to: toSpanishDate(dateTo),
+        date_from: toApiDate(dateFrom),
+        date_to: toApiDate(dateTo),
       });
       return resp.data as PullResult;
     },
@@ -110,28 +274,18 @@ function PullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () 
         <div className="px-6 py-5 space-y-4">
           {!result ? (
             <>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  {t('dashboard.date_from')}
-                </label>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  {t('dashboard.date_to')}
-                </label>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none"
-                />
-              </div>
+              <DatePicker
+                label={t('dashboard.date_from')}
+                value={dateFrom}
+                onChange={setDateFrom}
+                lang={lang}
+              />
+              <DatePicker
+                label={t('dashboard.date_to')}
+                value={dateTo}
+                onChange={setDateTo}
+                lang={lang}
+              />
               {pullMutation.isError && (
                 <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 text-sm text-rose-700">
                   {t('dashboard.pull_error')}
@@ -168,11 +322,11 @@ function PullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () 
                 onClick={onClose}
                 className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800"
               >
-                Cancelar
+                {lang === 'es' ? 'Cancelar' : 'Cancel'}
               </button>
               <button
                 onClick={() => pullMutation.mutate()}
-                disabled={!dateFrom || !dateTo || pullMutation.isPending}
+                disabled={pullMutation.isPending}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-sky-500 hover:bg-sky-600 text-white rounded-lg disabled:opacity-50"
               >
                 {pullMutation.isPending ? (

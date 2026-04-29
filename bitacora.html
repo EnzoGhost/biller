@@ -1,0 +1,455 @@
+
+<html>
+<head>
+<meta http-equiv="Content-Language" content="en-us">
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta name="google" content="notranslate" />
+<title>VistaNET Cloud 4.3.2 / Lic: 1373 MANATI - rcortes</title>
+<style>
+.font10 { font-family:arial; font-size: 10px; }
+.font12 { font-family:arial; font-size: 12px; }
+.font14 { font-family:arial; font-size: 14px; }
+.font16 { font-family:arial; font-size: 16px; }
+</style>
+<script>
+function BeforePrint() {
+document.getElementById("plan_on").style.display = "none";
+document.getElementById("fecha1_on").style.display = "none";
+document.getElementById("fecha2_on").style.display = "none";
+document.getElementById("plan_off").style.display = "";
+document.getElementById("fecha1_off").style.display = "";
+document.getElementById("fecha2_off").style.display = "";
+document.getElementById("botonreporte").style.display="none";
+document.getElementById("botonimprimir").style.display="none";
+document.getElementById("botonfacturacion").style.display="none";
+if(document.reportes.tabla_cpt_ventas.value == "NO_MOSTRAR") {
+document.getElementById("tabla_cpt_ventas").style.display="none";	
+}
+}
+function AfterPrint() {
+document.getElementById("plan_on").style.display = "";
+document.getElementById("fecha1_on").style.display = "";
+document.getElementById("fecha2_on").style.display = "";
+document.getElementById("plan_off").style.display = "none";
+document.getElementById("fecha1_off").style.display = "none";
+document.getElementById("fecha2_off").style.display = "none";
+document.getElementById("botonreporte").style.display="";
+document.getElementById("botonimprimir").style.display="";
+document.getElementById("botonfacturacion").style.display="";
+document.getElementById("tabla_cpt_ventas").style.display="";
+}
+function AutoExec() {
+
+document.reportes.fecha1.value = "Abril/28/2026";
+document.reportes.fecha2.value = "Abril/28/2026";
+document.reportes.plan.value = "";
+document.reportes.signature.value = "";
+
+self.focus();
+}
+function BuscarRecord(idpaciente) {
+opener.document.ver_record.id_infopersonal.value = idpaciente;
+opener.document.ver_record.foco.value = "info";
+opener.document.ver_record.submit();
+}
+function SubmitReporte() {
+document.reportes.boton_generar_reporte.value="...Por Favor Espere...";
+document.reportes.boton_generar_reporte.disabled=true;
+document.getElementById("submit_wait").style.display="";
+return true;	
+}
+function SubmitBitacora() {
+document.reportes.boton_bitacora.value="...Por Favor Espere...";
+document.reportes.boton_bitacora.disabled=true;
+document.getElementById("submit_wait").style.display="";
+return true;	
+}
+</script>
+</head>
+<body onload="AutoExec()" onbeforeprint="BeforePrint()" onafterprint="AfterPrint()">
+<form name="reportes" action="bitacora_planesmedicos_facturacion.pl?Display" method="POST" onSubmit="return SubmitReporte();">
+<table border="0" width="100%" id="table2" style="border-collapse: collapse">
+<tr>
+<td valign="top" width="60%">
+<p align="left">
+<font face="Verdana" size="5">Reporte de Facturaci&oacute;n</font><br>
+<font face="Verdana" size="4">Bit&aacute;cora de C&oacute;digos a Facturar</font>
+</font></td>
+<td width="39%" valign="top" rowspan="2">
+<p align="right">
+<img border="0" src="../images/logo_od.gif"></td>
+</tr>
+<tr>
+<td valign="top" width="60%">
+<p align="left"><font face="arial" size="2"><big><b>VISUAL ZONE</b></big><br>A8 Calle Marginal, Urb. San Salvador<br>Manatí, PR 00674<br>Tel: 787-884-6967<br></font>    
+</td>
+</tr>
+<tr>
+<td valign="top" colspan="2">
+<hr>
+</td>
+</tr>
+<tr>
+<td valign="top" width="60%">
+<p align="left"><font face="Verdana" color="#000080">Los Pacientes 
+Registrados aquí han certificado con su firma que han solicitado 
+voluntariamente los servicios de cubierta de su plan médico y han 
+recibido los mismos bajo los términos y condiciones de sus respectivos 
+proveedores.</font><p>
+<span id="botonimprimir"><input onclick="self.focus();self.print()" type=button value="IMPRIMIR BITACORA" style="width:180; height:26; color: blue"></span>
+&nbsp;<span id="botonfacturacion"><input onclick="SubmitBitacora();window.location.href='/cgi-bin/bitacora_planesmedicos.pl?Display'" type="button" name="boton_bitacora" value="Bitácora Pacientes" style="width:180; height:26; color: #007103"></span>
+</td>
+<td valign="top" align=right>
+<table border="1" width="280" id="table3" style="border-collapse: collapse" bordercolor="#808080">
+<tr>
+<td width="95"><font size="2" face="Arial">Plan Médico:</font></td>
+<td>
+<span id="plan_on">
+<select name="plan" style="width:100%; background-color: #c4ffff; font-size:10px">
+<option value="">TODOS LOS PLANES</option>
+<option value="MCS">MCS</option><option value="TRIPLE S PRIVADO">TRIPLE S PRIVADO</option><option value="MEDICARE">MEDICARE</option><option value="FIRST MEDICAL">FIRST MEDICAL</option><option value="HUMANA">HUMANA</option><option value="HUMANA GOLD PLUS">HUMANA GOLD PLUS</option><option value="PROSAM">PROSAM</option><option value="MCS CLASSICARE">MCS CLASSICARE</option><option value="MAPFRE">MAPFRE</option><option value="MMM">MMM</option><option value="TRIPLE S ADVANTAGE">TRIPLE S ADVANTAGE</option><option value="PLAN DE SALUD MENONITA">PLAN DE SALUD MENONITA</option><option value="TRIPLE S VITAL">TRIPLE S VITAL</option><option value="MMM VITAL">MMM VITAL</option><option value="FIRST MEDICAL VITAL">FIRST MEDICAL VITAL</option><option value="PLAN DE SALUD MENONITA VITAL">PLAN DE SALUD MENONITA VITAL</option><option value="PRIVADO ">PRIVADO </option></select></span>
+<span id="plan_off" style="display:none"><font size="2" face="Arial">TODOS LOS PLANES</font></span>
+</td>
+</tr>
+<tr>
+<td width="95"><font size="2" face="Arial">Doctor:</font></td>
+<td>
+<span id="plan_on">
+<select name="signature" style="width:100%; background-color: #c4ffff; font-size:10px">
+<option value="">TODOS LOS DOCTORES</option>
+<option value='CUENTA ADMINISTRATIVA'>CUENTA ADMINISTRATIVA</option><option value='DRA. BRENDA CUBERO'>DRA. BRENDA CUBERO</option></select></span>
+</td>
+</tr>
+<tr>
+<td class="font12" nowrap>Buscar por Record:</td>
+<td>
+<input name="record" type="text" style="width: 100%;background-color:#feffc9;" class=font12 value=""></td>
+</td>
+</tr>
+<tr>
+<td width="95" class=font12>Fecha Desde:</td>
+<td nowrap><span id="fecha1_on"><input class="plain" name="fecha1" value="Abril/28/2026" size="19" onfocus="if(self.gfPop)gfPop.fStartPop(document.reportes.fecha1,document.reportes.fecha2);return false;this.blur()" readonly><a href="javascript:void(0)" onclick="if(self.gfPop)gfPop.fStartPop(document.reportes.fecha1,document.reportes.fecha2);return false;" HIDEFOCUS><img class="PopcalTrigger" align="absmiddle" src="/cal/calbtn.gif" width="34" height="22" border="0" alt=""></a></span><span id="fecha1_off" style="display:none"><font size=2 face=arial>Abril/28/2026</font></span></td>
+</tr>
+<tr>
+<td width="95" class="font12">Fecha Hasta:</td>
+<td nowrap><span id="fecha2_on"><input class="plain" name="fecha2" value="Abril/28/2026" size="19" onfocus="if(self.gfPop)gfPop.fEndPop(document.reportes.fecha1,document.reportes.fecha2);return false;this.blur()" readonly><a href="javascript:void(0)" onclick="if(self.gfPop)gfPop.fEndPop(document.reportes.fecha1,document.reportes.fecha2);return false;" HIDEFOCUS><img class="PopcalTrigger" align="absmiddle" src="/cal/calbtn.gif" width="34" height="22" border="0" alt=""></a></span><span id="fecha2_off" style="display:none"><font size=2 face=arial>Abril/28/2026</font></span></td>
+</tr>
+<tr id="botonreporte">
+<td width="95">&nbsp;</td>
+<td>
+<input type="submit" value="&lt;&lt; Generar Reporte &gt;&gt;" name="boton_generar_reporte" style="color: #11620D; font-weight: bold; width: 100%; height: 22"></td>
+</tr>
+</table>
+<!-- <span style="font-family:arial;font-size:12px;">Exportar Reporte a Formato Excel <input type=checkbox name="formato_excel" value="SI"></span> -->
+</td>
+</tr>
+</table>
+&nbsp;</p>
+<div id="submit_wait" style="display:none"><img src="/images/wait.gif" style="width:100%;height:10px;margin-bottom:10px;"></div>
+<div style="float:left;">
+<div style="font-family:verdana,arial;font-size:18px"><b>PACIENTES CON EXAMEN VISUAL</b></div>
+<div style="margin-bottom:5px;font-family:arial;font-size:14px;">
+Pacientes Examinados en el Per&iacute;odo de Fecha Seleccionado.<br>Tambi&eacute;n incluye C&oacute;digos de Materiales Registrados en la Venta del Paciente.
+</div>
+</div>
+<div style="float:right;text-align:right">
+<div style="font-family:arial;font-size:12px;color:#435da6;margin-bottom:5px;">Todos los Doctores</div>
+<div id="suma_total1" style="font-family:arial;font-size:20px;color:#398d2e;"><img src="/images/wait.gif" style="width:230px;height:10px"></div>
+</div>
+<table border="1" width="100%" id="table1" style="border-collapse: collapse" bordercolor="#333333">
+<tr>
+<td align=center style="width:15px" bgcolor="#C0C0C0">&nbsp;</td>
+<td align=center bgcolor="#C0C0C0" style="width:230px;" class=font14 nowrap><b>Plan 1</b></td>
+<td align=center bgcolor="#C0C0C0" style="width:230px" class=font14 nowrap><b>ID Foto / Licencia</b></td>
+<td align=center bgcolor="#C0C0C0" style="width:100%" class=font14><b>Informaci&oacute;n General / Facturaci&oacute;n</b></td>
+</tr><tr onmouseover="style.cursor='hand';" onclick="javascript:BuscarRecord('0005561');">
+<td width="30px" align=center><font size=3 face-arial>&nbsp;1&nbsp;</font></td>
+<td style="width:250px" valign=top class=font10 nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=plan1&id=1373&record=0005561&path=32796c7677647168773234363a363267647732676c6a6c677266323333333838393432736f6471687634" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0>
+<div style="margin-top:10px;padding:5px"><b>Plan 1: </b>MMM<br><b>N&uacute;m. Contrato:</b> 030366879<p></div></td><td style="width:250px" valign=top align=center nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=licencia&id=1373&record=0005561&path=32796c7677647168773234363a363267647732676c6a6c6772663233333338383934326f6c666871666c6476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0><p>
+<img border=0 src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=firma&id=1373&record=0005561&path=32796c7677647168773234363a363267647732676c6a6c677266323333333838393432696c75706476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" style="width:150px;border-bottom:1px solid #000000;margin-bottom:3px"><br>Firma Del Paciente
+</td>
+<td style="width:250px;padding:5px" valign=top>
+<table border=0 style="width:100%"><tr>
+<td width="100%">
+<font face="Verdana" size=4>JOSE  PEREZ COLON</font><br>
+<font face="Verdana" size=2>Record: 0005561</font><br>
+<font face="Verdana" size=2>DOB: Julio/23/1964</font><br>
+<font size="1" face="Arial" color="#666666">HC 01 BOX 6466
+ BARCELONETA PR 00617<br><font size=2 color=#660000 face=arial>DRA. BRENDA CUBERO</font></font>
+<br>
+<font face="Arial" size="2">MMM<br></font><hr><div style="margin-top:5px" class=font10><b>SERVICIOS OPTOMETRICOS: (Abril/28/2026)</b><p><b>DIAGN&Oacute;STICOS:</b><br><b>A</b>. H52.03 - Hypermetropia, bilateral<br><b>B.</b> H52.4 - Presbyopia<br><b>C.</b> E11.9 - Type 2 diabetes mellitus without complications<br><b>D.</b> H25.13 - Age-related nuclear cataract, bilateral<br><b>J.</b> .<br><hr><b>PROCEDIMIENTOS:</b><br>1. 92015 - Refraction <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'>Pointer: AB</span><br>2. 92012 - Ophthalmological Services: Intermediate, Establish <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'>Pointer: CD</span><br></div><div style="float:right;text-align:right"></div><div  style="clear:both"></div><hr><div style="margin-top:5px" class=font10><b>CODIGOS DE MATERIALES: (Abril/28/2026)</b><br>1. V2025 - FRAME DELUXE <br>2. V2020 - Frame <br>3. V2200 - ESFERICO ( PL- ± 4.00) RT/LT <br>4. V2784 - POLICARBONATO <br>5. V2744 - FOTOCROMATICO <br><div style="margin-top:10px;"></div><div><p><b>Plan 1: </b>MMM&nbsp;(Cubierta: $1000.00)</div><div id="factura_tabla1_1" style="font-family:arial;font-size:10px"><hr><span class=font14><b>Venta Paciente:</b></span> <span class=font12>&num;0003947</span><div style='margin-bottom:3px;'>Abril 28, 2026</div><ol><li>MODERN CHISEL  <span style='color:green'>(60.00)</span></li><li>FT-28   <span style='color:green'>(195.00)</span></li><li>FT-28   <span style='color:green'>(195.00)</span></li><li>POLICARBONATO   <span style='color:green'>(50.00)</span></li><li>TRANSITION   <span style='color:green'>(90.00)</span></li><li>TRANSITION   <span style='color:green'>(90.00)</span></li><li>OAKLEY HOLBROOK 8100F 0158 <span style='color:green'>(330.00)</span></li></ol><b>SubTotal</b>: $1,010.00 | <b>Ajustes</b>: $10.00<br><span style='font-size:12px'><b>Total: $1,000.00</b></span><br><b>Dep&oacute;sito</b>: $0.00 (efectivo)<br><b>Balance</b>: $1,000.00</div>
+</div></td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td colspan=4 style="background-color:#C0C0C0">&nbsp;</td>
+</tr>
+<tr onmouseover="style.cursor='hand';" onclick="javascript:BuscarRecord('0026697');">
+<td width="30px" align=center><font size=3 face-arial>&nbsp;2&nbsp;</font></td>
+<td style="width:250px" valign=top class=font10 nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=plan1&id=1373&record=0026697&path=32796c7677647168773234363a363267647732676c6a6c6772663233333539393c3a32736f6471687634" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0>
+<div style="margin-top:10px;padding:5px"><b>Plan 1: </b>FIRST MEDICAL VITAL<br><b>N&uacute;m. Contrato:</b> 0080016056999<p></div></td><td style="width:250px" valign=top align=center nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=licencia&id=1373&record=0026697&path=32796c7677647168773234363a363267647732676c6a6c6772663233333539393c3a326f6c666871666c6476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0><p>
+<img border=0 src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=firma&id=1373&record=0026697&path=32796c7677647168773234363a363267647732676c6a6c6772663233333539393c3a32696c75706476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" style="width:150px;border-bottom:1px solid #000000;margin-bottom:3px"><br>Firma Del Paciente
+</td>
+<td style="width:250px;padding:5px" valign=top>
+<table border=0 style="width:100%"><tr>
+<td width="100%">
+<font face="Verdana" size=4>LUIS A PEREZ FIGUEROA </font><br>
+<font face="Verdana" size=2>Record: 0026697</font><br>
+<font face="Verdana" size=2>DOB: Marzo/1/1999</font><br>
+<font size="1" face="Arial" color="#666666">HC 02 BUZON 6061 FLORIDA P.R 00650<br><font size=2 color=#660000 face=arial>DRA. BRENDA CUBERO</font></font>
+<br>
+<font face="Arial" size="2">FIRST MEDICAL VITAL<br></font><hr><div style="margin-top:5px" class=font10><b>SERVICIOS OPTOMETRICOS: (Abril/28/2026)</b><p><b>DIAGN&Oacute;STICOS:</b><br><b>A</b>. H52.03 - Hypermetropia, bilateral<br><b>B.</b> H52.223 - Regular astigmatism, bilateral<br><b>J.</b> .<br><hr><b>PROCEDIMIENTOS:</b><br>1. 92015 - Refraction <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'></span><br>2. 92004 - Eye Exam : New Patient Comprehensive <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'></span><br></div><div style="float:right;text-align:right"></div><div  style="clear:both"></div><div id="factura_tabla1_2" style="font-family:arial;font-size:10px"><hr><span class=font14><b>Venta Paciente:</b></span></ol><script>
+document.getElementById("factura_tabla1_2").style.display="none";
+</script>
+
+</div></td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td colspan=4 style="background-color:#C0C0C0">&nbsp;</td>
+</tr>
+<tr onmouseover="style.cursor='hand';" onclick="javascript:BuscarRecord('0001862');">
+<td width="30px" align=center><font size=3 face-arial>&nbsp;3&nbsp;</font></td>
+<td style="width:250px" valign=top class=font10 nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=plan1&id=1373&record=0001862&path=32796c7677647168773234363a363267647732676c6a6c67726632333333343b393532736f6471687634" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0>
+<div style="margin-top:10px;padding:5px"><b>Plan 1: </b>MCS<br><b>N&uacute;m. Contrato:</b> 23413203300<p></div></td><td style="width:250px" valign=top align=center nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=licencia&id=1373&record=0001862&path=32796c7677647168773234363a363267647732676c6a6c67726632333333343b3935326f6c666871666c6476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0><p>
+<img border=0 src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=firma&id=1373&record=0001862&path=32796c7677647168773234363a363267647732676c6a6c67726632333333343b393532696c75706476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" style="width:150px;border-bottom:1px solid #000000;margin-bottom:3px"><br>Firma Del Paciente
+</td>
+<td style="width:250px;padding:5px" valign=top>
+<table border=0 style="width:100%"><tr>
+<td width="100%">
+<font face="Verdana" size=4>KEISHLA N VIDAL DIAZ</font><br>
+<font face="Verdana" size=2>Record: 0001862</font><br>
+<font face="Verdana" size=2>DOB: Enero/5/2000</font><br>
+<font size="1" face="Arial" color="#666666">HC-02 BOX 8015
+ CIALES PR 00638<br><font size=2 color=#660000 face=arial>DRA. BRENDA CUBERO</font></font>
+<br>
+<font face="Arial" size="2">MCS<br></font><hr><div style="margin-top:5px" class=font10><b>SERVICIOS OPTOMETRICOS: (Abril/28/2026)</b><p><b>DIAGN&Oacute;STICOS:</b><br><b>A</b>. H52.13 - Myopia, bilateral<br><b>B.</b> H52.223 - Regular astigmatism, bilateral<br><b>J.</b> .<br><hr><b>PROCEDIMIENTOS:</b><br>1. 92015 - Refraction <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'></span><br>2. 92012 - Ophthalmological Services: Intermediate, Establish <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'></span><br></div><div style="float:right;text-align:right"></div><div  style="clear:both"></div><div id="factura_tabla1_3" style="font-family:arial;font-size:10px"><hr><span class=font14><b>Venta Paciente:</b></span> <span class=font12>&num;0003950</span><div style='margin-bottom:3px;'>Abril 28, 2026</div><ol><li>EXAMEN REGULAR   <span style='color:green'>(32.00)</span></li></ol><b>SubTotal</b>: $32.00 | <b>Ajustes</b>: $0.00<br><span style='font-size:12px'><b>Total: $32.00</b></span><br><b>Dep&oacute;sito</b>: $32.00 (efectivo)<br><b>Balance</b>: $0.00</div>
+</div></td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td colspan=4 style="background-color:#C0C0C0">&nbsp;</td>
+</tr>
+<tr onmouseover="style.cursor='hand';" onclick="javascript:BuscarRecord('0004423');">
+<td width="30px" align=center><font size=3 face-arial>&nbsp;4&nbsp;</font></td>
+<td style="width:250px" valign=top class=font10 nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=plan1&id=1373&record=0004423&path=32796c7677647168773234363a363267647732676c6a6c677266323333333737353632736f6471687634" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0>
+<div style="margin-top:10px;padding:5px"><b>Plan 1: </b>MMM<br><b>N&uacute;m. Contrato:</b> 030416518<p></div></td><td style="width:250px" valign=top align=center nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=licencia&id=1373&record=0004423&path=32796c7677647168773234363a363267647732676c6a6c6772663233333337373536326f6c666871666c6476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0><p>
+<img border=0 src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=firma&id=1373&record=0004423&path=32796c7677647168773234363a363267647732676c6a6c677266323333333737353632696c75706476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" style="width:150px;border-bottom:1px solid #000000;margin-bottom:3px"><br>Firma Del Paciente
+</td>
+<td style="width:250px;padding:5px" valign=top>
+<table border=0 style="width:100%"><tr>
+<td width="100%">
+<font face="Verdana" size=4>ROBERTO  CORDERO MONTALVO</font><br>
+<font face="Verdana" size=2>Record: 0004423</font><br>
+<font face="Verdana" size=2>DOB: Febrero/12/1953</font><br>
+<font size="1" face="Arial" color="#666666">BO ESPERANZA 321 CALLE
+CIENAGUETA ARECIBO PR 00612<br><font size=2 color=#660000 face=arial>DRA. BRENDA CUBERO</font></font>
+<br>
+<font face="Arial" size="2">MMM<br></font><hr><div style="margin-top:5px" class=font10><b>SERVICIOS OPTOMETRICOS: (Abril/28/2026)</b><p><b>DIAGN&Oacute;STICOS:</b><br><b>A</b>. H52.03 - Hypermetropia, bilateral<br><b>B.</b> H52.4 - Presbyopia<br><b>C.</b> Z96.1 - Presence of intraocular lens<br><b>D.</b> H25.813 - Combined forms of age-related cataract, bilateral<br><b>J.</b> .<br><hr><b>PROCEDIMIENTOS:</b><br>1. 92015 - Refraction <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'>Pointer: ABC </span><br>2. 92012 - Ophthalmological Services: Intermediate, Establish <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'></span><br></div><div style="float:right;text-align:right"></div><div  style="clear:both"></div><hr><div style="margin-top:5px" class=font10><b>CODIGOS DE MATERIALES: (Abril/28/2026)</b><br>1. V2020 - Frame <br>2. V2200 - ESFERICO ( PL- ± 4.00) RT/LT <br>3. V2744 - FOTOCROMATICO <br><div style="margin-top:10px;"></div><div><p><b>Plan 1: </b>MMM&nbsp;(Cubierta: $500.00)</div><div id="factura_tabla1_4" style="font-family:arial;font-size:10px"><hr><span class=font14><b>Venta Paciente:</b></span> <span class=font12>&num;0003954</span><div style='margin-bottom:3px;'>Abril 28, 2026</div><ol><li>MODERN ADJOURN BROWN <span style='color:green'>(60.00)</span></li><li>FT-28   <span style='color:green'>(195.00)</span></li><li>FT-28   <span style='color:green'>(195.00)</span></li><li>TRANSITION   <span style='color:green'>(90.00)</span></li></ol><b>SubTotal</b>: $540.00 | <b>Ajustes</b>: $0.00<br><span style='font-size:12px'><b>Total: $540.00</b></span><br><b>Dep&oacute;sito</b>: $0.00 (efectivo)<br><b>Balance</b>: $540.00</div>
+</div></td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td colspan=4 style="background-color:#C0C0C0">&nbsp;</td>
+</tr>
+<tr onmouseover="style.cursor='hand';" onclick="javascript:BuscarRecord('0024107');">
+<td width="30px" align=center><font size=3 face-arial>&nbsp;5&nbsp;</font></td>
+<td style="width:250px" valign=top class=font10 nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=plan1&id=1373&record=0024107&path=32796c7677647168773234363a363267647732676c6a6c677266323333353734333a32736f6471687634" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0>
+<div style="margin-top:10px;padding:5px"><b>Plan 1: </b>MCS<br><b>N&uacute;m. Contrato:</b> 234045100300<p></div></td><td style="width:250px" valign=top align=center nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=licencia&id=1373&record=0024107&path=32796c7677647168773234363a363267647732676c6a6c677266323333353734333a326f6c666871666c6476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0><p>
+<img border=0 src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=firma&id=1373&record=0024107&path=32796c7677647168773234363a363267647732676c6a6c677266323333353734333a32696c75706476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" style="width:150px;border-bottom:1px solid #000000;margin-bottom:3px"><br>Firma Del Paciente
+</td>
+<td style="width:250px;padding:5px" valign=top>
+<table border=0 style="width:100%"><tr>
+<td width="100%">
+<font face="Verdana" size=4>MIRIAM  SEPULVEDA GONZALEZ</font><br>
+<font face="Verdana" size=2>Record: 0024107</font><br>
+<font face="Verdana" size=2>DOB: Noviembre/5/1966</font><br>
+<font size="1" face="Arial" color="#666666">HC 01 2000
+ JAYUYA PR 00664<br><font size=2 color=#660000 face=arial>DRA. BRENDA CUBERO</font></font>
+<br>
+<font face="Arial" size="2">MCS<br></font><hr><div style="margin-top:5px" class=font10><b>SERVICIOS OPTOMETRICOS: (Abril/28/2026)</b><p><b>DIAGN&Oacute;STICOS:</b><br><b>A</b>. H52.03 - Hypermetropia, bilateral<br><b>B.</b> H52.223 - Regular astigmatism, bilateral<br><b>C.</b> H52.4 - Presbyopia<br><b>D.</b> H25.13 - Age-related nuclear cataract, bilateral<br><b>J.</b> .<br><hr><b>PROCEDIMIENTOS:</b><br>1. 92015 - Refraction <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'>Pointer: ABC</span><br>2. 92012 - Ophthalmological Services: Intermediate, Establish <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'>Pointer: D</span><br></div><div style="float:right;text-align:right"></div><div  style="clear:both"></div><div id="factura_tabla1_5" style="font-family:arial;font-size:10px"><hr><span class=font14><b>Venta Paciente:</b></span> <span class=font12>&num;0003951</span><div style='margin-bottom:3px;'>Abril 28, 2026</div><ol><li>DEDUCIBLE EXAMEN VISUAL  <span style='color:green'>(30.50)</span></li></ol><b>SubTotal</b>: $30.50 | <b>Ajustes</b>: $0.00<br><span style='font-size:12px'><b>Total: $30.50</b></span><br><b>Dep&oacute;sito</b>: $30.50 (efectivo)<br><b>Balance</b>: $0.00</div>
+</div></td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td colspan=4 style="background-color:#C0C0C0">&nbsp;</td>
+</tr>
+<tr onmouseover="style.cursor='hand';" onclick="javascript:BuscarRecord('0026698');">
+<td width="30px" align=center><font size=3 face-arial>&nbsp;6&nbsp;</font></td>
+<td style="width:250px" valign=top class=font10 nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=plan1&id=1373&record=0026698&path=32796c7677647168773234363a363267647732676c6a6c6772663233333539393c3b32736f6471687634" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0>
+<div style="margin-top:10px;padding:5px"><p></div></td><td style="width:250px" valign=top align=center nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=licencia&id=1373&record=0026698&path=32796c7677647168773234363a363267647732676c6a6c6772663233333539393c3b326f6c666871666c6476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0><p>
+<img border=0 src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=firma&id=1373&record=0026698&path=32796c7677647168773234363a363267647732676c6a6c6772663233333539393c3b32696c75706476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" style="width:150px;border-bottom:1px solid #000000;margin-bottom:3px"><br>Firma Del Paciente
+</td>
+<td style="width:250px;padding:5px" valign=top>
+<table border=0 style="width:100%"><tr>
+<td width="100%">
+<font face="Verdana" size=4>GAMALIER  RIVERA SANTOS</font><br>
+<font face="Verdana" size=2>Record: 0026698</font><br>
+<font face="Verdana" size=2>DOB: Febrero/17/2004</font><br>
+<font size="1" face="Arial" color="#666666">BDA POLVORIN # 179  MANATí P.R 00674<br><font size=2 color=#660000 face=arial>DRA. BRENDA CUBERO</font></font>
+<br>
+<font face="Arial" size="2"><br></font><hr><div style="margin-top:5px" class=font10><b>SERVICIOS OPTOMETRICOS: (Abril/28/2026)</b><p><b>DIAGN&Oacute;STICOS:</b><br><b>A</b>. H52.13 - Myopia, bilateral<br><b>J.</b> .<br><hr><b>PROCEDIMIENTOS:</b><br>1. 92015 - Refraction <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'>Pointer: A</span><br>2. 92002 - Eye Exam : New Patient Intermediate <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'></span><br></div><div style="float:right;text-align:right"></div><div  style="clear:both"></div><div id="factura_tabla1_6" style="font-family:arial;font-size:10px"><hr><span class=font14><b>Venta Paciente:</b></span> <span class=font12>&num;0003953</span><div style='margin-bottom:3px;'>Abril 28, 2026</div><ol><li>EXAMEN REGULAR   <span style='color:green'>(50.00)</span></li><li>RAY BAN 6489 2501 <span style='color:green'>(239.00)</span></li><li>VISION SENCILLA   <span style='color:green'>(140.00)</span></li><li>POLICARBONATO   <span style='color:green'>(50.00)</span></li></ol><b>SubTotal</b>: $429.00 | <b>Ajustes</b>: $55.00<br><span style='font-size:12px'><b>Total: $374.00</b></span><br><b>Dep&oacute;sito</b>: $100.00 (efectivo)<br><b>Balance</b>: $274.00</div>
+</div></td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td colspan=4 style="background-color:#C0C0C0">&nbsp;</td>
+</tr>
+<tr onmouseover="style.cursor='hand';" onclick="javascript:BuscarRecord('0026699');">
+<td width="30px" align=center><font size=3 face-arial>&nbsp;7&nbsp;</font></td>
+<td style="width:250px" valign=top class=font10 nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=plan1&id=1373&record=0026699&path=32796c7677647168773234363a363267647732676c6a6c6772663233333539393c3c32736f6471687634" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0>
+<div style="margin-top:10px;padding:5px"><b>Plan 1: </b>MMM VITAL<br><b>N&uacute;m. Contrato:</b> 0080022187511<p></div></td><td style="width:250px" valign=top align=center nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=licencia&id=1373&record=0026699&path=32796c7677647168773234363a363267647732676c6a6c6772663233333539393c3c326f6c666871666c6476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0><p>
+<img border=0 src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=firma&id=1373&record=0026699&path=32796c7677647168773234363a363267647732676c6a6c6772663233333539393c3c32696c75706476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" style="width:150px;border-bottom:1px solid #000000;margin-bottom:3px"><br>Firma Del Paciente
+</td>
+<td style="width:250px;padding:5px" valign=top>
+<table border=0 style="width:100%"><tr>
+<td width="100%">
+<font face="Verdana" size=4>GUILLERMO X SANTIAGO RODRIGUEZ</font><br>
+<font face="Verdana" size=2>Record: 0026699</font><br>
+<font face="Verdana" size=2>DOB: Febrero/1/2008</font><br>
+<font size="1" face="Arial" color="#666666">RR 2 BOX 6725  MANATí P.R 00674<br><font size=2 color=#660000 face=arial>DRA. BRENDA CUBERO</font></font>
+<br>
+<font face="Arial" size="2">MMM VITAL<br></font><hr><div style="margin-top:5px" class=font10><b>SERVICIOS OPTOMETRICOS: (Abril/28/2026)</b><p><b>DIAGN&Oacute;STICOS:</b><br><b>A</b>. H52.223 - Regular astigmatism, bilateral<br><b>J.</b> .<br><hr><b>PROCEDIMIENTOS:</b><br>1. 92015 - Refraction <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'></span><br>2. 92002 - Eye Exam : New Patient Intermediate <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'></span><br></div><div style="float:right;text-align:right"></div><div  style="clear:both"></div><div id="factura_tabla1_7" style="font-family:arial;font-size:10px"><hr><span class=font14><b>Venta Paciente:</b></span> <span class=font12>&num;0003958</span><div style='margin-bottom:3px;'>Abril 28, 2026</div><ol><li>EXAMEN REGULAR   <span style='color:green'>(0.00)</span></li><li>MODERN TIMES KNOWLEDGE  <span style='color:green'>(60.00)</span></li><li>VISION SENCILLA   <span style='color:green'>(200.00)</span></li></ol><b>SubTotal</b>: $260.00 | <b>Ajustes</b>: $0.00<br><span style='font-size:12px'><b>Total: $260.00</b></span><br><b>Dep&oacute;sito</b>: $60.00 (efectivo)<br><b>Balance</b>: $200.00</div>
+</div></td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td colspan=4 style="background-color:#C0C0C0">&nbsp;</td>
+</tr>
+<tr onmouseover="style.cursor='hand';" onclick="javascript:BuscarRecord('0023975');">
+<td width="30px" align=center><font size=3 face-arial>&nbsp;8&nbsp;</font></td>
+<td style="width:250px" valign=top class=font10 nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=plan1&id=1373&record=0023975&path=32796c7677647168773234363a363267647732676c6a6c67726632333335363c3a3832736f6471687634" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0>
+<div style="margin-top:10px;padding:5px"><b>Plan 1: </b>FIRST MEDICAL<br><b>N&uacute;m. Contrato:</b> FM 164302701<p></div></td><td style="width:250px" valign=top align=center nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=licencia&id=1373&record=0023975&path=32796c7677647168773234363a363267647732676c6a6c67726632333335363c3a38326f6c666871666c6476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0><p>
+<img border=0 src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=firma&id=1373&record=0023975&path=32796c7677647168773234363a363267647732676c6a6c67726632333335363c3a3832696c75706476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" style="width:150px;border-bottom:1px solid #000000;margin-bottom:3px"><br>Firma Del Paciente
+</td>
+<td style="width:250px;padding:5px" valign=top>
+<table border=0 style="width:100%"><tr>
+<td width="100%">
+<font face="Verdana" size=4>JUAN  CORDOVA FIGUEROA</font><br>
+<font face="Verdana" size=2>Record: 0023975</font><br>
+<font face="Verdana" size=2>DOB: Septiembre/21/1974</font><br>
+<font size="1" face="Arial" color="#666666">RR 02 BOX 7028
+ MANATí P.R 00674<br><font size=2 color=#660000 face=arial>DRA. BRENDA CUBERO</font></font>
+<br>
+<font face="Arial" size="2">FIRST MEDICAL<br></font><hr><div style="margin-top:5px" class=font10><b>SERVICIOS OPTOMETRICOS: (Abril/28/2026)</b><p><b>DIAGN&Oacute;STICOS:</b><br><b>A</b>. H52.03 - Hypermetropia, bilateral<br><b>B.</b> H52.4 - Presbyopia<br><b>J.</b> .<br><hr><b>PROCEDIMIENTOS:</b><br>1. 92015 - Refraction <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'></span><br>2. 92014 - Ophthalmological Services: Comprehensive, Establis <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'></span><br></div><div style="float:right;text-align:right"></div><div  style="clear:both"></div><hr><div style="margin-top:5px" class=font10><b>CODIGOS DE MATERIALES: (Abril/28/2026)</b><br>1. V2020 - Frame <br><div style="margin-top:10px;"></div><div><p><b>Plan 1: </b>FIRST MEDICAL&nbsp;(Cubierta: $0.00)</div><div id="factura_tabla1_8" style="font-family:arial;font-size:10px"><hr><span class=font14><b>Venta Paciente:</b></span> <span class=font12>&num;0003957</span><div style='margin-bottom:3px;'>Abril 28, 2026</div><ol><li>DEDUCIBLE EXAMEN VISUAL  <span style='color:green'>(10.00)</span></li><li>FT-28 PLAN  <span style='color:green'>(20.00)</span></li><li>I VISION MONTURA  <span style='color:green'>(18.00)</span></li></ol><b>SubTotal</b>: $48.00 | <b>Ajustes</b>: $0.00<br><span style='font-size:12px'><b>Total: $48.00</b></span><br><b>Dep&oacute;sito</b>: $48.00 (efectivo)<br><b>Balance</b>: $0.00</div>
+</div></td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td colspan=4 style="background-color:#C0C0C0">&nbsp;</td>
+</tr>
+<tr onmouseover="style.cursor='hand';" onclick="javascript:BuscarRecord('0000532');">
+<td width="30px" align=center><font size=3 face-arial>&nbsp;9&nbsp;</font></td>
+<td style="width:250px" valign=top class=font10 nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=plan1&id=1373&record=0000532&path=32796c7677647168773234363a363267647732676c6a6c677266323333333338363532736f6471687634" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0>
+<div style="margin-top:10px;padding:5px"><b>Plan 1: </b>FIRST MEDICAL<br><b>N&uacute;m. Contrato:</b> FM150682801<p></div></td><td style="width:250px" valign=top align=center nowrap>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=licencia&id=1373&record=0000532&path=32796c7677647168773234363a363267647732676c6a6c6772663233333333383635326f6c666871666c6476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0><p>
+<img border=0 src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=firma&id=1373&record=0000532&path=32796c7677647168773234363a363267647732676c6a6c677266323333333338363532696c75706476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" style="width:150px;border-bottom:1px solid #000000;margin-bottom:3px"><br>Firma Del Paciente
+</td>
+<td style="width:250px;padding:5px" valign=top>
+<table border=0 style="width:100%"><tr>
+<td width="100%">
+<font face="Verdana" size=4>GERALIZ  RIOS GALARZA</font><br>
+<font face="Verdana" size=2>Record: 0000532</font><br>
+<font face="Verdana" size=2>DOB: Noviembre/13/1987</font><br>
+<font size="1" face="Arial" color="#666666">30 BO LLANADAS
+ BARCELONETA PR 00617<br><font size=2 color=#660000 face=arial>DRA. BRENDA CUBERO</font></font>
+<br>
+<font face="Arial" size="2">FIRST MEDICAL<br></font><hr><div style="margin-top:5px" class=font10><b>SERVICIOS OPTOMETRICOS: (Abril/28/2026)</b><p><b>DIAGN&Oacute;STICOS:</b><br><b>A</b>. H52.13 - Myopia, bilateral<br><b>B.</b> H52.222 - Regular astigmatism, left eye<br><b>J.</b> .<br><hr><b>PROCEDIMIENTOS:</b><br>1. 92015 - Refraction <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'></span><br>2. 92014 - Ophthalmological Services: Comprehensive, Establis <br>&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#8b8b8b'></span><br></div><div style="float:right;text-align:right"></div><div  style="clear:both"></div><hr><div style="margin-top:5px" class=font10><b>CODIGOS DE MATERIALES: (Abril/28/2026)</b><br>1. V2020 - Frame <br><div style="margin-top:10px;"></div><div><p><b>Plan 1: </b>FIRST MEDICAL VITAL&nbsp;(Cubierta: $0.00)</div><div id="factura_tabla1_9" style="font-family:arial;font-size:10px"><hr><span class=font14><b>Venta Paciente:</b></span> <span class=font12>&num;0003959</span><div style='margin-bottom:3px;'>Abril 28, 2026</div><ol><li>I VISION MONTURA  <span style='color:green'>(18.00)</span></li><li>I VISION LENTE  <span style='color:green'>(18.00)</span></li><li>DEDUCIBLE EXAMEN VISUAL  <span style='color:green'>(10.00)</span></li></ol><b>SubTotal</b>: $46.00 | <b>Ajustes</b>: $0.00<br><span style='font-size:12px'><b>Total: $46.00</b></span><br><b>Dep&oacute;sito</b>: $46.00 (efectivo)<br><b>Balance</b>: $0.00</div>
+</div></td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td colspan=4 style="background-color:#C0C0C0">&nbsp;</td>
+</tr>
+
+</table>
+<script>
+var suma_total1 = "$2,330.50";
+document.getElementById("suma_total1").innerHTML = "";
+if(suma_total1 != "$0.00") {
+document.getElementById("suma_total1").innerHTML = "Total Venta: $2,330.50";
+} 
+</script>
+&nbsp;
+<hr>
+<div id="tabla_cpt_ventas" style="display:">
+<P style="page-break-before: always">
+<div style="font-family:verdana,arial;font-size:18px"><b>PACIENTES SIN EXAMEN VISUAL</b></div>
+<div style="margin-bottom:5px;font-family:arial;font-size:14px;float:left">Solo Pacientes con Recetas de Afuera o que fueron<br>examinados en una fecha diferente a la compra de materiales.<br><span style="font-size:12px;color:#6d6c6f">(Solo muestra Pacientes con C&oacute;digos de Materiales Registrados en la Venta.).</span></div>
+<div id="suma_total2" style="font-family:arial;font-size:20px;float:right;color:398d2e"></div>
+<table border="1" width="100%" id="table1" style="border-collapse: collapse" bordercolor="#333333">
+<tr>
+<td align=center style="width:15px" bgcolor="#C0C0C0">&nbsp;</td>
+<td align=center bgcolor="#C0C0C0" style="width:230px;" class=font14 nowrap><b>Plan 1</b></td>
+<td align=center bgcolor="#C0C0C0" style="width:230px" class=font14 nowrap><b>ID Foto / Licencia</b></td>
+<td align=center bgcolor="#C0C0C0" style="width:100%" class=font14><b>Informaci&oacute;n General / Facturaci&oacute;n</b></td>
+</tr><!-- 0018259~Abril/28/2026 -->
+<tr onmouseover="style.cursor='hand';" onclick="javascript:BuscarRecord('0018259');">
+<td width="30px" align=center><font size=3 face-arial>&nbsp;1&nbsp;</font></td>
+<td style="width:250px" valign=top class=font10>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=plan1&id=1373&record=0018259&path=32796c7677647168773234363a363267647732676c6a6c677266323333343b35383c32736f6471687634" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0>
+<div style="margin-top:10px;padding:5px"><b>Plan 1: </b>MMM<p></div></td><td style="width:250px" valign=top align=center>
+<img src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=licencia&id=1373&record=0018259&path=32796c7677647168773234363a363267647732676c6a6c677266323333343b35383c326f6c666871666c6476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" width="230px" height="140px" border=0><p>
+<img border=0 src="https://docuserver.vistanet.cloud/getimage.php?tokendoc=MTc3NzQyOTM1MHxmOWY4YmQ4MTE2YTYxZDA5ZGYzZTM5MTdiMjA5ZTFkY3wxNDM4NWNhNTc5ZjQxYjM5ZWQ2N2JkNTA3NDUyZGYyNA%3D%3D&view=dir&doc=firma&id=1373&record=0018259&path=32796c7677647168773234363a363267647732676c6a6c677266323333343b35383c32696c75706476" onError="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQABzQJk9XwAAAAASUVORK5CYII='" style="width:150px;border-bottom:1px solid #000000;margin-bottom:3px"><br>Firma Del Paciente
+</td>
+<td style="width:250px;padding:5px" valign=top>
+<table border=0 style="width:100%"><tr>
+<td width="100%">
+<font face="Verdana" size=4>JOSE M ANDINO CRUZ</font><br>
+<font face="Verdana" size=2>Record: 0018259</font><br>
+<font face="Verdana" size=2>DOB: Septiembre/12/1955</font><br>
+<font size="1" face="Arial" color="#666666">HC-1 BOX 5495
+ CIALES PR 00652</font>
+<hr><div style="margin-top:5px" class=font10><b>CODIGOS DE MATERIALES: (Abril/28/2026)</b><br>1. V2303 - ESFERICO(PL- ±4.00)/CYL(0.25- 2.00)RT/LT <br><div style="margin-top:10px;"></div><div><p><b>Plan 1: </b>MMM&nbsp;($400.00)</div><div id="factura_tabla2_1" style="font-family:arial;font-size:10px"><hr><span class=font14><b>Venta Paciente:</b></span> <span class=font12>&num;0003949</span><div style='margin-bottom:3px;'>Abril 28, 2026</div><ol><li>TRIFOCAL   <span style='color:green'>(200.00)</span></li><li>PROGRESIVO STANDARD CR-39  <span style='color:green'>(110.00)</span></li><li>TRANSITION   <span style='color:green'>(90.00)</span></li></ol><b>SubTotal</b>: $400.00 | <b>Ajustes</b>: $0.00<br><span style='font-size:12px'><b>Total: $400.00</b></span> | <b>Dep&oacute;sito</b>: $0.00 (efectivo)<br><b>Balance</b>: $400.00</div></div></td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td colspan=4 style="background-color:#C0C0C0">&nbsp;</td>
+</tr></table></div>
+<script>
+var suma_total2 = "$400.00";
+if(suma_total2 != "$0.00") {
+document.getElementById("suma_total2").innerHTML = "Total Venta: $400.00";
+}
+</script>
+<input type="hidden" name="tabla_cpt_ventas" value="SI_MOSTRAR"></form>
+<iframe width=132 height=142 name="gToday:contrast:agenda.js" id="gToday:contrast:agenda.js" src="/cal/range/ipopeng.htm" scrolling="no" frameborder="0" style="visibility:visible; z-index:999; position:absolute; top:-500px;">
+</body>
+</html>

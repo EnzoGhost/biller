@@ -154,10 +154,11 @@ class VistaNetSession:
         resp = self.session.post(
             f"{VISTANET_BASE_URL}/cgi-bin/bitacora_planesmedicos_facturacion.pl?Display",
             data={
-                "fecha_desde": date_from,
-                "fecha_hasta": date_to,
-                "plan_medico": "",
-                "doctor": "",
+                "fecha1": date_from,
+                "fecha2": date_to,
+                "plan": "",
+                "signature": "",
+                "record": "",
             },
             timeout=REQUEST_TIMEOUT,
             allow_redirects=True,
@@ -228,11 +229,12 @@ def extract_patient_from_row(row) -> Optional[dict]:
     record_id = record_match.group(1)
 
     tds = row.find_all("td", recursive=False)
-    if len(tds) < 3:
+    if len(tds) < 4:
         return None
 
-    col1 = tds[0]  # Insurance card + plan info
-    col3 = tds[2]  # Main data: demographics, diagnoses, procedures, materials
+    col1 = tds[1]  # Insurance card + plan info
+    col3 = tds[3]  # Main data: demographics, diagnoses, procedures, materials
+    # Note: tds[0]=row#, tds[1]=ins card, tds[2]=license/signature, tds[3]=demographics+billing
 
     # Get the full text/html of col3 for parsing
     col3_html = str(col3)
