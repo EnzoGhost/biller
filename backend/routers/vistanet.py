@@ -364,18 +364,59 @@ def extract_patient_from_row(row) -> Optional[dict]:
                 "line": int(line_num),
                 "code": code.strip(),
                 "description": re.sub(r"<[^>]+>", "", desc).strip(),
+                "charge_amount": 0.0,
             })
 
     # ── Sale / Financial Info ──
+    # Parse individual sale line items: <li>ITEM NAME <span style='color:green'>(XX.XX)</span></li>
+    sale_items = []
+    sale_match = re.search(r"Venta Paciente:.*?<ol>(.*?)</ol>", col3_html, re.DOTALL | re.IGNORECASE)
+    if sale_match:
+        sale_block = sale_match.group(1)
+        li_items = re.findall(
+            r"<li>(.+?)</li>",
+            sale_block,
+            re.DOTALL | re.IGNORECASE,
+        )
+        for li_text in li_items:
+            # Extract item name and amount from "ITEM NAME  <span style='color:green'>(XX.XX)</span>"
+            clean_text = re.sub(r"<[^>]+>", "", li_text).strip()
+            amount_match = re.search(r"\(([\d,.]+)\)", clean_text)
+            amount = float(amount_match.group(1).replace(",", "")) if amount_match else 0.0
+            item_name = re.sub(r"\s*\([\d,.]+\)\s*$", "", clean_text).strip()
+            sale_items.append({"name": item_name, "amount": amount})
+
     sale_total = 0.0
     total_match = re.search(r"Total:\s*\$([\d,.]+)", col3_text)
     if total_match:
         sale_total = float(total_match.group(1).replace(",", ""))
 
+    # Cross-reference sale items with materials to assign amounts
+    # Try to match sale item names to material descriptions
+    for mat in materials:
+        mat_desc_lower = mat["description"].lower()
+        for sale_item in sale_items:
+            sale_name_lower = sale_item["name"].lower()
+            # Match if sale item name contains key words from material description or vice versa
+            if (mat_desc_lower in sale_name_lower or sale_name_lower in mat_desc_lower
+                    or _fuzzy_material_match(mat_desc_lower, sale_name_lower)):
+                mat["charge_amount"] = sale_item["amount"]
+                break
+
+    # If no cross-reference worked but we have sale_total and materials,
+    # distribute the total evenly as a fallback
+    materials_with_amounts = [m for m in materials if m["charge_amount"] > 0]
+    if not materials_with_amounts and materials and sale_total > 0:
+        per_material = round(sale_total / len(materials), 2)
+        for mat in materials:
+            mat["charge_amount"] = per_material
+
     # Determine section (exam vs no-exam)
     has_exam = bool(diagnoses) or bool(procedures)
 
+    # Store sale_items for reference
     return {
+        "sale_items": sale_items,
         "record_id": record_id,
         "record_num": record_num,
         "patient_name": patient_name,
@@ -390,6 +431,24 @@ def extract_patient_from_row(row) -> Optional[dict]:
         "sale_total": sale_total,
         "has_exam": has_exam,
     }
+
+
+def _fuzzy_material_match(mat_desc: str, sale_name: str) -> bool:
+    """Fuzzy match between material description and sale item name."""
+    # Common mappings between V-code descriptions and sale item names
+    mappings = {
+        "frame": ["montura", "frame", "oakley", "ray ban", "modern"],
+        "esferico": ["vision sencilla", "ft-28", "progresivo", "trifocal"],
+        "policarbonato": ["policarbonato"],
+        "fotocromatico": ["transition", "fotocromatico"],
+        "lente": ["lente", "vision sencilla", "ft-28", "progresivo"],
+    }
+    for key, aliases in mappings.items():
+        if key in mat_desc:
+            for alias in aliases:
+                if alias in sale_name:
+                    return True
+    return False
 
 
 # ── Claim Creation ───────────────────────────────────────────────────────────
@@ -506,7 +565,7 @@ async def create_claim_from_parsed(
     # Build diagnosis codes list
     diagnosis_codes = [d["code"] for d in parsed["diagnoses"]]
 
-    # Calculate total from sale or sum of procedures
+    # Calculate total from sale total
     total_billed = parsed["sale_total"] if parsed["sale_total"] > 0 else 0.0
 
     claim = Claim(
@@ -527,6 +586,17 @@ async def create_claim_from_parsed(
 
     # Create service lines for procedures
     line_number = 1
+    num_procedures = len(parsed["procedures"])
+
+    # Try to figure out billed amounts for procedures from sale items
+    # Look for exam-related sale items (e.g. "DEDUCIBLE EXAMEN VISUAL", "EXAMEN REGULAR")
+    sale_items = parsed.get("sale_items", [])
+    exam_amount = 0.0
+    for si in sale_items:
+        name_lower = si["name"].lower()
+        if any(kw in name_lower for kw in ["examen", "deducible", "exam"]):
+            exam_amount += si["amount"]
+
     for proc in parsed["procedures"]:
         # Convert letter pointers to numeric (A=1, B=2, etc.)
         numeric_pointers = [
@@ -534,13 +604,21 @@ async def create_claim_from_parsed(
             for p in proc.get("diagnosis_pointers", [])
             if p.isalpha()
         ]
+
+        # If no pointers were parsed for this procedure, default to first diagnosis
+        if not numeric_pointers and diagnosis_codes:
+            numeric_pointers = [1]
+
+        # Distribute exam amount across procedures if available
+        proc_amount = round(exam_amount / num_procedures, 2) if exam_amount > 0 and num_procedures > 0 else 0.0
+
         sl = ServiceLine(
             claim_id=claim.id,
             line_number=line_number,
             cpt_code=proc["code"],
             description=proc["description"],
             service_date=parsed["service_date"],
-            billed_amount=0.0,  # No individual line amounts in bitácora
+            billed_amount=proc_amount,
             diagnosis_pointers=numeric_pointers,
             units=1,
         )
@@ -549,14 +627,20 @@ async def create_claim_from_parsed(
 
     # Create service lines for materials (HCPCS V-codes)
     for mat in parsed["materials"]:
+        # Use the cross-referenced charge_amount from sale items
+        mat_amount = mat.get("charge_amount", 0.0)
+
+        # For materials, default pointers to first diagnosis if available
+        mat_pointers = [1] if diagnosis_codes else []
+
         sl = ServiceLine(
             claim_id=claim.id,
             line_number=line_number,
             cpt_code=mat["code"],
             description=mat["description"],
             service_date=parsed["service_date"],
-            billed_amount=0.0,
-            diagnosis_pointers=[],
+            billed_amount=mat_amount,
+            diagnosis_pointers=mat_pointers,
             units=1,
         )
         db.add(sl)

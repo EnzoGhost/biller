@@ -278,12 +278,12 @@
     "show_inactive": "Mostrar inactivos"
   },
   "stedi": {
-    "submit_stedi": "Someter a Stedi",
+    "submit_stedi": "Someter a Clearinghouse",
     "submitting": "Sometiendo...",
-    "submit_success": "Reclamación sometida a Stedi",
+    "submit_success": "Reclamación sometida a clearinghouse",
     "check_status": "Verificar Estado",
     "status_refreshed": "Estado actualizado",
-    "transaction_info": "Transacción Stedi",
+    "transaction_info": "Info de Transacción",
     "transaction_id": "ID de Transacción",
     "payer_claim_number": "# Reclamación Pagador",
     "submitted_on": "Sometida",
@@ -644,7 +644,7 @@
   },
   "submit_section": {
     "title": "Someter Reclamación",
-    "via_stedi": "Someter a Stedi",
+    "via_stedi": "Someter a Clearinghouse",
     "via_inmediata": "Generar EDI → Subir",
     "via_envolve": "Someter a Envolve",
     "via_envolve_vision": "Someter a Envolve (Visión)",
@@ -659,5 +659,13 @@
     "sign_in": "Iniciar Sesión",
     "signing_in": "Iniciando sesión...",
     "invalid_credentials": "Credenciales inválidas"
+  },
+  "scrub": {
+    "no_diagnosis": "No hay códigos de diagnóstico",
+    "no_service_lines": "No hay líneas de servicio",
+    "no_dx_pointers": "Línea {{line}} ({{cpt}}): sin punteros de diagnóstico",
+    "invalid_billed_amount": "Línea {{line}}: monto facturado inválido",
+    "lt_rt_conflict": "Línea {{line}}: no se pueden usar -LT y -RT juntos",
+    "mod50_conflict": "Línea {{line}}: modificador -50 no debe combinarse con -LT/-RT"
   }
 }

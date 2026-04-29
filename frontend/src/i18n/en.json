@@ -278,12 +278,12 @@
     "show_inactive": "Show inactive"
   },
   "stedi": {
-    "submit_stedi": "Submit to Stedi",
+    "submit_stedi": "Submit to Clearinghouse",
     "submitting": "Submitting...",
-    "submit_success": "Claim submitted to Stedi",
+    "submit_success": "Claim submitted to clearinghouse",
     "check_status": "Check Status",
     "status_refreshed": "Status updated",
-    "transaction_info": "Stedi Transaction",
+    "transaction_info": "Transaction Info",
     "transaction_id": "Transaction ID",
     "payer_claim_number": "Payer Claim #",
     "submitted_on": "Submitted",
@@ -649,7 +649,7 @@
   },
   "submit_section": {
     "title": "Submit Claim",
-    "via_stedi": "Submit to Stedi",
+    "via_stedi": "Submit to Clearinghouse",
     "via_inmediata": "Generate EDI → Upload",
     "via_envolve": "Submit to Envolve",
     "via_envolve_vision": "Submit to Envolve (Vision)",
@@ -664,5 +664,13 @@
     "sign_in": "Sign In",
     "signing_in": "Signing in...",
     "invalid_credentials": "Invalid credentials"
+  },
+  "scrub": {
+    "no_diagnosis": "No diagnosis codes",
+    "no_service_lines": "No service lines",
+    "no_dx_pointers": "Line {{line}} ({{cpt}}): no diagnosis pointers",
+    "invalid_billed_amount": "Line {{line}}: invalid billed amount",
+    "lt_rt_conflict": "Line {{line}}: cannot use -LT and -RT together",
+    "mod50_conflict": "Line {{line}}: modifier -50 should not combine with -LT/-RT"
   }
 }

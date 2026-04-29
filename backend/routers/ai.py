@@ -69,31 +69,39 @@ async def scrub_claim(
 
     # Rule-based checks (always run, no API key needed)
     if not claim.diagnosis_codes:
-        issues.append({"type": "error", "field": "diagnosis_codes", "msg": "No hay códigos de diagnóstico"})
+        issues.append({"type": "error", "field": "diagnosis_codes", "msg_key": "scrub.no_diagnosis", "msg": "No diagnosis codes"})
     if not claim.service_lines:
-        issues.append({"type": "error", "field": "service_lines", "msg": "No hay líneas de servicio"})
+        issues.append({"type": "error", "field": "service_lines", "msg_key": "scrub.no_service_lines", "msg": "No service lines"})
     for sl in claim.service_lines:
         if not sl.diagnosis_pointers:
             issues.append({
                 "type": "warning", "field": f"line_{sl.line_number}",
-                "msg": f"Línea {sl.line_number} ({sl.cpt_code}): sin punteros de diagnóstico"
+                "msg_key": "scrub.no_dx_pointers",
+                "msg_params": {"line": sl.line_number, "cpt": sl.cpt_code},
+                "msg": f"Line {sl.line_number} ({sl.cpt_code}): no diagnosis pointers"
             })
         if sl.billed_amount <= 0:
             issues.append({
                 "type": "error", "field": f"line_{sl.line_number}",
-                "msg": f"Línea {sl.line_number}: monto facturado inválido"
+                "msg_key": "scrub.invalid_billed_amount",
+                "msg_params": {"line": sl.line_number},
+                "msg": f"Line {sl.line_number}: invalid billed amount"
             })
         # Modifier checks
         mods = [m.strip("-").upper() for m in sl.modifiers]
         if "LT" in mods and "RT" in mods:
             issues.append({
                 "type": "error", "field": f"line_{sl.line_number}",
-                "msg": f"Línea {sl.line_number}: no se pueden usar -LT y -RT juntos"
+                "msg_key": "scrub.lt_rt_conflict",
+                "msg_params": {"line": sl.line_number},
+                "msg": f"Line {sl.line_number}: cannot use -LT and -RT together"
             })
         if "50" in mods and ("LT" in mods or "RT" in mods):
             issues.append({
                 "type": "warning", "field": f"line_{sl.line_number}",
-                "msg": f"Línea {sl.line_number}: modificador -50 no debe combinarse con -LT/-RT"
+                "msg_key": "scrub.mod50_conflict",
+                "msg_params": {"line": sl.line_number},
+                "msg": f"Line {sl.line_number}: modifier -50 should not combine with -LT/-RT"
             })
 
     if not claim.provider_id:

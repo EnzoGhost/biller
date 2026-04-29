@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { CheckCircle, XCircle, Search, AlertCircle, Globe, User } from 'lucide-react';
 import api from '../lib/api';
 import { formatDate } from '../lib/dates';
+import { formatDate } from '../lib/dates';
 import DatePicker from '../components/ui/DatePicker';
 import type { Patient, Payer } from '../types';
 
@@ -189,7 +190,7 @@ export default function EligibilityPage() {
               <User className="w-4 h-4 text-sky-500 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-slate-800">{selectedPatient.first_name} {selectedPatient.last_name}</p>
-                <p className="text-xs text-slate-500">{t('patients.dob')}: {dob} · {t('eligibility.member_id')}: {memberId}</p>
+                <p className="text-xs text-slate-500">{t('patients.dob')}: {formatDate(dob)} · {t('eligibility.member_id')}: {memberId}</p>
               </div>
               <button
                 onClick={() => {
@@ -227,7 +228,7 @@ export default function EligibilityPage() {
                       >
                         <p className="text-sm font-medium text-slate-800">{p.first_name} {p.last_name}</p>
                         <p className="text-xs text-slate-500">
-                          {t('patients.dob')}: {p.dob}
+                          {t('patients.dob')}: {formatDate(p.dob)}
                           {primary && ` · ${primary.payer?.name ?? 'Payer #' + primary.payer_id} · ${primary.member_id}`}
                         </p>
                       </button>
