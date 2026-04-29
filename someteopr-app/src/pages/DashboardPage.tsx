@@ -201,6 +201,7 @@ function ClaimCard({ claim, showAging = false, showDenialReason = false }: {
   showAging?: boolean;
   showDenialReason?: boolean;
 }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (

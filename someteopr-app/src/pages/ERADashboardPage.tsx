@@ -203,7 +203,7 @@ export default function ERADashboardPage() {
               <div className="flex gap-3 text-xs text-slate-500">
                 <span>{file.payer_name}</span>
                 {file.check_number && <span>#{file.check_number}</span>}
-                <span>{file.claim_count} claims</span>
+                <span>{t('era.claims_count', { count: file.claim_count })}</span>
               </div>
             </div>
           ))}
@@ -242,7 +242,7 @@ export default function ERADashboardPage() {
           )}
           {pasteMode && eraContent && (
             <div className="bg-sky-50 border border-sky-200 rounded-lg p-3 mb-3 text-xs text-sky-700">
-              ✓ {eraContent.length} characters ready
+              ✓ {t('era.characters_ready', { count: eraContent.length })}
             </div>
           )}
 
@@ -304,7 +304,7 @@ export default function ERADashboardPage() {
                         {fmt(r.paid_amount)}
                       </span>
                       {r.posted && (
-                        <span className="ml-2 text-xs text-indigo-600 bg-indigo-100 px-1 rounded">posted</span>
+                        <span className="ml-2 text-xs text-indigo-600 bg-indigo-100 px-1 rounded">{t('era.posted_tag')}</span>
                       )}
                     </div>
                   </div>

@@ -313,7 +313,7 @@ export default function NewClaimPage() {
                   <input
                     value={line.description}
                     onChange={e => updateLine(i, { description: e.target.value })}
-                    placeholder="Office visit..."
+                    placeholder={t('claims.office_visit_placeholder')}
                     className={inputClass}
                   />
                 </div>

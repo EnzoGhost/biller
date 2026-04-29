@@ -269,7 +269,7 @@ export default function PatientsPage() {
                         <div>
                           <p className="font-medium text-slate-800 text-xs">{primary.payer?.name ?? `Payer #${primary.payer_id}`}</p>
                           <p className="text-xs text-slate-400 font-mono">{primary.member_id}</p>
-                          {primary.group_number && <p className="text-xs text-slate-400">Grp: {primary.group_number}</p>}
+                          {primary.group_number && <p className="text-xs text-slate-400">{t('patients.group_abbr')}: {primary.group_number}</p>}
                         </div>
                       ) : (
                         <span className="text-slate-300 text-xs">—</span>
