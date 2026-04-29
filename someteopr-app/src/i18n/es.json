@@ -659,5 +659,10 @@
     "sign_in": "Iniciar Sesión",
     "signing_in": "Iniciando sesión...",
     "invalid_credentials": "Credenciales inválidas"
+  },
+  "attention": {
+    "denied_needs_appeal": "Denegada — necesita apelación",
+    "rejected_needs_correction": "Rechazada — necesita corrección",
+    "aging_follow_up": "Envejecimiento {{days}} días — dar seguimiento"
   }
 }

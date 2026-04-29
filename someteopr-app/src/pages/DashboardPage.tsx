@@ -11,6 +11,7 @@ import api from '../lib/api';
 import { formatDateShort } from '../lib/dates';
 import type { ClaimStatus } from '../types';
 import StatusBadge from '../components/ui/Badge';
+import DatePicker from '../components/ui/DatePicker';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,6 +29,7 @@ interface WorkQueueClaim {
   source: string;
   notes: string | null;
   denial_reason?: string;
+  denial_code?: string;
 }
 
 interface WorkQueueData {
@@ -114,23 +116,13 @@ function PullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () 
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   {t('dashboard.date_from')}
                 </label>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none"
-                />
+                <DatePicker value={dateFrom} onChange={setDateFrom} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   {t('dashboard.date_to')}
                 </label>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none"
-                />
+                <DatePicker value={dateTo} onChange={setDateTo} />
               </div>
               {pullMutation.isError && (
                 <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 text-sm text-rose-700">
@@ -235,9 +227,11 @@ function ClaimCard({ claim, showAging = false, showDenialReason = false }: {
               </>
             )}
           </div>
-          {showDenialReason && claim.denial_reason && (
+          {showDenialReason && (claim.denial_reason || claim.denial_code) && (
             <p className="text-xs text-rose-500 mt-0.5 truncate">
-              {claim.denial_reason}
+              {claim.denial_code
+                ? t(`denials.carc_codes.${claim.denial_code}`, { defaultValue: claim.denial_reason || claim.denial_code })
+                : claim.denial_reason}
             </p>
           )}
         </div>

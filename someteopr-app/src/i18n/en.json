@@ -664,5 +664,10 @@
     "sign_in": "Sign In",
     "signing_in": "Signing in...",
     "invalid_credentials": "Invalid credentials"
+  },
+  "attention": {
+    "denied_needs_appeal": "Denied — needs appeal",
+    "rejected_needs_correction": "Rejected — needs correction",
+    "aging_follow_up": "Aging {{days}} days — follow up"
   }
 }

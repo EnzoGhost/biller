@@ -76,9 +76,8 @@ async def get_work_queue(
             .limit(1)
         )
         denial = denial_res.scalar_one_or_none()
-        ac["denial_reason"] = denial.denial_reason if denial else (
-            "Rechazada" if ac["status"] == "rejected" else "Denegada"
-        )
+        ac["denial_reason"] = denial.denial_reason if denial else None
+        ac["denial_code"] = denial.denial_code if denial else None
 
     paid_q = (
         select(Claim)
