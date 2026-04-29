@@ -120,6 +120,7 @@ export interface Claim {
   total_paid: number;
   patient_responsibility: number;
   scrub_score?: number;
+  scrub_issues?: { type: string; field?: string; msg?: string }[];
   denial_risk_score?: number;
   stedi_transaction_id?: string;
   payer_claim_number?: string;

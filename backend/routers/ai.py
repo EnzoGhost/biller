@@ -49,7 +49,7 @@ async def scrub_claim_by_id(
 async def scrub_claim(
     body: ScrubRequest,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),  # type: ignore[assignment]
 ):
     """
     Analyze a claim for common billing errors before submission.

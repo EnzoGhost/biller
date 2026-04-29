@@ -33,6 +33,29 @@ VISTANET_LOCATION = "MANATI"
 VISTANET_ENCODING = "iso-8859-1"
 REQUEST_TIMEOUT = 30
 
+# Default optometry fee schedule (PR market rates)
+# These are typical billed amounts — actual allowed amounts vary by payer
+DEFAULT_FEE_SCHEDULE = {
+    "92002": 125.00,  # Ophthalmological services, new patient, intermediate
+    "92004": 200.00,  # Ophthalmological services, new patient, comprehensive
+    "92012": 100.00,  # Ophthalmological services, established, intermediate
+    "92014": 150.00,  # Ophthalmological services, established, comprehensive
+    "92015": 75.00,   # Refraction
+    "99201": 75.00,   # Office visit, new patient, straightforward
+    "99202": 110.00,  # Office visit, new patient, low
+    "99203": 150.00,  # Office visit, new patient, moderate
+    "99211": 40.00,   # Office visit, established, minimal
+    "99212": 65.00,   # Office visit, established, straightforward
+    "99213": 100.00,  # Office visit, established, low
+    "99214": 150.00,  # Office visit, established, moderate
+    "V2020": 0.00,    # Frame (keep at 0, materials priced from sale)
+    "V2100": 0.00,    # Sphere, single vision
+    "V2200": 0.00,    # Sphere, bifocal
+    "V2300": 0.00,    # Sphere, trifocal
+    "V2410": 0.00,    # Variable asphericity lens
+    "V2799": 0.00,    # Contact lens
+}
+
 MONTHS_ES = {
     "Enero": "01", "Febrero": "02", "Marzo": "03", "Abril": "04",
     "Mayo": "05", "Junio": "06", "Julio": "07", "Agosto": "08",
@@ -691,6 +714,10 @@ async def create_claim_from_parsed(
         # Distribute exam amount across procedures if available
         proc_amount = round(exam_amount / num_procedures, 2) if exam_amount > 0 and num_procedures > 0 else 0.0
 
+        # If amount is still 0, look up fee schedule
+        if proc_amount <= 0:
+            proc_amount = DEFAULT_FEE_SCHEDULE.get(proc["code"], 0.0)
+
         sl = ServiceLine(
             claim_id=claim.id,
             line_number=line_number,
@@ -708,6 +735,10 @@ async def create_claim_from_parsed(
     for mat in parsed["materials"]:
         # Use the cross-referenced charge_amount from sale items
         mat_amount = mat.get("charge_amount", 0.0)
+
+        # If amount is still 0, look up fee schedule (V-codes typically stay 0 unless sale data exists)
+        if mat_amount <= 0:
+            mat_amount = DEFAULT_FEE_SCHEDULE.get(mat["code"], 0.0)
 
         # For materials, default pointers to first diagnosis if available
         mat_pointers = [1] if diagnosis_codes else []
@@ -789,6 +820,7 @@ async def pull_bitacora(
 
     # Step 5: Create claims
     claims_created = 0
+    _new_claims: list[Claim] = []  # track for auto-scrub
     for parsed in parsed_patients:
         try:
             # Skip patients with no name
@@ -832,6 +864,7 @@ async def pull_bitacora(
 
             # Create claim
             claim = await create_claim_from_parsed(db, parsed, patient, payer, provider)
+            _new_claims.append(claim)
             claims_created += 1
 
         except Exception as e:
@@ -839,6 +872,23 @@ async def pull_bitacora(
             errors.append(f"Error processing {parsed.get('patient_name', 'unknown')}: {str(e)}")
 
     await db.commit()
+
+    # Auto-scrub all newly created claims
+    from routers.ai import scrub_claim as _scrub_claim
+    from schemas import ScrubRequest as _ScrubReq
+
+    for claim_obj in _new_claims:
+        try:
+            scrub_resp = await _scrub_claim(
+                _ScrubReq(claim_id=claim_obj.id), db, None  # type: ignore[arg-type]
+            )
+            logger.info(
+                "Auto-scrub claim %s: score=%.0f",
+                claim_obj.claim_number, scrub_resp.score,
+            )
+        except Exception as e:
+            logger.warning("Auto-scrub failed for claim %s: %s", claim_obj.id, e)
+            errors.append(f"Auto-scrub failed for {claim_obj.claim_number}: {e}")
 
     return PullBitacoraResponse(
         patients_found=len(parsed_patients),

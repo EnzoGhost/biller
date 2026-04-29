@@ -609,6 +609,16 @@ async def import_wink_encounters(
 
         await db.commit()
 
+        # Auto-scrub all newly created claims
+        from routers.ai import scrub_claim as _scrub_claim
+        from schemas import ScrubRequest as _ScrubReq
+
+        for cid in claim_ids:
+            try:
+                await _scrub_claim(_ScrubReq(claim_id=cid), db, None)  # type: ignore[arg-type]
+            except Exception:
+                pass  # best-effort scrub
+
     except HTTPException:
         raise
     except Exception as e:

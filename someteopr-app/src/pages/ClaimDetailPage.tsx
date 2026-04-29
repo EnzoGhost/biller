@@ -132,6 +132,8 @@ export default function ClaimDetailPage() {
 
   // Resubmit state
   const [resubmitting, setResubmitting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [reopening, setReopening] = useState(false);
 
   // Validation state
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
@@ -509,9 +511,9 @@ export default function ClaimDetailPage() {
       )}
 
       {/* Back */}
-      <Link to="/claims" className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4">
+      <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4">
         <ArrowLeft className="w-4 h-4" /> {t('claims.title')}
-      </Link>
+      </button>
 
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
@@ -586,6 +588,51 @@ export default function ClaimDetailPage() {
               >
                 <FileText className="w-4 h-4" />
                 {generatingLetter ? t('lifecycle.generating_letter') : t('lifecycle.appeal_letter')}
+              </button>
+            </>
+          )}
+          {(claim.status === 'denied' || claim.status === 'rejected') && (
+            <>
+              <button
+                onClick={async () => {
+                  setReopening(true);
+                  try {
+                    await api.post(`/claims/${id}/reopen`);
+                    qc.invalidateQueries({ queryKey: ['claim', id] });
+                    showToast(t('lifecycle.reopen_success', { defaultValue: 'Claim reopened as draft' }));
+                  } catch (err: unknown) {
+                    const e = err as { response?: { data?: { detail?: string } } };
+                    showToast(e?.response?.data?.detail ?? t('common.error'), false);
+                  } finally {
+                    setReopening(false);
+                  }
+                }}
+                disabled={reopening}
+                className="flex items-center gap-1.5 px-3 py-2 border border-sky-200 text-sky-600 text-sm rounded-lg hover:bg-sky-50 disabled:opacity-60"
+              >
+                <RefreshCw className="w-4 h-4" />
+                {reopening ? '...' : t('lifecycle.fix_resubmit', { defaultValue: 'Fix & Resubmit' })}
+              </button>
+              <button
+                onClick={async () => {
+                  if (!confirm(t('lifecycle.archive_confirm', { defaultValue: 'Archive this claim? It will be marked as void.' }))) return;
+                  setArchiving(true);
+                  try {
+                    await api.post(`/claims/${id}/void`);
+                    qc.invalidateQueries({ queryKey: ['claim', id] });
+                    showToast(t('lifecycle.archived', { defaultValue: 'Claim archived' }));
+                  } catch (err: unknown) {
+                    const e = err as { response?: { data?: { detail?: string } } };
+                    showToast(e?.response?.data?.detail ?? t('common.error'), false);
+                  } finally {
+                    setArchiving(false);
+                  }
+                }}
+                disabled={archiving}
+                className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-500 text-sm rounded-lg hover:bg-slate-50 disabled:opacity-60"
+              >
+                <Trash2 className="w-4 h-4" />
+                {archiving ? '...' : t('lifecycle.archive', { defaultValue: 'Archive' })}
               </button>
             </>
           )}
@@ -723,8 +770,23 @@ export default function ClaimDetailPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {claim.service_lines.map(sl => (
-                <tr key={sl.id} className="hover:bg-slate-50">
+              {claim.service_lines.map(sl => {
+                // Check if this service line has scrub errors
+                const lineIssues = (scrubResult?.issues ?? claim.scrub_issues ?? []).filter(issue => {
+                  // Match by field like "line_1" or by msg containing "Line X"
+                  if (issue.field === `line_${sl.line_number}`) return true;
+                  const lineMatch = issue.msg?.match(/Line\s+(\d+)/i);
+                  return lineMatch && parseInt(lineMatch[1]) === sl.line_number;
+                });
+                const hasError = lineIssues.some(i => i.type === 'error');
+                const hasWarning = lineIssues.length > 0 && !hasError;
+                const rowClass = hasError
+                  ? 'bg-red-50 border-l-4 border-l-red-400 hover:bg-red-100'
+                  : hasWarning
+                    ? 'bg-amber-50 border-l-4 border-l-amber-400 hover:bg-amber-100'
+                    : 'hover:bg-slate-50';
+                return (
+                <tr key={sl.id} className={rowClass} title={lineIssues.map(i => i.msg).join('; ') || undefined}>
                   <td className="px-4 py-2 text-slate-500">{sl.line_number}</td>
                   <td className="px-4 py-2 font-mono font-medium text-slate-900">{sl.cpt_code}</td>
                   <td className="px-4 py-2 text-slate-600">{sl.description ?? '—'}</td>
@@ -733,7 +795,8 @@ export default function ClaimDetailPage() {
                   <td className="px-4 py-2 text-right font-medium text-slate-900">{fmt(sl.billed_amount)}</td>
                   <td className="px-4 py-2 text-right font-medium text-emerald-700">{fmt(sl.paid_amount)}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}

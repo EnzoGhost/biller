@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Send, Zap, ChevronRight, ChevronDown, ChevronUp,
   FileText, CheckCircle, Clock, AlertTriangle, CircleDollarSign,
-  Download, X, Loader2,
+  Download, X, Loader2, Archive,
 } from 'lucide-react';
 import api from '../lib/api';
 import { formatDateShort } from '../lib/dates';
@@ -196,10 +196,11 @@ function PullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () 
 
 // ── Claim Card ───────────────────────────────────────────────────────────────
 
-function ClaimCard({ claim, showAging = false, showDenialReason = false }: {
+function ClaimCard({ claim, showAging = false, showDenialReason = false, onArchive }: {
   claim: WorkQueueClaim;
   showAging?: boolean;
   showDenialReason?: boolean;
+  onArchive?: (claimId: number) => void;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -248,6 +249,15 @@ function ClaimCard({ claim, showAging = false, showDenialReason = false }: {
             {claim.days_aging}d
           </span>
         )}
+        {onArchive && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onArchive(claim.id); }}
+            title={t('lifecycle.archive', { defaultValue: 'Archive' })}
+            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <Archive className="w-3.5 h-3.5" />
+          </button>
+        )}
         <span className="text-sm font-semibold text-slate-900">
           {fmt(claim.total_billed)}
         </span>
@@ -261,7 +271,7 @@ function ClaimCard({ claim, showAging = false, showDenialReason = false }: {
 
 function Section({
   title, icon: Icon, iconColor, claims, defaultOpen = true,
-  showAging = false, showDenialReason = false, headerAction,
+  showAging = false, showDenialReason = false, headerAction, onArchive,
 }: {
   title: string;
   icon: typeof FileText;
@@ -271,6 +281,7 @@ function Section({
   showAging?: boolean;
   showDenialReason?: boolean;
   headerAction?: React.ReactNode;
+  onArchive?: (claimId: number) => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(defaultOpen);
@@ -309,6 +320,7 @@ function Section({
               claim={claim}
               showAging={showAging}
               showDenialReason={showDenialReason}
+              onArchive={onArchive}
             />
           ))}
         </div>
@@ -324,6 +336,16 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [showPullModal, setShowPullModal] = useState(false);
+
+  const handleArchiveClaim = async (claimId: number) => {
+    if (!confirm('Archive this claim? It will be marked as void.')) return;
+    try {
+      await api.post(`/claims/${claimId}/void`);
+      qc.invalidateQueries({ queryKey: ['work-queue'] });
+    } catch {
+      alert('Failed to archive claim');
+    }
+  };
 
   const { data, isLoading } = useQuery<WorkQueueData>({
     queryKey: ['work-queue'],
@@ -424,6 +446,7 @@ export default function DashboardPage() {
         iconColor="text-rose-500"
         claims={q.attention}
         showDenialReason
+        onArchive={handleArchiveClaim}
       />
 
       {/* Ready to Submit — top priority */}

@@ -264,6 +264,35 @@ async def resubmit_claim(
     return ClaimOut.model_validate(result.scalar_one())
 
 
+@router.post("/{claim_id}/reopen", response_model=ClaimOut)
+async def reopen_claim(
+    claim_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Reopen a denied/rejected/void claim as draft for editing and resubmission."""
+    result = await db.execute(select(Claim).where(Claim.id == claim_id))
+    claim = result.scalar_one_or_none()
+    if not claim:
+        raise HTTPException(404, "Reclamación no encontrada")
+    if claim.status not in (ClaimStatus.DENIED, ClaimStatus.REJECTED, ClaimStatus.VOID):
+        raise HTTPException(400, f"No se puede reabrir una reclamación en estado '{claim.status}'")
+    old_status = claim.status
+    claim.status = ClaimStatus.DRAFT
+    claim.stedi_transaction_id = None
+    await log_action(
+        db, "claim", claim_id, "reopen",
+        claim_id=claim_id, old_value=str(old_status),
+        new_value=ClaimStatus.DRAFT, user=current_user,
+        notes="Claim reopened as draft for editing",
+    )
+    await db.commit()
+    result = await db.execute(
+        select(Claim).options(*claim_with_relations()).where(Claim.id == claim_id)
+    )
+    return ClaimOut.model_validate(result.scalar_one())
+
+
 @router.post("/{claim_id}/void", response_model=ClaimOut)
 async def void_claim(
     claim_id: int,

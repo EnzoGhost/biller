@@ -229,6 +229,7 @@ class ClaimOut(BaseModel):
     total_paid: float
     patient_responsibility: float
     scrub_score: Optional[float]
+    scrub_issues: Optional[list] = None
     denial_risk_score: Optional[float]
     stedi_transaction_id: Optional[str]
     payer_claim_number: Optional[str]

@@ -120,6 +120,7 @@ export interface Claim {
   total_paid: number;
   patient_responsibility: number;
   scrub_score?: number;
+  scrub_issues?: { type: string; field?: string; msg?: string }[];
   denial_risk_score?: number;
   stedi_transaction_id?: string;
   payer_claim_number?: string;
@@ -326,24 +327,4 @@ export interface PaginatedResponse<T> {
   page: number;
   per_page: number;
   pages: number;
-}
-
-export interface EligibilityCheck {
-  id: number;
-  patient_id?: number;
-  payer_id?: number;
-  member_id: string;
-  patient_first_name?: string;
-  patient_last_name?: string;
-  is_eligible?: boolean;
-  copay?: number;
-  deductible?: number;
-  deductible_met?: number;
-  out_of_pocket_max?: number;
-  out_of_pocket_met?: number;
-  coverage_start?: string;
-  coverage_end?: string;
-  payer_name?: string;
-  raw_response?: Record<string, unknown>;
-  checked_at: string;
 }
