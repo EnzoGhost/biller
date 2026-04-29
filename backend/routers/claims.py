@@ -8,11 +8,16 @@ from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 
 from database import get_db
-from models import Claim, ServiceLine, ClaimStatus, Patient, Provider, Payer
+from models import Claim, ServiceLine, ClaimStatus, Patient, Provider, Payer, Denial, AuditLog
 from schemas import ClaimOut, ClaimCreate, ClaimUpdate, PaymentOut, PaymentCreate, ServiceLineCreate
 from auth import get_current_user
 from models import User, Payment
 from routers.audit import log_action
+from pydantic import BaseModel
+
+
+class BulkDeleteRequest(BaseModel):
+    claim_ids: List[int]
 
 router = APIRouter(prefix="/claims", tags=["claims"])
 
@@ -400,3 +405,79 @@ async def batch_submit_claims(
         "errors": failed_list,
         "total": len(ready_claims),
     }
+
+
+# ── Delete Endpoints ──────────────────────────────────────────────────────────
+
+async def _delete_claim(db: AsyncSession, claim_id: int) -> None:
+    """Delete a claim and all its related records (service_lines, denials, payments, audit_logs)."""
+    # Service lines are cascade delete-orphan, but denials/payments/audit need manual cleanup
+    await db.execute(select(Denial).where(Denial.claim_id == claim_id))
+    denials = (await db.execute(select(Denial).where(Denial.claim_id == claim_id))).scalars().all()
+    for d in denials:
+        # Delete appeals linked to this denial
+        from models import Appeal
+        appeals = (await db.execute(select(Appeal).where(Appeal.denial_id == d.id))).scalars().all()
+        for a in appeals:
+            await db.delete(a)
+        await db.delete(d)
+
+    # Delete appeals linked to claim directly
+    from models import Appeal
+    appeals = (await db.execute(select(Appeal).where(Appeal.claim_id == claim_id))).scalars().all()
+    for a in appeals:
+        await db.delete(a)
+
+    payments = (await db.execute(select(Payment).where(Payment.claim_id == claim_id))).scalars().all()
+    for p in payments:
+        await db.delete(p)
+
+    audit_logs = (await db.execute(select(AuditLog).where(AuditLog.claim_id == claim_id))).scalars().all()
+    for log in audit_logs:
+        await db.delete(log)
+
+    # Now delete the claim itself (service_lines cascade)
+    claim = (await db.execute(select(Claim).where(Claim.id == claim_id))).scalar_one_or_none()
+    if claim:
+        await db.delete(claim)
+
+
+@router.delete("/{claim_id}", status_code=200)
+async def delete_claim(
+    claim_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Permanently delete a single claim and all related records."""
+    result = await db.execute(select(Claim).where(Claim.id == claim_id))
+    claim = result.scalar_one_or_none()
+    if not claim:
+        raise HTTPException(404, "Reclamación no encontrada")
+
+    claim_number = claim.claim_number
+    await _delete_claim(db, claim_id)
+    await db.commit()
+
+    return {"deleted": True, "claim_id": claim_id, "claim_number": claim_number}
+
+
+@router.post("/bulk-delete", status_code=200)
+async def bulk_delete_claims(
+    body: BulkDeleteRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete multiple claims. Returns count of deleted."""
+    if not body.claim_ids:
+        return {"deleted": 0, "claim_ids": []}
+
+    deleted_ids = []
+    for cid in body.claim_ids:
+        result = await db.execute(select(Claim).where(Claim.id == cid))
+        claim = result.scalar_one_or_none()
+        if claim:
+            await _delete_claim(db, cid)
+            deleted_ids.append(cid)
+
+    await db.commit()
+    return {"deleted": len(deleted_ids), "claim_ids": deleted_ids}

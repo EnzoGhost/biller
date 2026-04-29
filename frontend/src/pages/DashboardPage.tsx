@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Send, Zap, ChevronRight, ChevronDown, ChevronUp,
   FileText, CheckCircle, Clock, AlertTriangle, CircleDollarSign,
-  Download, X, Loader2, Archive,
+  Download, X, Loader2, Archive, Trash2,
 } from 'lucide-react';
 import api from '../lib/api';
 import { formatDateShort } from '../lib/dates';
@@ -197,11 +197,13 @@ function PullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () 
 
 // ── Claim Card ───────────────────────────────────────────────────────────────
 
-function ClaimCard({ claim, showAging = false, showDenialReason = false, onArchive }: {
+function ClaimCard({ claim, showAging = false, showDenialReason = false, onArchive, selected = false, onToggleSelect }: {
   claim: WorkQueueClaim;
   showAging?: boolean;
   showDenialReason?: boolean;
   onArchive?: (claimId: number) => void;
+  selected?: boolean;
+  onToggleSelect?: (claimId: number) => void;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -209,8 +211,20 @@ function ClaimCard({ claim, showAging = false, showDenialReason = false, onArchi
   return (
     <div
       onClick={() => navigate(`/claims/${claim.id}`)}
-      className="flex items-center justify-between py-3 px-4 bg-white rounded-xl border border-slate-100 hover:border-slate-200 hover:shadow-sm cursor-pointer transition-all group"
+      className={`flex items-center justify-between py-3 px-4 bg-white rounded-xl border hover:border-slate-200 hover:shadow-sm cursor-pointer transition-all group ${
+        selected ? 'border-sky-300 bg-sky-50/50' : 'border-slate-100'
+      }`}
     >
+      {onToggleSelect && (
+        <div className="mr-3 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(claim.id)}
+            className="w-4 h-4 rounded border-slate-300 text-sky-500 focus:ring-sky-500 cursor-pointer"
+          />
+        </div>
+      )}
       <div className="flex items-center gap-4 min-w-0 flex-1">
         <StatusBadge status={claim.status} />
         <div className="min-w-0">
@@ -273,6 +287,7 @@ function ClaimCard({ claim, showAging = false, showDenialReason = false, onArchi
 function Section({
   title, icon: Icon, iconColor, claims, defaultOpen = true,
   showAging = false, showDenialReason = false, headerAction, onArchive,
+  selectedIds, onToggleSelect,
 }: {
   title: string;
   icon: typeof FileText;
@@ -283,6 +298,8 @@ function Section({
   showDenialReason?: boolean;
   headerAction?: React.ReactNode;
   onArchive?: (claimId: number) => void;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (claimId: number) => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(defaultOpen);
@@ -322,6 +339,8 @@ function Section({
               showAging={showAging}
               showDenialReason={showDenialReason}
               onArchive={onArchive}
+              selected={selectedIds?.has(claim.id) ?? false}
+              onToggleSelect={onToggleSelect}
             />
           ))}
         </div>
@@ -337,6 +356,34 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [showPullModal, setShowPullModal] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const count = selectedIds.size;
+    if (!count) return;
+    if (!confirm(`Delete ${count} claim${count > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await api.post('/claims/bulk-delete', { claim_ids: Array.from(selectedIds) });
+      setSelectedIds(new Set());
+      qc.invalidateQueries({ queryKey: ['work-queue'] });
+      qc.invalidateQueries({ queryKey: ['claims'] });
+    } catch {
+      alert('Failed to delete claims');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleArchiveClaim = async (claimId: number) => {
     if (!confirm('Archive this claim? It will be marked as void.')) return;
@@ -448,6 +495,8 @@ export default function DashboardPage() {
         claims={q.attention}
         showDenialReason
         onArchive={handleArchiveClaim}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
       />
 
       {/* Ready to Submit — top priority */}
@@ -456,6 +505,8 @@ export default function DashboardPage() {
         icon={CheckCircle}
         iconColor="text-emerald-500"
         claims={q.ready}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
         headerAction={
           q.ready.length > 0 ? (
             <button
@@ -487,6 +538,8 @@ export default function DashboardPage() {
         icon={FileText}
         iconColor="text-sky-500"
         claims={q.new}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
       />
 
       {/* Submitted */}
@@ -496,6 +549,8 @@ export default function DashboardPage() {
         iconColor="text-amber-500"
         claims={q.submitted}
         showAging
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
       />
 
       {/* Recently Paid */}
@@ -505,6 +560,8 @@ export default function DashboardPage() {
         iconColor="text-emerald-500"
         claims={q.paid}
         defaultOpen={false}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
       />
 
       {/* Empty state */}
@@ -521,6 +578,33 @@ export default function DashboardPage() {
           >
             <Download className="w-4 h-4" />
             {t('dashboard.pull_vistanet')}
+          </button>
+        </div>
+      )}
+
+      {/* Floating Delete Bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl">
+          <span className="text-sm font-medium">
+            {selectedIds.size} selected
+          </span>
+          <button
+            onClick={handleBulkDelete}
+            disabled={deleting}
+            className="flex items-center gap-1.5 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+          >
+            {deleting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
+            Delete Selected
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="text-sm text-slate-300 hover:text-white px-2"
+          >
+            Cancel
           </button>
         </div>
       )}

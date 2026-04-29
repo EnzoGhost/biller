@@ -134,6 +134,7 @@ export default function ClaimDetailPage() {
   const [resubmitting, setResubmitting] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [reopening, setReopening] = useState(false);
+  const [deletingClaim, setDeletingClaim] = useState(false);
 
   // Validation state
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
@@ -645,6 +646,28 @@ export default function ClaimDetailPage() {
               {t('claims.void')}
             </button>
           )}
+          <button
+            onClick={async () => {
+              if (!confirm('Permanently delete this claim? This cannot be undone.')) return;
+              setDeletingClaim(true);
+              try {
+                await api.delete(`/claims/${id}`);
+                qc.invalidateQueries({ queryKey: ['work-queue'] });
+                qc.invalidateQueries({ queryKey: ['claims'] });
+                navigate('/');
+              } catch (err: unknown) {
+                const e = err as { response?: { data?: { detail?: string } } };
+                showToast(e?.response?.data?.detail ?? 'Failed to delete claim', false);
+              } finally {
+                setDeletingClaim(false);
+              }
+            }}
+            disabled={deletingClaim}
+            className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-600 text-sm rounded-lg hover:bg-red-50 disabled:opacity-60"
+          >
+            <Trash2 className="w-4 h-4" />
+            {deletingClaim ? '...' : 'Delete'}
+          </button>
         </div>
       </div>
 
