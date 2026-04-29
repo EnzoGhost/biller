@@ -64,8 +64,9 @@ const fmt = (n: number) =>
 
 function PullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const { t } = useTranslation();
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const today = new Date().toISOString().split('T')[0];
+  const [dateFrom, setDateFrom] = useState(today);
+  const [dateTo, setDateTo] = useState(today);
   const [result, setResult] = useState<PullResult | null>(null);
 
   // Convert YYYY-MM-DD to Spanish format Abril/28/2026
