@@ -1,0 +1,122 @@
+ 
+Disconnected.
+3:52 PM  Connecting...
+3:52 PM  Connected. A support representative will be with you shortly.
+3:52 PM  Support session established with Keishla Diaz Miranda.
+3:53 PM  Keishla Diaz Miranda: 
+Buenas Tardes, Gracias por contactar a Inmediata, Servicio en los que confías para la salud. Mi nombre es Keishla Diaz Miranda del departamento de Contact Center Representative,
+
+Por propósitos de seguridad le estaré realizando varias preguntas:
+
+¿Me puede facilitar el Numero de NPI?
+
+¿Me puede indicar su nombre con ambos apellidos?
+
+¿Me puede indicar número de teléfono, dirección de la facilidad y correo electrónico?
+3:53 PM  Brenda Cubero: 
+1164586079
+3:53 PM  Brenda Cubero: 
+Brenda Cubero Pantoja
+3:53 PM  Brenda Cubero: 
+7878846967
+3:54 PM  Brenda Cubero: 
+A8 Calle Marginal Urb. San Salvador Manati PR 00674
+3:54 PM  Brenda Cubero: 
+visualzonepr@gmail.com
+3:54 PM  Keishla Diaz Miranda: 
+Gracias por la información, voy a validar si usted es una persona de contacto en la cuenta con Inmediata, por favor permanezca en el CHAT.
+3:54 PM  Keishla Diaz Miranda: 
+Actualmente contamos con la nueva plataforma de Healthway.
+
+
+
+Si tienes alguna duda o/y dificultad o aun no se ha registrado, podemos asistirle con el proceso.
+
+
+
+El portal de Healthway incluye el SUPPORT CENTER, una herramienta que facilita su gestión diaria. Ofrece acceso a InmediataEDU, una plataforma educativa con videos disponibles 24/7 sobre los productos y a la herramienta digital de Formularios de Servicio, para obtener rápidamente los formularios necesarios.
+
+
+
+¡Le invitamos a explorarlo y aprovechar sus beneficios!
+3:54 PM  Keishla Diaz Miranda: 
+¿Proposito de su conexion?
+3:55 PM  Brenda Cubero: 
+Es acerca de las reclamaciones de First Medical Vital de la reforma. Por mucho tiempo siempre nos han dicho que la única manera de enviarlas es imprimiendo todo y enviándolo todo a ellos por correo regular.
+3:56 PM  Brenda Cubero: 
+Es cierto que eso se puede enviar a través de ustedes igual que los demás payers?
+3:56 PM  Brenda Cubero: 
+Hola Keishla, nosotros hablamos por aquí el viernes pasado acerca de ImPlug
+3:57 PM  Keishla Diaz Miranda: 
+Lo puede realizar con nosotros electronicamente ya se adquiriendo el programa de Secure Claim o Implug si cuenta con otro Clearinghouse
+3:57 PM  Keishla Diaz Miranda: 
+Si la recuerdo
+3:58 PM  Keishla Diaz Miranda: 
+veo que tiene contrato de Secure Claim desde el 10/22/2013
+3:58 PM  Brenda Cubero: 
+Pues no se si eso lo ve, pero hace unos minutos enviamos el email con el Instalation Form y también autorizando a mi hijo Angel Reynaldo Cortes a gestionar lo de la instalación y autorizando en la cuenta de inmediata.
+3:59 PM  Brenda Cubero: 
+Entonces para empezar a enviar esas reclamaciones de la reforma a través de ustedes solo hay que instalar lo de ImPlug y enviarlas como cualquier otra? O hay que registrarse o activar alguna otra cosa con ellos directo o algo asi?
+3:59 PM  Brenda Cubero: 
+el email se envio desde r3ycortes@gmail.com, no de visualzonepr@gmail.com. Por si acaso.
+4:00 PM  Keishla Diaz Miranda: 
+Si veo el email del formulario, le pregunto ya no esta trabajando el Secure Claim
+4:00 PM  Keishla Diaz Miranda: 
+cuanta con otro Clearinghouse donde realiza las facturas?
+4:02 PM  Brenda Cubero: 
+Si, esa es la manera que usamos todos los días ahora mismo. Pero estamos creando un software interno para poder hacerlo en bulk sin meter todo cada claim uno a uno en su portal. Y pues ya que no tienen lo del STFP, necesitaríamos esa integracionistas con el ImPlug.
+4:02 PM  Brenda Cubero: 
+También usan Envolve
+4:03 PM  Keishla Diaz Miranda: 
+Perfecto, esta seria la PC a instalar el Implug
+4:03 PM  Brenda Cubero: 
+La Macbook de donde le estoy escribiendo, si.
+4:05 PM  Keishla Diaz Miranda: 
+como se llama el programa?
+4:06 PM  Brenda Cubero: 
+Pues aun no tiene nombre... Me sugirieron "SometeoPR", pero siento que es cafre y poco profesional. Usted que opina? JAJA
+4:10 PM  Keishla Diaz Miranda: 
+se escucha graciaso, Consulto con Sup Liza Baquero
+4:13 PM  Brenda Cubero: 
+Pues a lo mejor lo considero todavía jaja! Estoy aquí en StandBy, me avisa.
+4:13 PM  Keishla Diaz Miranda: 
+le pregunto para que fecha tendria listo el programa?
+4:15 PM  Brenda Cubero: 
+Pues ya esta casi listo. Ya estamos integrados con VistaNet para obtener las bitácoras con toda la info de los pacientes y generar archivos en formato 837P. Asi que estamos casi esperando la integración con ImPlug y probarlo que funciona para empezar a usarlo.
+4:18 PM  Keishla Diaz Miranda: 
+Le pregunto ya que para la instalacion del Implug el programa debe estar finalizado, para Webservices ya estaria trabajando y el API estaria disponible para verano
+4:19 PM  Brenda Cubero: 
+Okay, pues me dice que evidencia necesita de que el programa esta listo. Yo digo que no porque falta verlo en acción. Pero para eso falta a la integración. Y si me obliga a ponerle nombre ahora mismo... ya sabe jajaja
+4:20 PM  Brenda Cubero: 
+API seria genial!
+4:24 PM  Keishla Diaz Miranda: 
+perfecto, Supervisora y yo estaremos solicitando la integracion de API para su programa, bajo que numero de telefono, email nos podriamos comunicar ?
+4:26 PM  Brenda Cubero: 
+Brutal, y eso seria para verano entonces y me avisan? r3ycortes@gmail.com, 7875491572. Ese es el contacto de mi hijo que va a estar bregando con eso.
+4:26 PM  Keishla Diaz Miranda: 
+Correcto, continuaremos con el numero de caso 01787107
+4:26 PM  Keishla Diaz Miranda: 
+ya Angel esta como contacto
+4:27 PM  Keishla Diaz Miranda: 
+nos estaremois comunicando Sra Cubero, duda adicional ?
+4:28 PM  Brenda Cubero: 
+Lo ultimo seria confirmar que una vez eso este ready, solo envio los claims de First Medical Vital a través de ahi como cualquier otro claim, y ya no tengo que hacer nada mas ni enviar mas cartas por correo?
+4:28 PM  Keishla Diaz Miranda: 
+Correcto
+4:28 PM  Keishla Diaz Miranda: 
+todo seria electronico
+4:29 PM  Brenda Cubero: 
+Perfecto. Pues espero a que me avisen! Muchas gracias Keishla, lindo dia!
+4:29 PM  Keishla Diaz Miranda: 
+A la orden siempre.
+
+Gracias por utiliza nuestro chat, Inmediata Support, recuerde fue atendido por: Keishla M. Diaz Miranda
+
+Al finalizar tiene la oportunidad de completar una pequeña encuesta, que nos permite continuar mejorando la calidad de nuestros servicios. En Inmediata, Servicio en los que confías para la salud.
+Información de contacto:
+Tel: 787-783-3233
+Chat: https://portal.inmediata.com/chat/
+E-mail: servicioalcliente@inmediata.com
+4:29 PM  Keishla Diaz Miranda would like you to complete a brief Customer Survey. Open Customer Survey
+4:29 PM  Keishla Diaz Miranda has ended the session.
+Keishla Diaz Miranda
