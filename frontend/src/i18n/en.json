@@ -104,7 +104,8 @@
     "service_lines": "Service Lines",
     "appeals": "Appeals",
     "deadline": "Due",
-    "outcome": "Outcome"
+    "outcome": "Outcome",
+    "office_visit_placeholder": "Office visit..."
   },
   "patients": {
     "title": "Patients",
@@ -134,7 +135,8 @@
     "spouse": "Spouse",
     "child": "Child",
     "primary_insurance": "Primary Insurance",
-    "termination_date": "Termination Date"
+    "termination_date": "Termination Date",
+    "group_abbr": "Grp"
   },
   "denials": {
     "title": "Denials",
@@ -198,7 +200,17 @@
     "oop_max": "Out-of-Pocket Max",
     "oop_met": "Out-of-Pocket Met",
     "coverage_start": "Coverage Start",
-    "error_checking": "Error checking eligibility"
+    "error_checking": "Error checking eligibility",
+    "supported": "✓ Eligibility",
+    "enrollment_required": "Enrollment Required",
+    "not_supported": "Not supported",
+    "show_pr_payers": "View Puerto Rico payers",
+    "hide_pr_payers": "Hide PR payer directory",
+    "pr_payer_directory": "Puerto Rico Payers — Directory",
+    "payers_found": "{{count}} payers found",
+    "loading_directory": "Loading directory…",
+    "selected_payer": "Selected Payer",
+    "payer_id_label": "Payer ID"
   },
   "settings": {
     "title": "Settings",
@@ -229,11 +241,23 @@
     "gpt4_turbo": "GPT-4 Turbo",
     "language": "Language",
     "interface_language": "Interface Language",
-    "lang_es": "Spanish (Puerto Rico)",
+    "lang_es": "Spanish",
     "lang_en": "English",
     "integrations": "Integrations",
     "save": "Save",
-    "saved": "Saved"
+    "saved": "Saved",
+    "npi_billing": "NPI (Billing)",
+    "tax_id_ein": "Tax ID / EIN",
+    "api_key": "API Key",
+    "openai_api_key": "OpenAI API Key",
+    "saving": "Saving...",
+    "browse": "Browse",
+    "implug_title": "ImPlug / EDI Folders",
+    "implug_desc": "Configure local folders for ImPlug EDI file exchange. When a claim is submitted, the 837P file will be written to the outbound folder. ERA (835) files from the inbound folder are auto-processed.",
+    "implug_outbound": "Outbound Folder (837P files)",
+    "implug_inbound": "Inbound Folder (835 ERA files)",
+    "implug_how_it_works": "How it works:",
+    "implug_how_it_works_desc": "When you submit a claim via the Submit button, SometeoPR generates an 837P X12 file and saves it to the outbound folder. ImPlug picks it up and submits to the clearinghouse. 835 ERA responses are dropped in the inbound folder and SometeoPR auto-processes them."
   },
   "import": {
     "title": "Import Data",
@@ -258,7 +282,24 @@
     "errors_label": "Errors:",
     "error_importing": "Error importing",
     "error_wink": "Error syncing patients with Wink",
-    "error_encounters": "Error importing encounters from Wink"
+    "error_encounters": "Error importing encounters from Wink",
+    "step_upload": "Upload",
+    "step_done": "Done",
+    "back": "← Back",
+    "field_patient_mrn": "Patient MRN",
+    "field_first_name": "First Name",
+    "field_last_name": "Last Name",
+    "field_dob": "Date of Birth",
+    "field_service_date": "Service Date",
+    "field_provider_npi": "Provider NPI",
+    "field_payer_id": "Payer ID",
+    "field_member_id": "Member ID",
+    "field_cpt_code": "CPT Code",
+    "field_icd10_1": "ICD-10 #1",
+    "field_icd10_2": "ICD-10 #2",
+    "field_units": "Units",
+    "field_billed_amount": "Billed Amount",
+    "field_pos": "Place of Service"
   },
   "providers": {
     "new": "New Provider",
@@ -278,12 +319,12 @@
     "show_inactive": "Show inactive"
   },
   "stedi": {
-    "submit_stedi": "Submit to Clearinghouse",
+    "submit_stedi": "Submit to Stedi",
     "submitting": "Submitting...",
-    "submit_success": "Claim submitted to clearinghouse",
+    "submit_success": "Claim submitted to Stedi",
     "check_status": "Check Status",
     "status_refreshed": "Status updated",
-    "transaction_info": "Transaction Info",
+    "transaction_info": "Stedi Transaction",
     "transaction_id": "Transaction ID",
     "payer_claim_number": "Payer Claim #",
     "submitted_on": "Submitted",
@@ -299,7 +340,8 @@
     "medicaid": "Medicaid",
     "vision": "Vision",
     "dental": "Dental",
-    "other": "Other"
+    "other": "Other",
+    "stedi_id": "Stedi ID"
   },
   "pos": {
     "11": "11 – Office",
@@ -356,7 +398,9 @@
     "last_name": "Last Name",
     "phone": "Phone",
     "select_date": "Select date",
-    "select_placeholder": "— Select —"
+    "select_placeholder": "— Select —",
+    "cancel_action": "Cancel",
+    "ok": "OK"
   },
   "inmediata": {
     "title": "Inmediata",
@@ -400,7 +444,10 @@
     "era_content_placeholder": "Paste 835 ERA content here for reconciliation...",
     "paste_era": "Paste ERA Content",
     "reconcile_from_paste": "Reconcile",
-    "select_file": "Select ERA file from downloaded list"
+    "select_file": "Select ERA file from downloaded list",
+    "characters_ready": "{{count}} characters ready",
+    "posted_tag": "posted",
+    "claims_count": "{{count}} claims"
   },
   "reports": {
     "title": "Reports",
@@ -420,7 +467,8 @@
     "amount": "Balance",
     "month": "Month",
     "no_data": "No data available",
-    "days": "days"
+    "days": "days",
+    "claims_count": "{{count}} claims"
   },
   "routing": {
     "stedi": "Stedi",
@@ -428,7 +476,8 @@
     "manual": "Manual/Fax",
     "route_via": "Route via",
     "manual_stedi_portal": "📋 Manual (Stedi Portal)",
-    "export_stedi_portal": "Export for Stedi Portal"
+    "export_stedi_portal": "Export for Stedi Portal",
+    "envolve_availity": "Envolve/Availity"
   },
   "payments": {
     "title": "Payments",
@@ -460,7 +509,20 @@
     "total_payments": "Total Payments",
     "total_amount": "Total Received",
     "total_adjustments": "Total Adjustments",
-    "total_patient_resp": "Patient Responsibility Total"
+    "total_patient_resp": "Patient Responsibility Total",
+    "claim_id": "Claim ID",
+    "payer_name": "Payer Name",
+    "optional_notes": "Optional notes",
+    "add_row": "Add Row",
+    "batch_desc": "Post multiple claim payments from one ERA (835) check at once.",
+    "paid_col": "Paid",
+    "adj_col": "Adj.",
+    "pt_resp_col": "Pt Resp.",
+    "denial_code": "Denial Code",
+    "method_eft": "EFT",
+    "method_check": "Check",
+    "method_virtual_card": "Virtual Card",
+    "method_cash": "Cash"
   },
   "validation": {
     "title": "Validation",
@@ -617,7 +679,8 @@
     "action_renew_auth": "Renew Auth",
     "action_submit": "Submit",
     "action_submit_claim": "Submit Claim",
-    "action_void": "Void"
+    "action_void": "Void",
+    "paid_amount": "{{amount}} paid"
   },
   "wizard": {
     "title": "Clinic Setup",
@@ -645,11 +708,15 @@
     "back": "Back",
     "finish": "Finish Setup",
     "complete": "Setup complete!",
-    "complete_msg": "Your clinic is configured and ready to bill."
+    "complete_msg": "Your clinic is configured and ready to bill.",
+    "go_to_dashboard": "Go to Dashboard",
+    "keep_existing_key": "Leave blank to keep existing key",
+    "availity_envolve_label": "Availity (Envolve Vision — Payer ID 56190)",
+    "inmediata_sftp_label": "Inmediata SFTP"
   },
   "submit_section": {
     "title": "Submit Claim",
-    "via_stedi": "Submit to Clearinghouse",
+    "via_stedi": "Submit to Stedi",
     "via_inmediata": "Generate EDI → Upload",
     "via_envolve": "Submit to Envolve",
     "via_envolve_vision": "Submit to Envolve (Vision)",
@@ -658,20 +725,12 @@
   },
   "auth": {
     "login_title": "Medical Biller PR",
-    "login_subtitle": "Medical billing for Puerto Rico",
+    "login_subtitle": "Medical billing",
     "email": "Email",
     "password": "Password",
     "sign_in": "Sign In",
     "signing_in": "Signing in...",
     "invalid_credentials": "Invalid credentials"
-  },
-  "scrub": {
-    "no_diagnosis": "No diagnosis codes",
-    "no_service_lines": "No service lines",
-    "no_dx_pointers": "Line {{line}} ({{cpt}}): no diagnosis pointers",
-    "invalid_billed_amount": "Line {{line}}: invalid billed amount",
-    "lt_rt_conflict": "Line {{line}}: cannot use -LT and -RT together",
-    "mod50_conflict": "Line {{line}}: modifier -50 should not combine with -LT/-RT"
   },
   "attention": {
     "denied_needs_appeal": "Denied — needs appeal",

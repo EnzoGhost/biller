@@ -3,7 +3,8 @@
  * Locale-aware: displays month names in EN or ES.
  * Works with ISO strings internally, shows human-friendly format.
  */
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
@@ -67,6 +68,7 @@ export default function DatePicker({
 
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const calendarRef = useRef<HTMLDivElement>(null);
 
   const today = new Date();
   const todayISO = today.toISOString().split('T')[0];
@@ -83,11 +85,14 @@ export default function DatePicker({
     }
   }, [isoValue]);
 
-  // Close on outside click
+  // Close on outside click (portal-aware)
   useEffect(() => {
     if (!open) return;
     const handle = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inContainer = containerRef.current?.contains(target);
+      const inCalendar = calendarRef.current?.contains(target);
+      if (!inContainer && !inCalendar) {
         setOpen(false);
       }
     };
@@ -180,8 +185,22 @@ export default function DatePicker({
         />
       )}
 
-      {open && (
-        <div className="absolute z-50 top-full mt-1.5 left-0 bg-white rounded-xl border border-slate-200 shadow-2xl p-3 w-72">
+      {open && createPortal(
+        <div
+          ref={calendarRef}
+          className="fixed z-[9999] bg-white rounded-xl border border-slate-200 shadow-2xl p-3 w-72"
+          style={(() => {
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (!rect) return {};
+            const top = rect.bottom + 6;
+            const left = rect.left;
+            // If calendar would go below viewport, open upward
+            const fitsBelow = top + 340 < window.innerHeight;
+            return fitsBelow
+              ? { top: `${top}px`, left: `${left}px` }
+              : { bottom: `${window.innerHeight - rect.top + 6}px`, left: `${left}px` };
+          })()}
+        >
           {/* Header */}
           <div className="flex items-center justify-between mb-3">
             <button type="button" onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors">
@@ -242,7 +261,8 @@ export default function DatePicker({
               {lang.startsWith('es') ? 'Hoy' : 'Today'}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
