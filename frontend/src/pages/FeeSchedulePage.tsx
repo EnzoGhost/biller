@@ -43,7 +43,7 @@ export default function FeeSchedulePage() {
 
   const { data: payers = [] } = useQuery<PayerOption[]>({
     queryKey: ['payers-list'],
-    queryFn: () => api.get('/payers').then(r => r.data?.map((p: any) => ({ id: p.id, name: p.name })) ?? []),
+    queryFn: () => api.get('/payers').then(r => ((r.data?.items ?? r.data) || []).map((p: any) => ({ id: p.id, name: p.name }))),
   });
 
   const upsertMutation = useMutation({
