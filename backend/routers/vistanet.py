@@ -713,6 +713,7 @@ async def create_claim_from_parsed(
     await db.flush()
 
     # Create service lines for procedures
+    _created_lines: list = []  # track locally to avoid lazy-load crash on claim.service_lines
     line_number = 1
     num_procedures = len(parsed["procedures"])
 
@@ -757,6 +758,7 @@ async def create_claim_from_parsed(
             units=1,
         )
         db.add(sl)
+        _created_lines.append(sl)
         line_number += 1
 
     # Create service lines for materials (HCPCS V-codes)
@@ -784,15 +786,11 @@ async def create_claim_from_parsed(
             units=1,
         )
         db.add(sl)
+        _created_lines.append(sl)
         line_number += 1
 
-    # Recalculate total_billed from actual service line amounts
-    await db.flush()
-    recalculated_total = sum(
-        sl.billed_amount * (sl.units or 1)
-        for sl in claim.service_lines
-    ) if hasattr(claim, 'service_lines') and claim.service_lines else 0.0
-    # Only override if we got a better number from service lines
+    # Recalculate total_billed from tracked service lines (NOT claim.service_lines — that triggers lazy load crash)
+    recalculated_total = sum(sl.billed_amount * (sl.units or 1) for sl in _created_lines)
     if recalculated_total > 0:
         claim.total_billed = recalculated_total
 
@@ -908,7 +906,9 @@ async def pull_bitacora(
             claims_created += 1
 
         except Exception as e:
-            logger.error("Failed to create claim for %s: %s", parsed.get("patient_name", "?"), e)
+            import traceback
+            tb = traceback.format_exc()
+            logger.error("Failed to create claim for %s: %s\n%s", parsed.get("patient_name", "?"), e, tb)
             errors.append(f"Error processing {parsed.get('patient_name', 'unknown')}: {str(e)}")
 
     await db.commit()
