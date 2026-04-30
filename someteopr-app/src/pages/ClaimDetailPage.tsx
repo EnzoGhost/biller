@@ -110,7 +110,7 @@ export default function ClaimDetailPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [showLines, setShowLines] = useState(true);
-  const [scrubResult, setScrubResult] = useState<{ score: number; issues: { type: string; msg: string }[]; suggestions: string[] } | null>(null);
+  const [scrubResult, setScrubResult] = useState<{ score: number; issues: { type: string; msg: string; msg_key?: string; msg_params?: Record<string, any>; field?: string }[]; suggestions: string[] } | null>(null);
   const [scrubbing, setScrubbing] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [stediStatus, setStediStatus] = useState<Record<string, unknown> | null>(null);
