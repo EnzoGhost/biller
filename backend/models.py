@@ -215,6 +215,8 @@ class Claim(Base):
     # Source
     source: Mapped[str] = mapped_column(String(50), default="manual")  # manual, wink, csv
     external_ref: Mapped[str] = mapped_column(String(100), nullable=True)
+    # Sale data (VistaNet line items, future use)
+    sale_items: Mapped[dict] = mapped_column(JSON, nullable=True)  # [{"description": ..., "qty": ..., "price": ...}]
     # Notes
     notes: Mapped[str] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

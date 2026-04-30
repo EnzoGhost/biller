@@ -12,6 +12,7 @@ import { formatDateShort } from '../lib/dates';
 import type { ClaimStatus } from '../types';
 import StatusBadge from '../components/ui/Badge';
 import DatePicker from '../components/ui/DatePicker';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -358,6 +359,7 @@ export default function DashboardPage() {
   const [showPullModal, setShowPullModal] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{open:boolean, title:string, message:string, onConfirm:()=>void}>({open:false,title:'',message:'',onConfirm:()=>{}});
 
   const toggleSelect = (id: number) => {
     setSelectedIds(prev => {
@@ -371,28 +373,42 @@ export default function DashboardPage() {
   const handleBulkDelete = async () => {
     const count = selectedIds.size;
     if (!count) return;
-    if (!confirm(`Delete ${count} claim${count > 1 ? 's' : ''}? This cannot be undone.`)) return;
-    setDeleting(true);
-    try {
-      await api.post('/claims/bulk-delete', { claim_ids: Array.from(selectedIds) });
-      setSelectedIds(new Set());
-      qc.invalidateQueries({ queryKey: ['work-queue'] });
-      qc.invalidateQueries({ queryKey: ['claims'] });
-    } catch {
-      alert('Failed to delete claims');
-    } finally {
-      setDeleting(false);
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Claims',
+      message: `Delete ${count} claim${count > 1 ? 's' : ''}? This cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setDeleting(true);
+        try {
+          await api.post('/claims/bulk-delete', { claim_ids: Array.from(selectedIds) });
+          setSelectedIds(new Set());
+          qc.invalidateQueries({ queryKey: ['work-queue'] });
+          qc.invalidateQueries({ queryKey: ['claims'] });
+        } catch {
+          alert('Failed to delete claims');
+        } finally {
+          setDeleting(false);
+        }
+      },
+    });
   };
 
   const handleArchiveClaim = async (claimId: number) => {
-    if (!confirm('Archive this claim? It will be marked as void.')) return;
-    try {
-      await api.post(`/claims/${claimId}/void`);
-      qc.invalidateQueries({ queryKey: ['work-queue'] });
-    } catch {
-      alert('Failed to archive claim');
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Archive Claim',
+      message: 'Archive this claim? It will be marked as void.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await api.post(`/claims/${claimId}/void`);
+          qc.invalidateQueries({ queryKey: ['work-queue'] });
+        } catch {
+          alert('Failed to archive claim');
+        }
+      },
+    });
   };
 
   const { data, isLoading } = useQuery<WorkQueueData>({
@@ -616,6 +632,15 @@ export default function DashboardPage() {
           onSuccess={() => qc.invalidateQueries({ queryKey: ['work-queue'] })}
         />
       )}
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </div>
   );
 }

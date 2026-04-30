@@ -16,6 +16,7 @@ import { formatDateShort, formatDate } from '../lib/dates';
 import type { Claim, Denial, Appeal, ValidationResult, AuditLogEntry, Payment, PriorAuth } from '../types';
 import StatusBadge from '../components/ui/Badge';
 import DatePicker from '../components/ui/DatePicker';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 // ── Routing indicator ─────────────────────────────────────────────────────────
 
@@ -158,6 +159,12 @@ export default function ClaimDetailPage() {
   const [pmtPatientResp, setPmtPatientResp] = useState('');
   const [pmtMethod, setPmtMethod] = useState('eft');
   const [postingPayment, setPostingPayment] = useState(false);
+
+  // Confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{open:boolean, title:string, message:string, variant?:'danger'|'warning'|'info', onConfirm:()=>void}>({open:false,title:'',message:'',onConfirm:()=>{}});
+
+  // Venta del Paciente collapsible state
+  const [showSaleData, setShowSaleData] = useState(false);
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -304,7 +311,19 @@ export default function ClaimDetailPage() {
   // ── Resubmit ─────────────────────────────────────────────────────────────
 
   const handleResubmit = async () => {
-    if (!confirm(t('lifecycle.resubmit_confirm'))) return;
+    setConfirmDialog({
+      open: true,
+      title: t('lifecycle.resubmit', 'Resubmit'),
+      message: t('lifecycle.resubmit_confirm', 'Resubmit this claim?'),
+      variant: 'warning',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        await doResubmit();
+      },
+    });
+  };
+
+  const doResubmit = async () => {
     setResubmitting(true);
     try {
       await api.post(`/claims/${id}/resubmit`);
@@ -615,19 +634,26 @@ export default function ClaimDetailPage() {
                 {reopening ? '...' : t('lifecycle.fix_resubmit', { defaultValue: 'Fix & Resubmit' })}
               </button>
               <button
-                onClick={async () => {
-                  if (!confirm(t('lifecycle.archive_confirm', { defaultValue: 'Archive this claim? It will be marked as void.' }))) return;
-                  setArchiving(true);
-                  try {
-                    await api.post(`/claims/${id}/void`);
-                    qc.invalidateQueries({ queryKey: ['claim', id] });
-                    showToast(t('lifecycle.archived', { defaultValue: 'Claim archived' }));
-                  } catch (err: unknown) {
-                    const e = err as { response?: { data?: { detail?: string } } };
-                    showToast(e?.response?.data?.detail ?? t('common.error'), false);
-                  } finally {
-                    setArchiving(false);
-                  }
+                onClick={() => {
+                  setConfirmDialog({
+                    open: true,
+                    title: t('lifecycle.archive', { defaultValue: 'Archive' }),
+                    message: t('lifecycle.archive_confirm', { defaultValue: 'Archive this claim? It will be marked as void.' }),
+                    onConfirm: async () => {
+                      setConfirmDialog(prev => ({ ...prev, open: false }));
+                      setArchiving(true);
+                      try {
+                        await api.post(`/claims/${id}/void`);
+                        qc.invalidateQueries({ queryKey: ['claim', id] });
+                        showToast(t('lifecycle.archived', { defaultValue: 'Claim archived' }));
+                      } catch (err: unknown) {
+                        const e = err as { response?: { data?: { detail?: string } } };
+                        showToast(e?.response?.data?.detail ?? t('common.error'), false);
+                      } finally {
+                        setArchiving(false);
+                      }
+                    },
+                  });
                 }}
                 disabled={archiving}
                 className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-500 text-sm rounded-lg hover:bg-slate-50 disabled:opacity-60"
@@ -639,7 +665,17 @@ export default function ClaimDetailPage() {
           )}
           {claim.status !== 'void' && (
             <button
-              onClick={() => { if (confirm(t('claims.void_confirm'))) voidMutation.mutate(); }}
+              onClick={() => {
+                setConfirmDialog({
+                  open: true,
+                  title: t('claims.void', 'Void'),
+                  message: t('claims.void_confirm', 'Void this claim?'),
+                  onConfirm: () => {
+                    setConfirmDialog(prev => ({ ...prev, open: false }));
+                    voidMutation.mutate();
+                  },
+                });
+              }}
               className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-600 text-sm rounded-lg hover:bg-red-50"
             >
               <Trash2 className="w-4 h-4" />
@@ -647,20 +683,27 @@ export default function ClaimDetailPage() {
             </button>
           )}
           <button
-            onClick={async () => {
-              if (!confirm('Permanently delete this claim? This cannot be undone.')) return;
-              setDeletingClaim(true);
-              try {
-                await api.delete(`/claims/${id}`);
-                qc.invalidateQueries({ queryKey: ['work-queue'] });
-                qc.invalidateQueries({ queryKey: ['claims'] });
-                navigate('/');
-              } catch (err: unknown) {
-                const e = err as { response?: { data?: { detail?: string } } };
-                showToast(e?.response?.data?.detail ?? 'Failed to delete claim', false);
-              } finally {
-                setDeletingClaim(false);
-              }
+            onClick={() => {
+              setConfirmDialog({
+                open: true,
+                title: 'Delete Claim',
+                message: 'Permanently delete this claim? This cannot be undone.',
+                onConfirm: async () => {
+                  setConfirmDialog(prev => ({ ...prev, open: false }));
+                  setDeletingClaim(true);
+                  try {
+                    await api.delete(`/claims/${id}`);
+                    qc.invalidateQueries({ queryKey: ['work-queue'] });
+                    qc.invalidateQueries({ queryKey: ['claims'] });
+                    navigate('/');
+                  } catch (err: unknown) {
+                    const e = err as { response?: { data?: { detail?: string } } };
+                    showToast(e?.response?.data?.detail ?? 'Failed to delete claim', false);
+                  } finally {
+                    setDeletingClaim(false);
+                  }
+                },
+              });
             }}
             disabled={deletingClaim}
             className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-600 text-sm rounded-lg hover:bg-red-50 disabled:opacity-60"
@@ -1296,6 +1339,30 @@ export default function ClaimDetailPage() {
         </div>
       )}
 
+      {/* Venta del Paciente */}
+      {claim.notes && claim.notes.includes('VistaNet') && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-4">
+          <button
+            onClick={() => setShowSaleData(s => !s)}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <span className="flex items-center gap-2">
+              <span className="text-base">🛒</span>
+              Venta del Paciente
+            </span>
+            {showSaleData ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+          {showSaleData && (
+            <div className="px-4 pb-4 border-t border-slate-100">
+              <div className="mt-3 text-sm text-slate-700 bg-amber-50 border border-amber-100 rounded-lg p-3 whitespace-pre-wrap">
+                {claim.notes}
+              </div>
+              <p className="text-xs text-slate-400 mt-2">Datos importados de VistaNet. Los artículos de venta detallados estarán disponibles próximamente.</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Notes & Activity */}
       <div className="bg-white rounded-xl border border-slate-200 p-4">
         <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
@@ -1324,6 +1391,16 @@ export default function ClaimDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        variant={confirmDialog.variant}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </div>
   );
 }

@@ -287,6 +287,48 @@ async def scrub_claim(
     _scrub_claim_level(claim, issues)
     _scrub_service_lines(claim, issues)
 
+    # ── Clinical Cross-Checks ──────────────────────────────────────────────
+    cpt_codes = [sl.cpt_code for sl in claim.service_lines] if claim.service_lines else []
+    dx_codes = claim.diagnosis_codes or []
+
+    # 1. Contact lens materials without contact lens fitting code
+    has_cl_materials = any(c.startswith("V25") for c in cpt_codes)  # V2500-V2599
+    has_cl_fitting = any(c in ("92310", "92311", "92312", "92313", "92314") for c in cpt_codes)
+    if has_cl_materials and not has_cl_fitting:
+        issues.append({"type": "warning", "field": "clinical",
+            "msg_key": "scrub.cl_no_fitting",
+            "msg": "Contact lens materials billed without fitting code (92310-92314)"})
+
+    # 2. Refraction (92015) without refractive diagnosis
+    has_refraction = "92015" in cpt_codes
+    refractive_dx = any(c.startswith(("H52", "H53", "H54")) for c in dx_codes)
+    if has_refraction and not refractive_dx:
+        issues.append({"type": "warning", "field": "clinical",
+            "msg_key": "scrub.refraction_no_dx",
+            "msg": "Refraction (92015) billed but no refractive error diagnosis (H52.x)"})
+
+    # 3. Medical exam (92012/92014) without medical diagnosis
+    medical_exam_codes = {"92002", "92004", "92012", "92014"}
+    has_medical_exam = bool(medical_exam_codes & set(cpt_codes))
+    routine_only_dx = all(c.startswith(("Z01", "Z00")) for c in dx_codes)
+    if has_medical_exam and routine_only_dx and len(dx_codes) > 0:
+        issues.append({"type": "warning", "field": "clinical",
+            "msg_key": "scrub.medical_exam_routine_dx",
+            "msg": "Medical exam code used but only routine/preventive diagnoses \u2014 consider adding medical diagnosis"})
+
+    # 4. Comprehensive exam (92004/92014) for follow-up visit
+    # Informational — sometimes comprehensive is correct
+    if ("92004" in cpt_codes or "92014" in cpt_codes):
+        pass  # Future: check patient visit history
+
+    # 5. Glasses sold but no frame/lens V-codes
+    has_v2020 = "V2020" in cpt_codes  # Frame
+    has_lens = any(c.startswith(("V210", "V220", "V230")) for c in cpt_codes)
+    if has_v2020 and not has_lens:
+        issues.append({"type": "info", "field": "clinical",
+            "msg_key": "scrub.frame_no_lens",
+            "msg": "Frame (V2020) billed without lens codes \u2014 verify if lenses were prescribed"})
+
     # ── Score calculation ─────────────────────────────────────────────────
     errors = [i for i in issues if i["type"] == "error"]
     warnings = [i for i in issues if i["type"] == "warning"]
