@@ -31,6 +31,7 @@ interface WorkQueueClaim {
   notes: string | null;
   denial_reason?: string;
   denial_code?: string;
+  scrub_score?: number | null;
 }
 
 interface WorkQueueData {
@@ -228,6 +229,9 @@ function ClaimCard({ claim, showAging = false, showDenialReason = false, onArchi
       )}
       <div className="flex items-center gap-4 min-w-0 flex-1">
         <StatusBadge status={claim.status} />
+        {claim.scrub_score !== null && claim.scrub_score !== undefined && claim.scrub_score < 100 && (
+          <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-xs font-bold" title={t('dashboard.has_issues', 'Has issues')}>!</span>
+        )}
         <div className="min-w-0">
           <p className="text-sm font-medium text-slate-900 truncate">
             {claim.patient_name || claim.claim_number}

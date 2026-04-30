@@ -59,6 +59,7 @@ async def get_work_queue(
                 "days_aging": days_aging,
                 "date_of_submission": c.date_of_submission.isoformat() if c.date_of_submission else None,
                 "source": c.source,
+                "scrub_score": c.scrub_score,
                 "notes": c.notes,
             })
         return out
