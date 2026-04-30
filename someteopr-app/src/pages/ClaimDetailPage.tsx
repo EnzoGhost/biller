@@ -1339,8 +1339,8 @@ export default function ClaimDetailPage() {
         </div>
       )}
 
-      {/* Venta del Paciente */}
-      {claim.notes && claim.notes.includes('VistaNet') && (
+      {/* Patient Sale Data */}
+      {claim.source === 'vistanet' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-4">
           <button
             onClick={() => setShowSaleData(s => !s)}
@@ -1348,16 +1348,32 @@ export default function ClaimDetailPage() {
           >
             <span className="flex items-center gap-2">
               <span className="text-base">🛒</span>
-              Venta del Paciente
+              {t('claims.patient_sale', 'Patient Sale')}
             </span>
             {showSaleData ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
           {showSaleData && (
             <div className="px-4 pb-4 border-t border-slate-100">
-              <div className="mt-3 text-sm text-slate-700 bg-amber-50 border border-amber-100 rounded-lg p-3 whitespace-pre-wrap">
-                {claim.notes}
-              </div>
-              <p className="text-xs text-slate-400 mt-2">Datos importados de VistaNet. Los artículos de venta detallados estarán disponibles próximamente.</p>
+              {claim.sale_items && Array.isArray(claim.sale_items) && claim.sale_items.length > 0 ? (
+                <table className="w-full text-sm mt-3">
+                  <thead><tr className="text-left text-xs text-slate-400 border-b">
+                    <th className="pb-2">#</th>
+                    <th className="pb-2">{t('common.description', 'Description')}</th>
+                    <th className="pb-2 text-right">{t('common.amount', 'Amount')}</th>
+                  </tr></thead>
+                  <tbody>
+                    {(claim.sale_items as {name:string;amount:number}[]).map((item, i) => (
+                      <tr key={i} className="border-b border-slate-50">
+                        <td className="py-1.5 text-slate-400">{i + 1}</td>
+                        <td className="py-1.5 text-slate-700">{item.name}</td>
+                        <td className="py-1.5 text-right font-mono text-slate-600">${(item.amount || 0).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-sm text-slate-400 mt-3 italic">{t('claims.no_sale_data', 'No sale data available')}</p>
+              )}
             </div>
           )}
         </div>

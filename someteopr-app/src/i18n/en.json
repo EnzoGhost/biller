@@ -106,7 +106,9 @@
     "appeals": "Appeals",
     "deadline": "Due",
     "outcome": "Outcome",
-    "office_visit_placeholder": "Office visit..."
+    "office_visit_placeholder": "Office visit...",
+    "patient_sale": "Patient Sale",
+    "no_sale_data": "No sale data available"
   },
   "patients": {
     "title": "Patients",

@@ -234,6 +234,7 @@ class ClaimOut(BaseModel):
     stedi_transaction_id: Optional[str]
     payer_claim_number: Optional[str]
     source: str
+    sale_items: Optional[list] = None
     notes: Optional[str]
     service_lines: List[ServiceLineOut] = []
     created_at: datetime

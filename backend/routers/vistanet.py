@@ -708,6 +708,7 @@ async def create_claim_from_parsed(
         source="vistanet",
         external_ref=f"vistanet:{parsed['record_id']}",
         notes=f"Auto-imported from VistaNet bitácora. Plan: {parsed['plan_name']}. Record: {parsed['record_num']}.",
+        sale_items=parsed.get("sale_items"),
     )
     db.add(claim)
     await db.flush()
@@ -738,14 +739,10 @@ async def create_claim_from_parsed(
         if not numeric_pointers and diagnosis_codes:
             numeric_pointers = [1]
 
-        # Distribute exam amount across procedures if available
-        proc_amount = round(exam_amount / num_procedures, 2) if exam_amount > 0 and num_procedures > 0 else 0.0
-
-        # If amount is still 0, look up fee schedule from DB
-        if proc_amount <= 0:
-            from routers.fee_schedule import get_fee_amount as _get_fee
-            db_amount, _src = await _get_fee(db, proc["code"], payer.id if payer else None)
-            proc_amount = db_amount if db_amount > 0 else _LEGACY_FEE_SCHEDULE.get(proc["code"], 0.0)
+        # Always use fee schedule for billed amounts (NOT patient deductible/copay from sale)
+        from routers.fee_schedule import get_fee_amount as _get_fee
+        db_amount, _src = await _get_fee(db, proc["code"], payer.id if payer else None)
+        proc_amount = db_amount if db_amount > 0 else _LEGACY_FEE_SCHEDULE.get(proc["code"], 0.0)
 
         sl = ServiceLine(
             claim_id=claim.id,

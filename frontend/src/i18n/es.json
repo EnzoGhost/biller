@@ -106,7 +106,9 @@
     "appeals": "Apelaciones",
     "deadline": "Vence",
     "outcome": "Resultado",
-    "office_visit_placeholder": "Visita de oficina..."
+    "office_visit_placeholder": "Visita de oficina...",
+    "patient_sale": "Venta del Paciente",
+    "no_sale_data": "No hay datos de venta disponibles"
   },
   "patients": {
     "title": "Pacientes",

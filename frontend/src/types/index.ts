@@ -125,6 +125,7 @@ export interface Claim {
   stedi_transaction_id?: string;
   payer_claim_number?: string;
   source: string;
+  sale_items?: { name: string; amount: number }[];
   notes?: string;
   service_lines: ServiceLine[];
   created_at: string;
