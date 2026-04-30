@@ -59,13 +59,13 @@ def _scrub_patient(claim: Claim, issues: list) -> None:
         issues.append({"type": "error", "field": "patient.dob", "msg_key": "scrub.patient_placeholder_dob", "msg": "Patient DOB is placeholder (1900-01-01) — update with real DOB"})
 
     if not patient.gender:
-        issues.append({"type": "error", "field": "patient.gender", "msg_key": "scrub.patient_no_gender", "msg": "Patient gender missing"})
+        issues.append({"type": "info", "field": "patient.gender", "msg_key": "scrub.patient_no_gender", "msg": "Patient gender not set (optional for most PR payers)"})
     elif str(patient.gender) == "U" or (hasattr(patient.gender, 'value') and patient.gender.value == "U"):
-        issues.append({"type": "warning", "field": "patient.gender", "msg_key": "scrub.patient_gender_unknown", "msg": "Patient gender is 'Unknown' — most payers require M or F"})
+        issues.append({"type": "info", "field": "patient.gender", "msg_key": "scrub.patient_gender_unknown", "msg": "Patient gender is 'Unknown' (optional for most PR payers)"})
 
     # Address
     if not (patient.city or "").strip() or not (patient.state or "").strip() or not (patient.zip_code or "").strip():
-        issues.append({"type": "error", "field": "patient.address", "msg_key": "scrub.patient_no_address", "msg": "Patient address incomplete — need at least city, state, zip"})
+        issues.append({"type": "warning" if (patient.address_line1 or "").strip() else "error", "field": "patient.address", "msg_key": "scrub.patient_no_address", "msg": "Patient address incomplete — need at least city, state, zip"})
 
     # Member/insurance ID for this payer
     if claim.payer_id and patient.insurances:
@@ -261,7 +261,7 @@ async def scrub_claim(
     Comprehensive 837P pre-submission scrub.
     Validates patient, provider, payer, claim-level fields, and every service line.
     Score: 100 base, -25 per error, -5 per warning.
-    Ready threshold: score >= 80 AND zero errors.
+    Ready threshold: PERFECT score (zero errors AND zero warnings). Anything less needs review.
     """
     result = await db.execute(
         select(Claim)
@@ -327,7 +327,7 @@ Identifica problemas potenciales de facturación y sugiere mejoras. Responde en 
     claim.scrub_issues = issues
 
     # Auto-advance to ready if scrub passes (score >= 80 AND zero errors)
-    if score >= 80 and not any(i.get("type") == "error" for i in issues):
+    if not any(i.get("type") == "error" for i in issues) and not any(i.get("type") == "warning" for i in issues):
         if claim.status == ClaimStatus.DRAFT:
             claim.status = ClaimStatus.READY
             from routers.audit import log_action

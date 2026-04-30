@@ -530,20 +530,55 @@ async def find_or_create_patient(
     # Create new patient
     first_name, last_name = split_patient_name(parsed["patient_name"])
 
-    # Parse address
+    # Parse address — PR addresses typically end with "CITY PR ZIPCODE" or "CITY P.R. ZIPCODE"
     city = ""
     state = "PR"
     zip_code = ""
     address_line1 = parsed["address"]
     if address_line1:
-        # Try to extract zip code from end
-        zip_match = re.search(r"(\d{5})(?:-\d{4})?$", address_line1)
+        # Clean up the address (remove extra whitespace, newlines)
+        address_clean = re.sub(r'\s+', ' ', address_line1).strip()
+
+        # Try to extract zip code
+        zip_match = re.search(r'(\d{5})(?:-\d{4})?\s*$', address_clean)
         if zip_match:
             zip_code = zip_match.group(1)
-        # Try to extract "PR" state
-        pr_match = re.search(r"\b(PR|P\.R\.?)\b", address_line1, re.IGNORECASE)
-        if pr_match:
-            state = "PR"
+
+        # Try to extract city — look for pattern: CITY (PR|P.R.) ZIPCODE
+        city_match = re.search(
+            r'([A-Z][A-Za-z\s\']+?)\s+(?:PR|P\.?R\.?)\s+\d{5}',
+            address_clean, re.IGNORECASE
+        )
+        if city_match:
+            city = city_match.group(1).strip().title()
+        else:
+            # Fallback: try to get city from known PR municipalities
+            pr_cities = [
+                'MANATI', 'BARCELONETA', 'ARECIBO', 'SAN JUAN', 'BAYAMON',
+                'CAROLINA', 'PONCE', 'MAYAGUEZ', 'CAGUAS', 'GUAYNABO',
+                'HUMACAO', 'AGUADILLA', 'HATILLO', 'VEGA BAJA', 'VEGA ALTA',
+                'DORADO', 'TOA BAJA', 'TOA ALTA', 'TRUJILLO ALTO', 'UTUADO',
+                'MOROVIS', 'CIALES', 'FLORIDA', 'COROZAL', 'NARANJITO',
+                'COMERIO', 'OROCOVIS', 'JAYUYA', 'ADJUNTAS', 'LARES',
+                'SAN SEBASTIAN', 'ISABELA', 'QUEBRADILLAS', 'CAMUY',
+                'RIO GRANDE', 'LOIZA', 'CANÓVANAS', 'JUNCOS', 'LAS PIEDRAS',
+                'NAGUABO', 'FAJARDO', 'CEIBA', 'LUQUILLO', 'YABUCOA',
+                'MAUNABO', 'PATILLAS', 'ARROYO', 'GUAYAMA', 'SALINAS',
+                'SANTA ISABEL', 'COAMO', 'JUANA DIAZ', 'VILLALBA',
+                'AIBONITO', 'BARRANQUITAS', 'CIDRA', 'AGUAS BUENAS',
+                'CATAÑO', 'GUANICA', 'YAUCO', 'SAN GERMAN', 'LAJAS',
+                'SABANA GRANDE', 'MARICAO', 'HORMIGUEROS', 'CABO ROJO',
+                'ANASCO', 'LAS MARIAS', 'RINCON', 'AGUADA', 'MOCA',
+                'PEÑUELAS', 'CAYEY', 'GURABO', 'SAN LORENZO',
+            ]
+            addr_upper = address_clean.upper()
+            for c in pr_cities:
+                if c in addr_upper:
+                    city = c.title()
+                    break
+
+        state = "PR"
+        address_line1 = address_clean
 
     patient = Patient(
         wink_patient_id=parsed["record_id"],
@@ -883,18 +918,31 @@ async def pull_bitacora(
 
     await db.commit()
 
-    # Auto-scrub all newly created claims
+    # Auto-scrub all newly created claims (re-query with eager loading)
     from routers.ai import scrub_claim as _scrub_claim
     from schemas import ScrubRequest as _ScrubReq
+    from sqlalchemy.orm import selectinload
 
     for claim_obj in _new_claims:
         try:
+            # Re-load with all relationships for scrub
+            fresh = await db.execute(
+                select(Claim).options(
+                    selectinload(Claim.patient).selectinload(Patient.insurances),
+                    selectinload(Claim.provider),
+                    selectinload(Claim.payer),
+                    selectinload(Claim.service_lines),
+                ).where(Claim.id == claim_obj.id)
+            )
+            fresh_claim = fresh.scalar_one_or_none()
+            if not fresh_claim:
+                continue
             scrub_resp = await _scrub_claim(
-                _ScrubReq(claim_id=claim_obj.id), db, None  # type: ignore[arg-type]
+                _ScrubReq(claim_id=fresh_claim.id), db, None  # type: ignore[arg-type]
             )
             logger.info(
-                "Auto-scrub claim %s: score=%.0f",
-                claim_obj.claim_number, scrub_resp.score,
+                "Auto-scrub claim %s: score=%.0f status=%s",
+                fresh_claim.claim_number, scrub_resp.score, fresh_claim.status,
             )
         except Exception as e:
             logger.warning("Auto-scrub failed for claim %s: %s", claim_obj.id, e)

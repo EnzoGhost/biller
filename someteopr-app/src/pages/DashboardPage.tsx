@@ -64,7 +64,7 @@ const fmt = (n: number) =>
 
 function PullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const { t } = useTranslation();
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date(); const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo, setDateTo] = useState(today);
   const [result, setResult] = useState<PullResult | null>(null);
