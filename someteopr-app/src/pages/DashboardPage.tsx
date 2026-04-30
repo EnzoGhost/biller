@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -289,10 +289,31 @@ function ClaimCard({ claim, showAging = false, showDenialReason = false, onArchi
 
 // ── Section ──────────────────────────────────────────────────────────────────
 
+function IndeterminateCheckbox({ checked, indeterminate, onChange, className }: {
+  checked: boolean;
+  indeterminate: boolean;
+  onChange: () => void;
+  className?: string;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      className={className}
+    />
+  );
+}
+
 function Section({
   title, icon: Icon, iconColor, claims, defaultOpen = true,
   showAging = false, showDenialReason = false, headerAction, onArchive,
-  selectedIds, onToggleSelect,
+  selectedIds, onToggleSelect, onToggleSelectAll,
 }: {
   title: string;
   icon: typeof FileText;
@@ -305,11 +326,17 @@ function Section({
   onArchive?: (claimId: number) => void;
   selectedIds?: Set<number>;
   onToggleSelect?: (claimId: number) => void;
+  onToggleSelectAll?: (claimIds: number[], allSelected: boolean) => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(defaultOpen);
 
   if (claims.length === 0) return null;
+
+  const claimIds = claims.map(c => c.id);
+  const selectedCount = selectedIds ? claimIds.filter(id => selectedIds.has(id)).length : 0;
+  const allSelected = selectedCount === claims.length;
+  const someSelected = selectedCount > 0 && !allSelected;
 
   return (
     <div className="mb-6">
@@ -318,6 +345,16 @@ function Section({
         className="flex items-center justify-between w-full mb-2 group"
       >
         <div className="flex items-center gap-2">
+          {onToggleSelectAll && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <IndeterminateCheckbox
+                checked={allSelected}
+                indeterminate={someSelected}
+                onChange={() => onToggleSelectAll(claimIds, allSelected)}
+                className="w-4 h-4 rounded border-slate-300 text-sky-500 focus:ring-sky-500 cursor-pointer"
+              />
+            </div>
+          )}
           <Icon className={`w-4 h-4 ${iconColor}`} />
           <h2 className="text-sm font-semibold text-slate-700">
             {title}
@@ -370,6 +407,18 @@ export default function DashboardPage() {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (claimIds: number[], allSelected: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        claimIds.forEach(id => next.delete(id));
+      } else {
+        claimIds.forEach(id => next.add(id));
+      }
       return next;
     });
   };
@@ -517,6 +566,7 @@ export default function DashboardPage() {
         onArchive={handleArchiveClaim}
         selectedIds={selectedIds}
         onToggleSelect={toggleSelect}
+        onToggleSelectAll={toggleSelectAll}
       />
 
       {/* Ready to Submit — top priority */}
@@ -527,6 +577,7 @@ export default function DashboardPage() {
         claims={q.ready}
         selectedIds={selectedIds}
         onToggleSelect={toggleSelect}
+        onToggleSelectAll={toggleSelectAll}
         headerAction={
           q.ready.length > 0 ? (
             <button
@@ -560,6 +611,7 @@ export default function DashboardPage() {
         claims={q.new}
         selectedIds={selectedIds}
         onToggleSelect={toggleSelect}
+        onToggleSelectAll={toggleSelectAll}
       />
 
       {/* Submitted */}
@@ -571,6 +623,7 @@ export default function DashboardPage() {
         showAging
         selectedIds={selectedIds}
         onToggleSelect={toggleSelect}
+        onToggleSelectAll={toggleSelectAll}
       />
 
       {/* Recently Paid */}
@@ -582,6 +635,7 @@ export default function DashboardPage() {
         defaultOpen={false}
         selectedIds={selectedIds}
         onToggleSelect={toggleSelect}
+        onToggleSelectAll={toggleSelectAll}
       />
 
       {/* Empty state */}

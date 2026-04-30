@@ -55,6 +55,7 @@
     "section_paid": "Pagadas Recientemente",
     "days_aging": "{{days}}d",
     "submitted_on": "Sometida",
+    "select_all": "Seleccionar Todo",
     "no_claims_section": "No hay reclamaciones en esta sección",
     "pull_modal_title": "Buscar Bitácora en VistaNet",
     "date_from": "Fecha Desde",
@@ -108,7 +109,10 @@
     "outcome": "Resultado",
     "office_visit_placeholder": "Visita de oficina...",
     "patient_sale": "Venta del Paciente",
-    "no_sale_data": "No hay datos de venta disponibles"
+    "no_sale_data": "No hay datos de venta disponibles",
+    "category_diagnoses": "Diagnósticos",
+    "category_procedures": "Procedimientos",
+    "category_materials": "Materiales"
   },
   "patients": {
     "title": "Pacientes",
