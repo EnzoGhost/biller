@@ -9,6 +9,7 @@
     "import": "Import",
     "reports": "Reports",
     "settings": "Settings",
+    "fee_schedule": "Fee Schedule",
     "payments": "Payments",
     "denials": "Denials"
   },

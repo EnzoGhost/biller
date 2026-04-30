@@ -33,27 +33,13 @@ VISTANET_LOCATION = "MANATI"
 VISTANET_ENCODING = "iso-8859-1"
 REQUEST_TIMEOUT = 30
 
-# Default optometry fee schedule (PR market rates)
-# These are typical billed amounts — actual allowed amounts vary by payer
-DEFAULT_FEE_SCHEDULE = {
-    "92002": 125.00,  # Ophthalmological services, new patient, intermediate
-    "92004": 200.00,  # Ophthalmological services, new patient, comprehensive
-    "92012": 100.00,  # Ophthalmological services, established, intermediate
-    "92014": 150.00,  # Ophthalmological services, established, comprehensive
-    "92015": 75.00,   # Refraction
-    "99201": 75.00,   # Office visit, new patient, straightforward
-    "99202": 110.00,  # Office visit, new patient, low
-    "99203": 150.00,  # Office visit, new patient, moderate
-    "99211": 40.00,   # Office visit, established, minimal
-    "99212": 65.00,   # Office visit, established, straightforward
-    "99213": 100.00,  # Office visit, established, low
-    "99214": 150.00,  # Office visit, established, moderate
-    "V2020": 0.00,    # Frame (keep at 0, materials priced from sale)
-    "V2100": 0.00,    # Sphere, single vision
-    "V2200": 0.00,    # Sphere, bifocal
-    "V2300": 0.00,    # Sphere, trifocal
-    "V2410": 0.00,    # Variable asphericity lens
-    "V2799": 0.00,    # Contact lens
+# Legacy hardcoded fee schedule — used as fallback only if DB has no entry
+_LEGACY_FEE_SCHEDULE = {
+    "92002": 125.00, "92004": 200.00, "92012": 100.00, "92014": 150.00,
+    "92015": 75.00, "99201": 75.00, "99202": 110.00, "99203": 150.00,
+    "99211": 40.00, "99212": 65.00, "99213": 100.00, "99214": 150.00,
+    "V2020": 0.00, "V2100": 0.00, "V2200": 0.00, "V2300": 0.00,
+    "V2410": 0.00, "V2799": 0.00,
 }
 
 MONTHS_ES = {
@@ -749,9 +735,11 @@ async def create_claim_from_parsed(
         # Distribute exam amount across procedures if available
         proc_amount = round(exam_amount / num_procedures, 2) if exam_amount > 0 and num_procedures > 0 else 0.0
 
-        # If amount is still 0, look up fee schedule
+        # If amount is still 0, look up fee schedule from DB
         if proc_amount <= 0:
-            proc_amount = DEFAULT_FEE_SCHEDULE.get(proc["code"], 0.0)
+            from routers.fee_schedule import get_fee_amount as _get_fee
+            db_amount, _src = await _get_fee(db, proc["code"], payer.id if payer else None)
+            proc_amount = db_amount if db_amount > 0 else _LEGACY_FEE_SCHEDULE.get(proc["code"], 0.0)
 
         sl = ServiceLine(
             claim_id=claim.id,
@@ -771,9 +759,11 @@ async def create_claim_from_parsed(
         # Use the cross-referenced charge_amount from sale items
         mat_amount = mat.get("charge_amount", 0.0)
 
-        # If amount is still 0, look up fee schedule (V-codes typically stay 0 unless sale data exists)
+        # If amount is still 0, look up fee schedule from DB (V-codes typically stay 0 unless sale data exists)
         if mat_amount <= 0:
-            mat_amount = DEFAULT_FEE_SCHEDULE.get(mat["code"], 0.0)
+            from routers.fee_schedule import get_fee_amount as _get_fee
+            db_amount, _src = await _get_fee(db, mat["code"], payer.id if payer else None)
+            mat_amount = db_amount if db_amount > 0 else _LEGACY_FEE_SCHEDULE.get(mat["code"], 0.0)
 
         # For materials, default pointers to first diagnosis if available
         mat_pointers = [1] if diagnosis_codes else []

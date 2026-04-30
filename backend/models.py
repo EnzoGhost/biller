@@ -4,9 +4,10 @@ SQLAlchemy ORM models for Medical Biller.
 from __future__ import annotations
 import enum
 from datetime import datetime, date
+from typing import Optional
 from sqlalchemy import (
     String, Integer, Float, Boolean, Text, Date, DateTime,
-    ForeignKey, Enum as SAEnum, JSON
+    ForeignKey, Enum as SAEnum, JSON, UniqueConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
@@ -407,6 +408,27 @@ class ClinicSettings(Base):
     setup_complete: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── Fee Schedule ─────────────────────────────────────────────────────────────
+
+class FeeScheduleEntry(Base):
+    __tablename__ = "fee_schedule"
+    __table_args__ = (UniqueConstraint('payer_id', 'cpt_code', name='uq_fee_payer_cpt'),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    payer_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("payers.id"), nullable=True)  # NULL = default/Medicare baseline
+    cpt_code: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    allowed_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # exam, diagnostic, contacts, materials
+    source: Mapped[str] = mapped_column(String(50), default="manual")  # medicare, manual, learned
+    effective_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    payer: Mapped[Optional["Payer"]] = relationship("Payer")
 
 
 class Appeal(Base):

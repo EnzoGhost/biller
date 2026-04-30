@@ -6,7 +6,7 @@ import {
   LayoutDashboard, FileText, Users, Building2,
   CheckCircle, Upload, BarChart3, Settings,
   ChevronLeft, ChevronRight, LogOut, Stethoscope, RefreshCw, CreditCard, XCircle,
-  Bell, Wand2,
+  Bell, Wand2, DollarSign,
 } from 'lucide-react';
 import { useAuthStore } from '../../hooks/useAuth';
 import clsx from 'clsx';
@@ -24,6 +24,7 @@ const NAV_ITEMS = [
   { to: '/era',         icon: RefreshCw,       labelKey: 'inmediata.era_dashboard' },
   { to: '/payments',    icon: CreditCard,      labelKey: 'nav.payments' },
   { to: '/denials',     icon: XCircle,         labelKey: 'nav.denials' },
+  { to: '/fee-schedule', icon: DollarSign,     labelKey: 'nav.fee_schedule' },
   { to: '/setup',       icon: Wand2,           labelKey: 'wizard.title' },
   { to: '/settings',    icon: Settings,        labelKey: 'nav.settings' },
 ];

@@ -22,6 +22,7 @@ const ERADashboardPage = lazy(() => import('./pages/ERADashboardPage'));
 const PaymentsPage     = lazy(() => import('./pages/PaymentsPage'));
 const FollowUpPage     = lazy(() => import('./pages/FollowUpPage'));
 const SetupWizardPage  = lazy(() => import('./pages/SetupWizardPage'));
+const FeeSchedulePage  = lazy(() => import('./pages/FeeSchedulePage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -75,6 +76,7 @@ export default function App() {
               <Route path="payments" element={<PaymentsPage />} />
               <Route path="follow-up" element={<FollowUpPage />} />
               <Route path="setup" element={<SetupWizardPage />} />
+              <Route path="fee-schedule" element={<FeeSchedulePage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
