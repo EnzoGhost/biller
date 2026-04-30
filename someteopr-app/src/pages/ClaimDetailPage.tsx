@@ -720,21 +720,21 @@ export default function ClaimDetailPage() {
       </div>
 
       {/* Scrub result */}
-      {scrubResult && (
-        <div className={`rounded-xl border p-4 mb-4 ${scrubResult.score >= 80 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+      {(scrubResult || (claim.scrub_issues && claim.scrub_issues.length > 0)) && (
+        <div className={`rounded-xl border p-4 mb-4 ${(scrubResult?.score ?? claim.scrub_score ?? 0) >= 100 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
           <div className="flex items-center gap-2 mb-2">
-            <ShieldCheck className={`w-4 h-4 ${scrubResult.score >= 80 ? 'text-emerald-600' : 'text-amber-600'}`} />
+            <ShieldCheck className={`w-4 h-4 ${(scrubResult?.score ?? claim.scrub_score ?? 0) >= 100 ? 'text-emerald-600' : 'text-amber-600'}`} />
             <span className="text-sm font-semibold">
-              {t('claims.scrub_score', { score: scrubResult.score.toFixed(0) })}
+              {t('claims.scrub_score', { score: (scrubResult?.score ?? claim.scrub_score ?? 0).toFixed(0) })}
             </span>
           </div>
-          {scrubResult.issues.map((issue, i) => (
+          {(scrubResult?.issues ?? claim.scrub_issues ?? []).map((issue, i) => (
             <div key={i} className="flex items-start gap-2 text-sm mt-1">
               <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${issue.type === 'error' ? 'text-red-500' : 'text-amber-500'}`} />
-              <span className="text-slate-700">{issue.msg}</span>
+              <span className="text-slate-700">{issue.msg_key ? t(issue.msg_key, { defaultValue: issue.msg, ...(issue.msg_params || {}) }) : issue.msg}</span>
             </div>
           ))}
-          {scrubResult.suggestions.map((s, i) => (
+          {(scrubResult?.suggestions ?? []).map((s, i) => (
             <p key={i} className="text-xs text-slate-600 mt-1 ml-5">💡 {s}</p>
           ))}
         </div>
@@ -1340,7 +1340,7 @@ export default function ClaimDetailPage() {
       )}
 
       {/* Patient Sale Data */}
-      {claim.source === 'vistanet' && (
+      {claim.sale_items && Array.isArray(claim.sale_items) && claim.sale_items.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-4">
           <button
             onClick={() => setShowSaleData(s => !s)}
