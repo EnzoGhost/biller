@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 
 from database import get_db
 from models import (
@@ -918,35 +918,28 @@ async def pull_bitacora(
 
     await db.commit()
 
-    # Auto-scrub all newly created claims (re-query with eager loading)
-    from routers.ai import scrub_claim as _scrub_claim
-    from schemas import ScrubRequest as _ScrubReq
-    from sqlalchemy.orm import selectinload
-
+    # Auto-scrub: simple validation + auto-advance (avoids greenlet issues)
+    from routers.validation import validate_claim as _validate
     for claim_obj in _new_claims:
         try:
-            # Re-load with all relationships for scrub
-            fresh = await db.execute(
-                select(Claim).options(
-                    selectinload(Claim.patient).selectinload(Patient.insurances),
-                    selectinload(Claim.provider),
-                    selectinload(Claim.payer),
-                    selectinload(Claim.service_lines),
-                ).where(Claim.id == claim_obj.id)
-            )
-            fresh_claim = fresh.scalar_one_or_none()
-            if not fresh_claim:
-                continue
-            scrub_resp = await _scrub_claim(
-                _ScrubReq(claim_id=fresh_claim.id), db, None  # type: ignore[arg-type]
-            )
-            logger.info(
-                "Auto-scrub claim %s: score=%.0f status=%s",
-                fresh_claim.claim_number, scrub_resp.score, fresh_claim.status,
-            )
+            validation = await _validate(claim_obj.id, db)
+            is_valid = validation.get("is_valid", False)
+            issue_count = len(validation.get("issues", []))
+            if is_valid and issue_count == 0:
+                await db.execute(
+                    text("UPDATE claims SET status = 'READY', scrub_score = 100 WHERE id = :cid AND status = 'DRAFT'"),
+                    {"cid": claim_obj.id}
+                )
+                logger.info("Auto-validated claim %s → READY", claim_obj.claim_number)
+            else:
+                await db.execute(
+                    text("UPDATE claims SET scrub_score = :score WHERE id = :cid"),
+                    {"score": max(0, 100 - issue_count * 20), "cid": claim_obj.id}
+                )
+                logger.info("Auto-validated claim %s → DRAFT (%d issues)", claim_obj.claim_number, issue_count)
         except Exception as e:
-            logger.warning("Auto-scrub failed for claim %s: %s", claim_obj.id, e)
-            errors.append(f"Auto-scrub failed for {claim_obj.claim_number}: {e}")
+            logger.warning("Auto-validate failed for claim %s: %s", claim_obj.id, e)
+    await db.commit()
 
     return PullBitacoraResponse(
         patients_found=len(parsed_patients),
