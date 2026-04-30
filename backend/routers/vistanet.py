@@ -484,9 +484,12 @@ async def find_or_create_patient(
     parsed: dict,
 ) -> Patient:
     """Find existing patient by record number or create a new one."""
+    from sqlalchemy.orm import selectinload as _sil
+
     # Try to find by wink_patient_id (VistaNet record)
     result = await db.execute(
-        select(Patient).where(Patient.wink_patient_id == parsed["record_id"]).limit(1)
+        select(Patient).options(_sil(Patient.insurances))
+        .where(Patient.wink_patient_id == parsed["record_id"]).limit(1)
     )
     patient = result.scalars().first()
     if patient:
@@ -494,7 +497,8 @@ async def find_or_create_patient(
 
     # Try by MRN
     result = await db.execute(
-        select(Patient).where(Patient.mrn == parsed["record_num"]).limit(1)
+        select(Patient).options(_sil(Patient.insurances))
+        .where(Patient.mrn == parsed["record_num"]).limit(1)
     )
     patient = result.scalars().first()
     if patient:
@@ -504,7 +508,8 @@ async def find_or_create_patient(
     first_name_q, last_name_q = split_patient_name(parsed["patient_name"])
     if first_name_q and last_name_q and parsed.get("dob"):
         result = await db.execute(
-            select(Patient).where(
+            select(Patient).options(_sil(Patient.insurances))
+            .where(
                 func.upper(Patient.first_name) == first_name_q.upper(),
                 func.upper(Patient.last_name) == last_name_q.upper(),
             ).limit(1)
