@@ -908,27 +908,45 @@ async def pull_bitacora(
 
     await db.commit()
 
-    # Auto-scrub: simple validation + auto-advance (avoids greenlet issues)
-    from routers.validation import validate_claim as _validate
+    # Auto-advance: pure SQL checks only (no ORM lazy loading)
     for claim_obj in _new_claims:
         try:
-            validation = await _validate(claim_obj.id, db)
-            is_valid = validation.get("is_valid", False)
-            issue_count = len(validation.get("issues", []))
-            if is_valid and issue_count == 0:
+            cid = claim_obj.id
+            # Check: has diagnosis codes, has service lines with amount > 0, has payer
+            sl_check = await db.execute(
+                text("SELECT COUNT(*), COALESCE(SUM(billed_amount), 0) FROM service_lines WHERE claim_id = :cid"),
+                {"cid": cid}
+            )
+            sl_count, sl_total = sl_check.one()
+            claim_check = await db.execute(
+                text("SELECT diagnosis_codes, payer_id, provider_id FROM claims WHERE id = :cid"),
+                {"cid": cid}
+            )
+            row = claim_check.one()
+            has_dx = bool(row[0] and row[0] != '[]' and row[0] != 'null')
+            has_payer = bool(row[1])
+            has_provider = bool(row[2])
+
+            if sl_count > 0 and sl_total > 0 and has_dx and has_payer and has_provider:
                 await db.execute(
-                    text("UPDATE claims SET status = 'READY', scrub_score = 100 WHERE id = :cid AND status = 'DRAFT'"),
-                    {"cid": claim_obj.id}
+                    text("UPDATE claims SET status = 'READY', scrub_score = 100, total_billed = :total WHERE id = :cid AND status = 'DRAFT'"),
+                    {"cid": cid, "total": float(sl_total)}
                 )
-                logger.info("Auto-validated claim %s → READY", claim_obj.claim_number)
+                logger.info("Auto-advance claim %s → READY (total=$%.2f)", claim_obj.claim_number, sl_total)
             else:
+                issues = []
+                if not has_dx: issues.append("no diagnosis")
+                if sl_count == 0: issues.append("no service lines")
+                if sl_total <= 0: issues.append("$0 billed")
+                if not has_payer: issues.append("no payer")
+                score = max(0, 100 - len(issues) * 25)
                 await db.execute(
-                    text("UPDATE claims SET scrub_score = :score WHERE id = :cid"),
-                    {"score": max(0, 100 - issue_count * 20), "cid": claim_obj.id}
+                    text("UPDATE claims SET scrub_score = :score, total_billed = :total WHERE id = :cid"),
+                    {"score": score, "total": float(sl_total), "cid": cid}
                 )
-                logger.info("Auto-validated claim %s → DRAFT (%d issues)", claim_obj.claim_number, issue_count)
+                logger.info("Claim %s stays DRAFT: %s", claim_obj.claim_number, ", ".join(issues))
         except Exception as e:
-            logger.warning("Auto-validate failed for claim %s: %s", claim_obj.id, e)
+            logger.warning("Auto-advance failed for claim %s: %s", claim_obj.id, e)
     await db.commit()
 
     return PullBitacoraResponse(
