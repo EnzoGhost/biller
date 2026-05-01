@@ -536,16 +536,17 @@ async def find_or_create_patient(
             zip_code = zip_match.group(1)
 
         # Try to extract city — look for pattern: CITY (PR|P.R.) ZIPCODE
+        # Use \w and Unicode flag to handle accented chars (MANATÍ, CAÑOVANAS, etc.)
         city_match = re.search(
-            r'([A-Z][A-Za-z\s\']+?)\s+(?:PR|P\.?R\.?)\s+\d{5}',
-            address_clean, re.IGNORECASE
+            r'([\w][\w\s\']+?)\s+(?:PR|P\.?R\.?)\s+\d{5}',
+            address_clean, re.IGNORECASE | re.UNICODE
         )
         if city_match:
             city = city_match.group(1).strip().title()
         else:
             # Fallback: try to get city from known PR municipalities
             pr_cities = [
-                'MANATI', 'BARCELONETA', 'ARECIBO', 'SAN JUAN', 'BAYAMON',
+                'MANATI', 'MANATÍ', 'BARCELONETA', 'ARECIBO', 'SAN JUAN', 'BAYAMON',
                 'CAROLINA', 'PONCE', 'MAYAGUEZ', 'CAGUAS', 'GUAYNABO',
                 'HUMACAO', 'AGUADILLA', 'HATILLO', 'VEGA BAJA', 'VEGA ALTA',
                 'DORADO', 'TOA BAJA', 'TOA ALTA', 'TRUJILLO ALTO', 'UTUADO',

@@ -206,9 +206,10 @@ def _scrub_service_lines(claim: Claim, issues: list) -> None:
             issues.append({"type": "error", "field": f"line_{ln}", "msg_key": "scrub.line_no_units",
                            "msg_params": {"line": ln}, "msg": f"Line {ln}: units must be >= 1"})
 
-        # Diagnosis pointers
+        # Diagnosis pointers — only required for procedure codes, not materials (V-codes/HCPCS)
         pointers = sl.diagnosis_pointers or []
-        if not pointers:
+        is_material = sl.cpt_code and sl.cpt_code[0:1].isalpha()  # V2020, A4000, etc.
+        if not pointers and not is_material and dx_codes:
             issues.append({"type": "error", "field": f"line_{ln}", "msg_key": "scrub.no_dx_pointers",
                            "msg_params": {"line": ln, "cpt": sl.cpt_code},
                            "msg": f"Line {ln} ({sl.cpt_code}): no diagnosis pointers"})
