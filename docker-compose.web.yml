@@ -1,0 +1,26 @@
+# SometeoPR Web App — Docker Compose
+# Usage: docker compose -f docker-compose.web.yml up -d --build
+
+services:
+  someteopr:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: someteopr-web
+    restart: unless-stopped
+    ports:
+      - "8100:8100"
+    volumes:
+      - /opt/someteopr/data:/app/data
+    env_file:
+      - /opt/someteopr/.env
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/someteopr.db
+      - DEBUG=false
+      - CORS_ORIGINS=*
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

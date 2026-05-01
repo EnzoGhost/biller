@@ -2,8 +2,13 @@
 Medical Biller PR — FastAPI Backend
 Port: 8100
 """
+import os
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 
 from config import settings
@@ -62,6 +67,23 @@ app.include_router(fee_schedule.router)
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "Medical Biller PR", "version": "1.0.0"}
+
+
+# ── Serve frontend static files in production ────────────────────────
+STATIC_DIR = Path(__file__).parent / "static"
+if STATIC_DIR.is_dir():
+    # Serve static assets (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="frontend-assets")
+
+    # SPA fallback: serve index.html for all non-API routes
+    @app.get("/{path:path}")
+    async def serve_spa(path: str):
+        # If a static file exists, serve it
+        file_path = STATIC_DIR / path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        # Otherwise serve index.html (SPA routing)
+        return FileResponse(STATIC_DIR / "index.html")
 
 
 if __name__ == "__main__":
