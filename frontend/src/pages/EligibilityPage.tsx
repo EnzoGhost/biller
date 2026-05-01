@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { CheckCircle, XCircle, Search, AlertCircle, Globe, User } from 'lucide-react';
 import api from '../lib/api';
 import { formatDate } from '../lib/dates';
-import { formatDate } from '../lib/dates';
 import DatePicker from '../components/ui/DatePicker';
 import type { Patient, Payer } from '../types';
 
