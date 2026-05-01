@@ -27,7 +27,10 @@ rsync -avz --delete -e ssh frontend/dist/ "$VPS:$VPS_DIR/static/"
 # 4. Sync Docker/deploy files
 scp Dockerfile.web docker-compose.web.yml "$VPS:$VPS_DIR/"
 
-# 5. Fix permissions
+# 5. Copy static files into backend dir (FastAPI serves them)
+ssh "$VPS" "cp -r /opt/someteopr/app/static /opt/someteopr/app/backend/static"
+
+# 6. Fix permissions
 ssh "$VPS" "chmod -R a+r /opt/someteopr/app/ && find /opt/someteopr/app -type d -exec chmod 755 {} +"
 
 # 6. Build and start container
