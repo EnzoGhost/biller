@@ -813,17 +813,31 @@ export default function ClaimDetailPage() {
         </div>
       </div>
 
-      {/* Service Lines */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-4">
-        <button
-          onClick={() => setShowLines(s => !s)}
-          className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          {t('claims.service_lines')} ({claim.service_lines.length})
-          {showLines ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
-        {showLines && (
-          <table className="w-full text-sm border-t border-slate-200">
+      {/* Service Lines — grouped by category */}
+      {(() => {
+        // Categorize service lines by code format
+        const categorize = (code: string): 'diagnoses' | 'procedures' | 'materials' => {
+          if (/^[A-Za-z]\d/.test(code)) {
+            // HCPCS: letter + 4 digits (V2020, V2781, A4000, etc.)
+            if (/^[A-Za-z]\d{4}$/.test(code)) return 'materials';
+            // ICD-10: letter + digits/dots (H52.xx, E11.xx, Z96.x)
+            return 'diagnoses';
+          }
+          // 5-digit numeric = CPT procedure
+          return 'procedures';
+        };
+
+        const categories = [
+          { key: 'diagnoses' as const,  labelKey: 'claims.category_diagnoses',  items: claim.service_lines.filter(sl => categorize(sl.cpt_code) === 'diagnoses') },
+          { key: 'procedures' as const, labelKey: 'claims.category_procedures', items: claim.service_lines.filter(sl => categorize(sl.cpt_code) === 'procedures') },
+          { key: 'materials' as const,  labelKey: 'claims.category_materials',  items: claim.service_lines.filter(sl => categorize(sl.cpt_code) === 'materials') },
+        ].filter(c => c.items.length > 0);
+
+        // If only one category (or none), show flat like before
+        const showFlat = categories.length <= 1;
+
+        const renderTable = (lines: typeof claim.service_lines) => (
+          <table className="w-full text-sm">
             <thead className="bg-slate-50">
               <tr>
                 <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500">#</th>
@@ -836,10 +850,8 @@ export default function ClaimDetailPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {claim.service_lines.map(sl => {
-                // Check if this service line has scrub errors
+              {lines.map(sl => {
                 const lineIssues = (scrubResult?.issues ?? claim.scrub_issues ?? []).filter(issue => {
-                  // Match by field like "line_1" or by msg containing "Line X"
                   if (issue.field === `line_${sl.line_number}`) return true;
                   const lineMatch = issue.msg?.match(/Line\s+(\d+)/i);
                   return lineMatch && parseInt(lineMatch[1]) === sl.line_number;
@@ -852,21 +864,52 @@ export default function ClaimDetailPage() {
                     ? 'bg-amber-50 border-l-4 border-l-amber-400 hover:bg-amber-100'
                     : 'hover:bg-slate-50';
                 return (
-                <tr key={sl.id} className={rowClass} title={lineIssues.map(i => i.msg).join('; ') || undefined}>
-                  <td className="px-4 py-2 text-slate-500">{sl.line_number}</td>
-                  <td className="px-4 py-2 font-mono font-medium text-slate-900">{sl.cpt_code}</td>
-                  <td className="px-4 py-2 text-slate-600">{sl.description ?? '—'}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-slate-500">{sl.modifiers.join(' ') || '—'}</td>
-                  <td className="px-4 py-2 text-center text-slate-600">{sl.units}</td>
-                  <td className="px-4 py-2 text-right font-medium text-slate-900">{fmt(sl.billed_amount)}</td>
-                  <td className="px-4 py-2 text-right font-medium text-emerald-700">{fmt(sl.paid_amount)}</td>
-                </tr>
+                  <tr key={sl.id} className={rowClass} title={lineIssues.map(i => i.msg).join('; ') || undefined}>
+                    <td className="px-4 py-2 text-slate-500">{sl.line_number}</td>
+                    <td className="px-4 py-2 font-mono font-medium text-slate-900">{sl.cpt_code}</td>
+                    <td className="px-4 py-2 text-slate-600">{sl.description ?? '—'}</td>
+                    <td className="px-4 py-2 font-mono text-xs text-slate-500">{sl.modifiers.join(' ') || '—'}</td>
+                    <td className="px-4 py-2 text-center text-slate-600">{sl.units}</td>
+                    <td className="px-4 py-2 text-right font-medium text-slate-900">{fmt(sl.billed_amount)}</td>
+                    <td className="px-4 py-2 text-right font-medium text-emerald-700">{fmt(sl.paid_amount)}</td>
+                  </tr>
                 );
               })}
             </tbody>
           </table>
-        )}
-      </div>
+        );
+
+        return (
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-4">
+            <button
+              onClick={() => setShowLines(s => !s)}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              {t('claims.service_lines')} ({claim.service_lines.length})
+              {showLines ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            {showLines && (
+              <div className="border-t border-slate-200">
+                {showFlat ? (
+                  renderTable(claim.service_lines)
+                ) : (
+                  categories.map(cat => (
+                    <details key={cat.key} open className="group">
+                      <summary className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-100 cursor-pointer hover:bg-slate-100 select-none">
+                        <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                          {t(cat.labelKey)} ({cat.items.length})
+                        </span>
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-open:rotate-180 transition-transform" />
+                      </summary>
+                      {renderTable(cat.items)}
+                    </details>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Diagnosis codes */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">

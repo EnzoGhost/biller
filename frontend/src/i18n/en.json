@@ -55,6 +55,7 @@
     "section_paid": "Recently Paid",
     "days_aging": "{{days}}d",
     "submitted_on": "Submitted",
+    "select_all": "Select All",
     "no_claims_section": "No claims in this section",
     "pull_modal_title": "Pull Bitácora from VistaNet",
     "date_from": "Date From",
@@ -108,7 +109,10 @@
     "outcome": "Outcome",
     "office_visit_placeholder": "Office visit...",
     "patient_sale": "Patient Sale",
-    "no_sale_data": "No sale data available"
+    "no_sale_data": "No sale data available",
+    "category_diagnoses": "Diagnoses",
+    "category_procedures": "Procedures",
+    "category_materials": "Materials"
   },
   "patients": {
     "title": "Patients",

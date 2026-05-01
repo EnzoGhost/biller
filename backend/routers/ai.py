@@ -58,10 +58,8 @@ def _scrub_patient(claim: Claim, issues: list) -> None:
     elif patient.dob == date(1900, 1, 1):
         issues.append({"type": "error", "field": "patient.dob", "msg_key": "scrub.patient_placeholder_dob", "msg": "Patient DOB is placeholder (1900-01-01) — update with real DOB"})
 
-    if not patient.gender:
-        issues.append({"type": "info", "field": "patient.gender", "msg_key": "scrub.patient_no_gender", "msg": "Patient gender not set (optional for most PR payers)"})
-    elif str(patient.gender) == "U" or (hasattr(patient.gender, 'value') and patient.gender.value == "U"):
-        issues.append({"type": "info", "field": "patient.gender", "msg_key": "scrub.patient_gender_unknown", "msg": "Patient gender is 'Unknown' (optional for most PR payers)"})
+    # Gender: Not required for PR payers. VistaNet doesn't track it.
+    # Removed — was causing unnecessary warnings.
 
     # Address
     if not (patient.city or "").strip() or not (patient.state or "").strip() or not (patient.zip_code or "").strip():
@@ -127,9 +125,14 @@ def _scrub_claim_level(claim: Claim, issues: list) -> None:
     """Validate claim-level fields for 837P."""
     dx_codes = claim.diagnosis_codes or []
 
-    # Diagnosis codes
-    if not dx_codes:
-        issues.append({"type": "error", "field": "diagnosis_codes", "msg_key": "scrub.no_diagnosis", "msg": "No diagnosis codes"})
+    # Diagnosis codes — required for procedure claims, optional for materials-only
+    cpt_codes = [sl.cpt_code for sl in (claim.service_lines or []) if sl.cpt_code]
+    has_procedures = any(c.isdigit() for c in cpt_codes)  # 5-digit CPT = procedure
+    has_only_materials = all(c[0:1].isalpha() for c in cpt_codes) if cpt_codes else False
+    if not dx_codes and has_procedures:
+        issues.append({"type": "error", "field": "diagnosis_codes", "msg_key": "scrub.no_diagnosis", "msg": "No diagnosis codes (required for procedure claims)"})
+    elif not dx_codes and has_only_materials:
+        issues.append({"type": "info", "field": "diagnosis_codes", "msg_key": "scrub.no_diagnosis_materials", "msg": "No diagnosis codes (optional for materials-only claims)"})
     else:
         for dx in dx_codes:
             if not _ICD10_RE.match(dx):
