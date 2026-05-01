@@ -930,12 +930,31 @@ async def pull_bitacora(
             has_payer = bool(row[1])
             has_provider = bool(row[2])
 
-            if sl_count > 0 and sl_total > 0 and has_dx and has_payer and has_provider:
+            # Run full scrub instead of naive auto-advance
+            try:
+                from routers.ai import _scrub_patient, _scrub_provider, _scrub_claim_level
+                scrub_issues = []
+                _scrub_patient(claim_obj, scrub_issues)
+                _scrub_provider(claim_obj, scrub_issues)
+                _scrub_claim_level(claim_obj, scrub_issues)
+                err_c = sum(1 for i in scrub_issues if i.get('type') == 'error')
+                warn_c = sum(1 for i in scrub_issues if i.get('type') == 'warning')
+                score = max(0, 100 - err_c * 15 - warn_c * 5)
+                import json
                 await db.execute(
-                    text("UPDATE claims SET status = 'READY', scrub_score = 100, total_billed = :total WHERE id = :cid AND status = 'DRAFT'"),
+                    text("UPDATE claims SET scrub_score = :score, scrub_issues = :issues, total_billed = :total, status = CASE WHEN :err = 0 AND :warn = 0 THEN 'READY' ELSE status END WHERE id = :cid"),
+                    {"cid": cid, "total": float(sl_total), "score": score, "issues": json.dumps(scrub_issues), "err": err_c, "warn": warn_c}
+                )
+                if err_c == 0 and warn_c == 0:
+                    logger.info("Auto-advance claim %s → READY (score=%d)", claim_obj.claim_number, score)
+                else:
+                    logger.info("Claim %s stays DRAFT (score=%d, %d errors, %d warnings)", claim_obj.claim_number, score, err_c, warn_c)
+            except Exception:
+                import traceback; traceback.print_exc()
+                await db.execute(
+                    text("UPDATE claims SET total_billed = :total WHERE id = :cid"),
                     {"cid": cid, "total": float(sl_total)}
                 )
-                logger.info("Auto-advance claim %s → READY (total=$%.2f)", claim_obj.claim_number, sl_total)
             else:
                 issues = []
                 if not has_dx: issues.append("no diagnosis")
