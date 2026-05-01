@@ -299,15 +299,30 @@ async def receive_wink_encounter(
     # ── 7. Auto-validate ────────────────────────────────────────────────────────────
     validation_result = await validate_claim(claim.id, db)
 
-    # ── 8. Auto-advance to 'ready' if validation passes ────────────────────────────
-    if validation_result.get("is_valid") and not errors:
-        from sqlalchemy import update
-        await db.execute(
-            update(Claim).where(Claim.id == claim.id).values(status=ClaimStatus.READY)
-        )
+    # ── 8. Run full scrub, persist results, auto-advance only if ZERO warnings+errors ──
+    try:
+        from routers.ai import _scrub_patient, _scrub_provider, _scrub_claim_level, _scrub_line_items, _scrub_cross_validation
+        scrub_issues = []
+        _scrub_patient(claim, scrub_issues)
+        _scrub_provider(claim, scrub_issues)
+        _scrub_claim_level(claim, scrub_issues)
+        _scrub_line_items(claim, scrub_issues)
+        _scrub_cross_validation(claim, scrub_issues)
+        err_count = sum(1 for i in scrub_issues if i.get('type') == 'error')
+        warn_count = sum(1 for i in scrub_issues if i.get('type') == 'warning')
+        scrub_score = max(0, 100 - err_count * 15 - warn_count * 5)
+        from sqlalchemy import update as sql_update
+        await db.execute(sql_update(Claim).where(Claim.id == claim.id).values(
+            scrub_score=scrub_score, scrub_issues=scrub_issues
+        ))
+        if err_count == 0 and warn_count == 0:
+            await db.execute(sql_update(Claim).where(Claim.id == claim.id).values(status=ClaimStatus.READY))
+            final_status = "ready"
+        else:
+            final_status = "draft"
         await db.commit()
-        final_status = "ready"
-    else:
+    except Exception:
+        import traceback; traceback.print_exc()
         final_status = "draft"
 
     return {
