@@ -505,31 +505,31 @@ function ClaimDetailPageInner() {
 
   const { data: denials } = useQuery<Denial[]>({
     queryKey: ['claim-denials', id],
-    queryFn: () => api.get(`/claims/${id}/denials`).then(r => r.data),
+    queryFn: () => api.get(`/claims/${id}/denials`).then(r => Array.isArray(r.data) ? r.data : []),
     enabled: !!id,
   });
 
   const { data: appeals } = useQuery<Appeal[]>({
     queryKey: ['claim-appeals', id],
-    queryFn: () => api.get(`/claims/${id}/appeals`).then(r => r.data),
+    queryFn: () => api.get(`/claims/${id}/appeals`).then(r => Array.isArray(r.data) ? r.data : []),
     enabled: !!id,
   });
 
   const { data: payments, refetch: refetchPayments } = useQuery<Payment[]>({
     queryKey: ['claim-payments', id],
-    queryFn: () => api.get(`/claims/${id}/payments`).then(r => r.data),
+    queryFn: () => api.get(`/claims/${id}/payments`).then(r => Array.isArray(r.data) ? r.data : []),
     enabled: !!id,
   });
 
   const { data: auditLog, refetch: refetchAudit } = useQuery<AuditLogEntry[]>({
     queryKey: ['claim-audit', id],
-    queryFn: () => api.get(`/audit/claims/${id}`).then(r => r.data),
+    queryFn: () => api.get(`/audit/claims/${id}`).then(r => Array.isArray(r.data) ? r.data : []),
     enabled: !!id,
   });
 
   const { data: priorAuths, refetch: refetchPriorAuths } = useQuery<PriorAuth[]>({
     queryKey: ['claim-prior-auths', id],
-    queryFn: () => api.get(`/prior-auth/claims/${id}`).then(r => r.data),
+    queryFn: () => api.get(`/prior-auth/claims/${id}`).then(r => Array.isArray(r.data) ? r.data : []),
     enabled: !!id,
   });
 
@@ -548,7 +548,7 @@ function ClaimDetailPageInner() {
     created_at: string;
   }[]>({
     queryKey: ['claim-approvals', id],
-    queryFn: () => api.get(`/approvals/claims/${id}`).then(r => r.data),
+    queryFn: () => api.get(`/approvals/claims/${id}`).then(r => Array.isArray(r.data) ? r.data : []),
     enabled: !!id,
   });
 

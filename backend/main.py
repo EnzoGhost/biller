@@ -15,7 +15,7 @@ from config import settings
 from database import init_db
 
 from routers import auth, claims, patients, payers, providers, denials, stedi, ai, imports, dashboard, inmediata
-from routers import validation, payments, audit
+from routers import validation, payments, audit, approvals
 from routers import availity, templates, prior_auth, followup, clinic, vistanet, fee_schedule
 
 
@@ -58,6 +58,7 @@ app.include_router(audit.router, prefix="/api")
 app.include_router(availity.router, prefix="/api")
 app.include_router(templates.router, prefix="/api")
 app.include_router(prior_auth.router, prefix="/api")
+app.include_router(approvals.router, prefix="/api")
 app.include_router(followup.router, prefix="/api")
 app.include_router(clinic.router, prefix="/api")
 app.include_router(vistanet.router, prefix="/api")
