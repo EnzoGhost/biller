@@ -16,7 +16,7 @@ from database import init_db
 
 from routers import auth, claims, patients, payers, providers, denials, stedi, ai, imports, dashboard, inmediata
 from routers import validation, payments, audit, approvals
-from routers import availity, templates, prior_auth, followup, clinic, vistanet, fee_schedule
+from routers import availity, templates, prior_auth, followup, clinic, vistanet, fee_schedule, wink_docs
 
 
 @asynccontextmanager
@@ -63,6 +63,7 @@ app.include_router(followup.router, prefix="/api")
 app.include_router(clinic.router, prefix="/api")
 app.include_router(vistanet.router, prefix="/api")
 app.include_router(fee_schedule.router, prefix="/api")
+app.include_router(wink_docs.router, prefix="/api")
 
 
 @app.get("/health")

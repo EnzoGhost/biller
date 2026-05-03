@@ -95,12 +95,24 @@ async def create_approval(
     import httpx
     try:
         WINK_CLINIC_ID = "1a905d29-0a9a-42b3-8bc3-83c0ceb9acba"
+        # Get patient name + wink_patient_id for Wink-side display
+        patient_name = None
+        wink_patient_id = None
+        if claim.patient_id:
+            from sqlalchemy import select as sa_select
+            from models import Patient
+            p_result = await db.execute(sa_select(Patient).where(Patient.id == claim.patient_id))
+            patient = p_result.scalar_one_or_none()
+            if patient:
+                patient_name = f"{patient.first_name} {patient.last_name}"
+                wink_patient_id = patient.wink_patient_id
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
                 "http://159.65.235.231:3100/api/sync/approval-bridge",
                 json={
                     "clinic_id": WINK_CLINIC_ID,
-                        "patient_id": str(approval.patient_id) if approval.patient_id else None,
+                        "patient_id": wink_patient_id or str(approval.patient_id) if approval.patient_id else None,
+                        "patient_name": patient_name,
                         "claim_id": approval.claim_id,
                         "request_type": approval.request_type,
                         "requested_by": approval.requested_by,
@@ -117,6 +129,50 @@ async def create_approval(
         print(f"[approvals] Failed to forward to sync server: {e}")
 
     return approval
+
+
+WINK_SYNC_SERVER = "http://159.65.235.231:3100"
+
+
+@router.get("/sync-status/{claim_id}")
+async def check_approval_sync_status(
+    claim_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Check if any approvals for this claim were responded to on the sync server."""
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{WINK_SYNC_SERVER}/api/sync/approval-bridge/status",
+                params={"claim_id": claim_id},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                approvals = data.get("approvals", [])
+                updated = False
+                for a in approvals:
+                    if a.get("status") in ("approved", "rejected"):
+                        # Find matching local pending approvals
+                        result = await db.execute(
+                            select(ApprovalRequest).where(
+                                ApprovalRequest.claim_id == claim_id,
+                                ApprovalRequest.status == "pending",
+                            )
+                        )
+                        for local_a in result.scalars().all():
+                            if local_a.request_type == a.get("request_type"):
+                                local_a.status = a["status"]
+                                local_a.reviewed_by = a.get("reviewed_by")
+                                local_a.reviewed_at = datetime.utcnow()
+                                updated = True
+                if updated:
+                    await db.commit()
+                return {"synced": True, "updated": updated, "approvals": approvals}
+    except Exception as e:
+        print(f"[approvals] sync status check failed: {e}")
+    return {"synced": False, "updated": False, "approvals": []}
 
 
 @router.patch("/{approval_id}", response_model=ApprovalOut)

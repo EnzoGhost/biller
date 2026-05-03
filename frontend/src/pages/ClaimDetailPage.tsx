@@ -120,26 +120,42 @@ function PatientDocuments({
   setShowDocs,
   fullSizeImg,
   setFullSizeImg,
+  source,
+  winkPatientId,
 }: {
   claimId: number;
   showDocs: boolean;
   setShowDocs: (v: boolean) => void;
   fullSizeImg: string | null;
   setFullSizeImg: (v: string | null) => void;
+  source?: string;
+  winkPatientId?: string;
 }) {
   const { t } = useTranslation();
   const DOC_TYPE_LABELS: Record<string, string> = {
     insurance_card: t('claim.insurance_card', 'Insurance Card'),
     license: t('claim.license_id', 'License / ID'),
+    photo: t('claim.photo', 'Photo'),
+    other: t('claim.other_doc', 'Other'),
   };
 
+  // VistaNet attachments (stored locally)
   const { data: attachments } = useQuery<Attachment[]>({
     queryKey: ['claim-attachments', claimId],
     queryFn: () => api.get(`/vistanet/attachments/${claimId}`).then(r => r.data),
-    enabled: !!claimId,
+    enabled: !!claimId && source === 'vistanet',
   });
 
-  const filteredAttachments = attachments?.filter(att => att.attachment_type !== 'signature') ?? [];
+  // Wink patient documents (from sync server)
+  const { data: winkDocs } = useQuery<Attachment[]>({
+    queryKey: ['wink-patient-docs', winkPatientId],
+    queryFn: () => api.get(`/wink/patient-documents/${winkPatientId}`).then(r => Array.isArray(r.data) ? r.data : []),
+    enabled: !!winkPatientId && source === 'wink',
+  });
+
+  // Combine both sources
+  const allAttachments = source === 'wink' ? (winkDocs ?? []) : (attachments ?? []);
+  const filteredAttachments = allAttachments.filter(att => att.attachment_type !== 'signature');
 
   if (filteredAttachments.length === 0) return null;
 
@@ -551,6 +567,22 @@ function ClaimDetailPageInner() {
     queryFn: () => api.get(`/approvals/claims/${id}`).then(r => Array.isArray(r.data) ? r.data : []),
     enabled: !!id,
   });
+
+  // Poll for approval status updates from Wink sync server every 10s when there are pending approvals
+  useEffect(() => {
+    if (!approvalRequests?.some(a => a.status === 'pending')) return;
+    const interval = setInterval(async () => {
+      try {
+        const { data } = await api.get(`/approvals/sync-status/${id}`);
+        if (data.updated) {
+          refetchApprovals();
+          // Also refetch claim in case codes were applied by doctor
+          qc.invalidateQueries({ queryKey: ['claim', id] });
+        }
+      } catch { /* ignore poll errors */ }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [approvalRequests, id, refetchApprovals, qc]);
 
   const submitMutation = useMutation({
     mutationFn: () => api.post(`/stedi/submit/${id}`),
@@ -1288,7 +1320,7 @@ function ClaimDetailPageInner() {
       </div>
 
       {/* Patient Documents (Insurance Card, License, Signature) */}
-      {claim.source === 'vistanet' && (
+      {(claim.source === 'vistanet' || claim.source === 'wink') && (
         <ErrorBoundary fallback={<div className="p-4 text-red-500 text-sm">Error loading patient documents</div>}>
           <PatientDocuments
             claimId={claim.id}
@@ -1296,6 +1328,8 @@ function ClaimDetailPageInner() {
             setShowDocs={setShowDocs}
             fullSizeImg={fullSizeImg}
             setFullSizeImg={setFullSizeImg}
+            source={claim.source}
+            winkPatientId={claim.patient?.wink_patient_id || claim.patient?.mrn}
           />
         </ErrorBoundary>
       )}
