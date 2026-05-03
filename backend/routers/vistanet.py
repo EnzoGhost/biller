@@ -971,7 +971,10 @@ async def _download_claim_attachments(
             continue
 
         try:
-            resp = vs.session.get(url, timeout=REQUEST_TIMEOUT)
+            # Resolve relative URLs against VistaNet base
+            full_url = url if url.startswith('http') else f"{VISTANET_BASE_URL}/cgi-bin/{url}"
+            logger.info("Downloading %s from %s", att_type, full_url[:80])
+            resp = vs.session.get(full_url, timeout=REQUEST_TIMEOUT)
             if resp.status_code != 200:
                 logger.warning("Image download %s returned %s", att_type, resp.status_code)
                 continue
