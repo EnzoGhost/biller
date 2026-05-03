@@ -3,9 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
-  Send, Zap, ChevronRight, ChevronDown, ChevronUp,
+  Send, ChevronRight, ChevronDown, ChevronUp,
   FileText, CheckCircle, Clock, AlertTriangle, CircleDollarSign,
-  Download, X, Loader2, Archive, Trash2,
+  Download, X, Loader2, Archive, Trash2, Upload, Settings,
 } from 'lucide-react';
 import api from '../lib/api';
 import { formatDateShort } from '../lib/dates';
@@ -59,7 +59,8 @@ const fmt = (n: number) =>
   new Intl.NumberFormat('es-PR', {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(n);
 
 // ── VistaNet Pull Modal ──────────────────────────────────────────────────────
@@ -141,7 +142,7 @@ function PullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () 
               <p className="text-sm font-medium text-slate-900 mb-1">
                 {t('dashboard.pull_success', {
                   patients: result.patients_found,
-                  claims: result.claims_created,
+                  claims: Array.isArray(result.claims_created) ? result.claims_created.length : result.claims_created,
                 })}
               </p>
               {result.errors.length > 0 && (
@@ -193,6 +194,255 @@ function PullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () 
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Wink Pull Modal ──────────────────────────────────────────────────────────
+
+function WinkPullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const { t } = useTranslation();
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const [dateFrom, setDateFrom] = useState(today);
+  const [dateTo, setDateTo] = useState(today);
+  const [result, setResult] = useState<PullResult | null>(null);
+
+  // Pairing state
+  const [winkClinicId, setWinkClinicId] = useState<string | null>(() => localStorage.getItem('wink_clinic_id'));
+  const [winkClinicName, setWinkClinicName] = useState<string | null>(() => localStorage.getItem('wink_clinic_name'));
+  const [joinCode, setJoinCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+
+  const isPaired = !!winkClinicId;
+
+  const handleVerifyCode = async () => {
+    if (joinCode.length < 6) return;
+    setVerifying(true);
+    setJoinError(null);
+    try {
+      const { data } = await api.post('/clinic/join-codes/verify', { code: joinCode.trim() });
+      if (data.valid) {
+        const clinicId = data.wink_clinic_id;
+        setWinkClinicId(clinicId);
+        setWinkClinicName(data.clinic_name);
+        localStorage.setItem('wink_clinic_id', clinicId);
+        localStorage.setItem('wink_clinic_name', data.clinic_name);
+        setJoinCode('');
+      } else {
+        setJoinError(data.message || 'Invalid code');
+      }
+    } catch {
+      setJoinError('Failed to verify code');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const pullMutation = useMutation({
+    mutationFn: async () => {
+      const resp = await api.post('/import/wink-invoices', null, {
+        params: {
+          date_from: dateFrom,
+          date_to: dateTo,
+          provider_id: 1,
+          payer_id: 1,
+          clinic_id: winkClinicId,
+        },
+      });
+      return resp.data as PullResult;
+    },
+    onSuccess: (data) => {
+      setResult(data);
+      onSuccess();
+    },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <h2 className="text-base font-semibold text-slate-900">
+            🏥 {t('dashboard.import_wink_title', 'Import from Wink')}
+          </h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          {!isPaired ? (
+            /* Pairing flow — enter clinic code */
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-slate-700">Enter Clinic Code</p>
+              <p className="text-xs text-slate-500">
+                Ask the clinic admin to generate a join code from Wink Settings → Clinic Pairing.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  value={joinCode}
+                  onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                  placeholder="ABC123"
+                  maxLength={6}
+                  className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono tracking-widest text-center uppercase focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  onKeyDown={e => e.key === 'Enter' && handleVerifyCode()}
+                />
+                <button
+                  onClick={handleVerifyCode}
+                  disabled={verifying || joinCode.length < 6}
+                  className="bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
+                >
+                  {verifying ? 'Verifying...' : 'Connect'}
+                </button>
+              </div>
+              {joinError && (
+                <div className="flex items-center gap-1.5 text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg p-2">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />{joinError}
+                </div>
+              )}
+            </div>
+          ) : !result ? (
+            /* Date range picker */
+            <>
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-1">
+                <CheckCircle className="w-4 h-4 text-emerald-600" />
+                <span className="text-sm text-emerald-700 font-medium">Connected to {winkClinicName}</span>
+                <button
+                  onClick={() => {
+                    setWinkClinicId(null);
+                    setWinkClinicName(null);
+                    localStorage.removeItem('wink_clinic_id');
+                    localStorage.removeItem('wink_clinic_name');
+                  }}
+                  className="ml-auto text-xs text-slate-500 hover:text-red-600"
+                >
+                  Disconnect
+                </button>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {t('dashboard.date_from')}
+                </label>
+                <DatePicker value={dateFrom} onChange={setDateFrom} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {t('dashboard.date_to')}
+                </label>
+                <DatePicker value={dateTo} onChange={setDateTo} />
+              </div>
+              {pullMutation.isError && (
+                <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 text-sm text-rose-700">
+                  {t('dashboard.import_wink_error', 'Error importing from Wink')}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-4">
+              <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                <CheckCircle className="w-6 h-6 text-emerald-500" />
+              </div>
+              <p className="text-sm font-medium text-slate-900 mb-1">
+                {t('dashboard.import_wink_success', {
+                  defaultValue: 'Imported {{claims}} claims',
+                  claims: Array.isArray(result.claims_created) ? result.claims_created.length : result.claims_created,
+                })}
+              </p>
+              {result.errors && result.errors.length > 0 && (
+                <div className="mt-3 text-left bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-h-32 overflow-y-auto">
+                  {result.errors.map((err, i) => (
+                    <p key={i} className="text-xs text-amber-700">{err}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+          {!isPaired ? (
+            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">
+              {t('common.cancel')}
+            </button>
+          ) : !result ? (
+            <>
+              <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={() => pullMutation.mutate()}
+                disabled={!dateFrom || !dateTo || pullMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-sky-500 hover:bg-sky-600 text-white rounded-lg disabled:opacity-50"
+              >
+                {pullMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" />{t('dashboard.pulling')}</>
+                ) : (
+                  <><Download className="w-4 h-4" />{t('dashboard.pull', 'Import')}</>
+                )}
+              </button>
+            </>
+          ) : (
+            <button onClick={onClose} className="px-4 py-2 text-sm font-medium bg-sky-500 hover:bg-sky-600 text-white rounded-lg">
+              {t('common.ok')}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Import Dropdown ──────────────────────────────────────────────────────────
+
+function ImportDropdown({
+  onVistaNet,
+  onWink,
+}: {
+  onVistaNet: () => void;
+  onWink: () => void;
+}) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg"
+      >
+        <Upload className="w-3.5 h-3.5" />
+        {t('dashboard.import_claims', 'Import Claims')}
+        <ChevronDown className="w-3 h-3" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-40 bg-white rounded-xl shadow-xl border border-slate-200 py-1 w-56">
+            <button
+              onClick={() => { setOpen(false); onVistaNet(); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 text-left"
+            >
+              <span className="text-base">📋</span>
+              <span>VistaNet</span>
+            </button>
+            <button
+              onClick={() => { setOpen(false); onWink(); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 text-left"
+            >
+              <span className="text-base">🏥</span>
+              <span>Wink</span>
+            </button>
+            <div className="border-t border-slate-100 my-1" />
+            <button
+              onClick={() => { setOpen(false); navigate('/import'); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-400 hover:bg-slate-50 text-left"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>{t('dashboard.more_import_options', 'More import options...')}</span>
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -398,6 +648,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [showPullModal, setShowPullModal] = useState(false);
+  const [showWinkModal, setShowWinkModal] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{open:boolean, title:string, message:string, onConfirm:()=>void}>({open:false,title:'',message:'',onConfirm:()=>{}});
@@ -519,20 +770,11 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-slate-900">{t('dashboard.work_queue')}</h1>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowPullModal(true)}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600"
-          >
-            <Download className="w-3.5 h-3.5 text-sky-500" />
-            {t('dashboard.pull_vistanet')}
-          </button>
-          <button
-            onClick={() => navigate('/eligibility')}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600"
-          >
-            <Zap className="w-3.5 h-3.5 text-amber-500" />
-            {t('dashboard.check_eligibility')}
-          </button>
+          <ImportDropdown
+            onVistaNet={() => setShowPullModal(true)}
+            onWink={() => setShowWinkModal(true)}
+          />
+
         </div>
       </div>
 
@@ -646,13 +888,12 @@ export default function DashboardPage() {
           <p className="text-sm text-slate-400">
             {t('dashboard.no_claims_section')}
           </p>
-          <button
-            onClick={() => setShowPullModal(true)}
-            className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-sky-500 hover:text-sky-600"
-          >
-            <Download className="w-4 h-4" />
-            {t('dashboard.pull_vistanet')}
-          </button>
+          <div className="mt-4 inline-flex">
+            <ImportDropdown
+              onVistaNet={() => setShowPullModal(true)}
+              onWink={() => setShowWinkModal(true)}
+            />
+          </div>
         </div>
       )}
 
@@ -687,6 +928,14 @@ export default function DashboardPage() {
       {showPullModal && (
         <PullModal
           onClose={() => setShowPullModal(false)}
+          onSuccess={() => qc.invalidateQueries({ queryKey: ['work-queue'] })}
+        />
+      )}
+
+      {/* Wink Pull Modal */}
+      {showWinkModal && (
+        <WinkPullModal
+          onClose={() => setShowWinkModal(false)}
           onSuccess={() => qc.invalidateQueries({ queryKey: ['work-queue'] })}
         />
       )}

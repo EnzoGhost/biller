@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -12,11 +12,14 @@ import {
   ShieldAlert, Plus,
 } from 'lucide-react';
 import api from '../lib/api';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { formatDateShort, formatDate } from '../lib/dates';
+import { displayPhone } from '../lib/format';
 import type { Claim, Denial, Appeal, ValidationResult, AuditLogEntry, Payment, PriorAuth } from '../types';
 import StatusBadge from '../components/ui/Badge';
 import DatePicker from '../components/ui/DatePicker';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import { searchICD10, type ICD10Code } from '../lib/icd10';
 
 // ── Routing indicator ─────────────────────────────────────────────────────────
 
@@ -102,12 +105,276 @@ function StatusTimeline({ status }: { status: string }) {
   );
 }
 
+// ── Patient Documents component ──────────────────────────────────────────────
+
+interface Attachment {
+  id: number;
+  filename: string;
+  attachment_type: string;
+  url: string;
+}
+
+function PatientDocuments({
+  claimId,
+  showDocs,
+  setShowDocs,
+  fullSizeImg,
+  setFullSizeImg,
+}: {
+  claimId: number;
+  showDocs: boolean;
+  setShowDocs: (v: boolean) => void;
+  fullSizeImg: string | null;
+  setFullSizeImg: (v: string | null) => void;
+}) {
+  const { t } = useTranslation();
+  const DOC_TYPE_LABELS: Record<string, string> = {
+    insurance_card: t('claim.insurance_card', 'Insurance Card'),
+    license: t('claim.license_id', 'License / ID'),
+  };
+
+  const { data: attachments } = useQuery<Attachment[]>({
+    queryKey: ['claim-attachments', claimId],
+    queryFn: () => api.get(`/vistanet/attachments/${claimId}`).then(r => r.data),
+    enabled: !!claimId,
+  });
+
+  const filteredAttachments = attachments?.filter(att => att.attachment_type !== 'signature') ?? [];
+
+  if (filteredAttachments.length === 0) return null;
+
+  return (
+    <>
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-4">
+        <button
+          onClick={() => setShowDocs(!showDocs)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          <span className="flex items-center gap-2">
+            <span className="text-base">📋</span>
+            {t('claim.patient_documents')} ({filteredAttachments.length})
+          </span>
+          {showDocs ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+        {showDocs && (
+          <div className="px-4 pb-4 border-t border-slate-100">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-3">
+              {filteredAttachments.map(att => (
+                <div key={att.id} className="text-center">
+                  <button
+                    onClick={() => setFullSizeImg(`/api${att.url}`)}
+                    className="block w-full rounded-lg border border-slate-200 overflow-hidden hover:border-sky-400 hover:shadow-md transition-all cursor-pointer"
+                  >
+                    <img
+                      src={`/api${att.url}`}
+                      alt={DOC_TYPE_LABELS[att.attachment_type] ?? att.attachment_type}
+                      className="w-full h-32 object-cover bg-slate-50"
+                      loading="lazy"
+                    />
+                  </button>
+                  <p className="text-xs text-slate-500 mt-1 font-medium">
+                    {DOC_TYPE_LABELS[att.attachment_type] ?? att.attachment_type}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Full-size image overlay */}
+      {fullSizeImg && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          onClick={() => setFullSizeImg(null)}
+        >
+          <div className="relative max-w-3xl max-h-[90vh]">
+            <button
+              onClick={() => setFullSizeImg(null)}
+              className="absolute -top-3 -right-3 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-600 hover:text-slate-900"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <img
+              src={fullSizeImg}
+              alt="Document"
+              className="max-w-full max-h-[85vh] rounded-lg shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Inline editable billed amount ─────────────────────────────────────────────
+
+function InlineEditAmount({
+  value,
+  claimId,
+  lineId,
+  cptCode,
+  fmt,
+  onSaved,
+}: {
+  value: number;
+  claimId: number;
+  lineId: number;
+  cptCode: string;
+  fmt: (n: number) => string;
+  onSaved: (newAmount: number) => void;
+}) {
+  const { t } = useTranslation();
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState((value ?? 0).toFixed(2));
+  const [saving, setSaving] = useState(false);
+  const [showFeePrompt, setShowFeePrompt] = useState(false);
+  const [savedAmount, setSavedAmount] = useState<number | null>(null);
+
+  const handleStartEdit = () => {
+    setEditValue(value > 0 ? value.toFixed(2) : '');
+    setEditing(true);
+  };
+
+  const handleCancel = () => {
+    setEditing(false);
+    setEditValue(value.toFixed(2));
+  };
+
+  const handleSave = async () => {
+    const newAmount = parseFloat(editValue);
+    if (isNaN(newAmount) || newAmount < 0) return;
+    if (newAmount === value) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.patch(`/claims/${claimId}/service-lines/${lineId}`, {
+        billed_amount: newAmount,
+      });
+      setSavedAmount(newAmount);
+      setEditing(false);
+      onSaved(newAmount);
+      // Show fee schedule update prompt
+      setShowFeePrompt(true);
+    } catch {
+      // stay in edit mode on error
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSave();
+    if (e.key === 'Escape') handleCancel();
+  };
+
+  const handleUpdateFeeSchedule = async (update: boolean) => {
+    setShowFeePrompt(false);
+    if (!update || savedAmount === null) return;
+    try {
+      const { data } = await api.put(`/fee-schedule/${cptCode}`, {
+        cpt_code: cptCode,
+        allowed_amount: savedAmount,
+        source: 'learned',
+      });
+      if (data?.cascade_updated_claims > 0) {
+        // Show a notification about cascade updates
+        const event = new CustomEvent('fee-cascade-toast', {
+          detail: { count: data.cascade_updated_claims, cpt: cptCode },
+        });
+        window.dispatchEvent(event);
+      }
+    } catch {
+      // best-effort
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <input
+          type="text"
+          inputMode="decimal"
+          pattern="[0-9.]*"
+          value={editValue}
+          onChange={e => setEditValue(e.target.value.replace(/[^0-9.]/g, ''))}
+          onKeyDown={handleKeyDown}
+          autoFocus
+          className="w-20 px-1.5 py-0.5 border border-sky-300 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-sky-500"
+        />
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="p-0.5 text-emerald-600 hover:text-emerald-800"
+          title="Save"
+        >
+          {saving ? <div className="w-3 h-3 border border-emerald-500 border-t-transparent rounded-full animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+        </button>
+        <button onClick={handleCancel} className="p-0.5 text-slate-400 hover:text-slate-600" title="Cancel">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <button
+        onClick={handleStartEdit}
+        className="text-right font-medium text-slate-900 hover:text-sky-600 hover:underline cursor-pointer transition-colors"
+        title={t('fee_schedule.click_to_edit', { defaultValue: 'Click to edit amount' })}
+      >
+        {fmt(value)}
+      </button>
+      {/* Fee schedule update prompt */}
+      {showFeePrompt && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => handleUpdateFeeSchedule(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-5 text-center">
+              <div className="w-12 h-12 bg-sky-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-xl">💰</span>
+              </div>
+              <h3 className="text-base font-semibold text-slate-900 mb-2">
+                {t('fee_schedule.update_prompt_title', { defaultValue: 'Update Fee Schedule?' })}
+              </h3>
+              <p className="text-sm text-slate-500">
+                {t('fee_schedule.update_prompt', {
+                  defaultValue: 'Update fee schedule for {{cpt}} to ${{amount}}?',
+                  cpt: cptCode,
+                  amount: savedAmount?.toFixed(2),
+                })}
+              </p>
+            </div>
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex gap-3 justify-center">
+              <button
+                onClick={() => handleUpdateFeeSchedule(false)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                {t('common.no', { defaultValue: 'No' })}
+              </button>
+              <button
+                onClick={() => handleUpdateFeeSchedule(true)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 rounded-xl transition-colors shadow-sm"
+              >
+                {t('common.yes', { defaultValue: 'Yes' })}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function ClaimDetailPage() {
+function ClaimDetailPageInner() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const qc = useQueryClient();
   const [showLines, setShowLines] = useState(true);
   const [scrubResult, setScrubResult] = useState<{ score: number; issues: { type: string; msg: string; msg_key?: string; msg_params?: Record<string, any>; field?: string }[]; suggestions: string[] } | null>(null);
@@ -166,14 +433,74 @@ export default function ClaimDetailPage() {
   // Venta del Paciente collapsible state
   const [showSaleData, setShowSaleData] = useState(false);
 
+  // Patient documents (attachments) state
+  const [showDocs, setShowDocs] = useState(false);
+  const [fullSizeImg, setFullSizeImg] = useState<string | null>(null);
+
+  // Diagnosis codes state (moved from IIFE to top-level for hooks rules)
+  const [showDxSearch, setShowDxSearch] = useState(false);
+  const [dxQuery, setDxQuery] = useState('');
+  const [dxResults, setDxResults] = useState<ICD10Code[]>([]);
+  const [dxActiveIdx, setDxActiveIdx] = useState(-1);
+  const [savingDx, setSavingDx] = useState(false);
+  const [dxSuggestions, setDxSuggestions] = useState<string[]>([]);
+  const dxInputRef = useRef<HTMLInputElement>(null);
+
+  // Approval request state
+  const [showSuggestModal, setShowSuggestModal] = useState(false);
+  const [suggestCurrentCode, setSuggestCurrentCode] = useState('');
+  const [suggestNewCode, setSuggestNewCode] = useState('');
+  const [suggestNote, setSuggestNote] = useState('');
+  const [suggestQuery, setSuggestQuery] = useState('');
+  const [suggestResults, setSuggestResults] = useState<ICD10Code[]>([]);
+  const [submittingApproval, setSubmittingApproval] = useState(false);
+
+  // Fix pointer state
+  const [expandedFix, setExpandedFix] = useState<number | null>(null);
+  const [addingFixCode, setAddingFixCode] = useState(false);
+
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 4000);
   };
 
+  // Listen for fee cascade toasts
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.count > 0) {
+        showToast(`Updated ${detail.count} claim${detail.count > 1 ? 's' : ''} with new fee for ${detail.cpt}`);
+        qc.invalidateQueries({ queryKey: ['work-queue'] });
+      }
+    };
+    window.addEventListener('fee-cascade-toast', handler);
+    return () => window.removeEventListener('fee-cascade-toast', handler);
+  }, []);
+
   const { data: claim, isLoading } = useQuery<Claim>({
     queryKey: ['claim', id],
-    queryFn: () => api.get(`/claims/${id}`).then(r => r.data),
+    queryFn: () => api.get(`/claims/${id}`).then(r => {
+      const d = r.data;
+      // Ensure arrays are actual arrays (not JSON strings from SQLite)
+      d.diagnosis_codes = Array.isArray(d.diagnosis_codes) ? d.diagnosis_codes :
+        (typeof d.diagnosis_codes === 'string' ? JSON.parse(d.diagnosis_codes) : []);
+      d.service_lines = Array.isArray(d.service_lines) ? d.service_lines : [];
+      d.scrub_issues = Array.isArray(d.scrub_issues) ? d.scrub_issues :
+        (typeof d.scrub_issues === 'string' ? JSON.parse(d.scrub_issues) : []);
+      d.sale_items = Array.isArray(d.sale_items) ? d.sale_items :
+        (typeof d.sale_items === 'string' ? JSON.parse(d.sale_items) : []);
+      // Ensure service line sub-arrays are arrays
+      if (d.service_lines) {
+        d.service_lines = d.service_lines.map(sl => ({
+          ...sl,
+          modifiers: Array.isArray(sl.modifiers) ? sl.modifiers :
+            (typeof sl.modifiers === 'string' ? JSON.parse(sl.modifiers) : []),
+          diagnosis_pointers: Array.isArray(sl.diagnosis_pointers) ? sl.diagnosis_pointers :
+            (typeof sl.diagnosis_pointers === 'string' ? JSON.parse(sl.diagnosis_pointers) : []),
+        }));
+      }
+      return d;
+    }),
   });
 
   const { data: denials } = useQuery<Denial[]>({
@@ -203,6 +530,25 @@ export default function ClaimDetailPage() {
   const { data: priorAuths, refetch: refetchPriorAuths } = useQuery<PriorAuth[]>({
     queryKey: ['claim-prior-auths', id],
     queryFn: () => api.get(`/prior-auth/claims/${id}`).then(r => r.data),
+    enabled: !!id,
+  });
+
+  // Approval requests
+  const { data: approvalRequests, refetch: refetchApprovals } = useQuery<{
+    id: number;
+    claim_id: number;
+    request_type: string;
+    requested_by: string | null;
+    details: string | null;
+    suggested_codes: string[] | null;
+    current_code: string | null;
+    status: string;
+    reviewed_by: string | null;
+    reviewed_at: string | null;
+    created_at: string;
+  }[]>({
+    queryKey: ['claim-approvals', id],
+    queryFn: () => api.get(`/approvals/claims/${id}`).then(r => r.data),
     enabled: !!id,
   });
 
@@ -384,6 +730,109 @@ export default function ClaimDetailPage() {
     }
   };
 
+  // ── Approval requests ─────────────────────────────────────────────────────
+
+  const handleSubmitApproval = async () => {
+    if (!suggestNewCode && !suggestNote) return;
+    setSubmittingApproval(true);
+    try {
+      await api.post('/approvals/', {
+        claim_id: Number(id),
+        request_type: 'dx_change',
+        details: suggestNote || `Change ${suggestCurrentCode} → ${suggestNewCode}`,
+        suggested_codes: suggestNewCode ? [suggestNewCode] : [],
+        current_code: suggestCurrentCode || undefined,
+      });
+      showToast(t('approvals.submitted', { defaultValue: 'Approval request submitted' }));
+      refetchApprovals();
+      setShowSuggestModal(false);
+      setSuggestCurrentCode('');
+      setSuggestNewCode('');
+      setSuggestNote('');
+      setSuggestQuery('');
+      setSuggestResults([]);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      showToast(e?.response?.data?.detail ?? t('common.error'), false);
+    } finally {
+      setSubmittingApproval(false);
+    }
+  };
+
+  const handleApproveRequest = async (approvalId: number) => {
+    try {
+      await api.patch(`/approvals/${approvalId}`, { status: 'approved' });
+      showToast(t('approvals.approved', { defaultValue: 'Approved' }));
+      refetchApprovals();
+      // Auto-scrub: check if no more pending approvals, then re-scrub
+      const { data: remaining } = await api.get(`/approvals/claims/${id}`);
+      const hasPending = (remaining || []).some((a: { status: string }) => a.status === 'pending');
+      if (!hasPending) {
+        // Apply suggested codes first
+        const approved = (remaining || []).filter((a: { status: string }) => a.status === 'approved');
+        for (const a of approved) {
+          if (a.suggested_codes?.length && claim) {
+            const currentCodes = claim.diagnosis_codes || [];
+            const newCodes = [...currentCodes];
+            for (const code of a.suggested_codes) {
+              if (!newCodes.includes(code)) newCodes.push(code);
+            }
+            if (newCodes.length > currentCodes.length) {
+              await api.patch(`/claims/${id}`, { diagnosis_codes: newCodes });
+            }
+          }
+        }
+        // Re-scrub
+        try {
+          const { data } = await api.post(`/ai/scrub/${id}`);
+          setScrubResult(data);
+          qc.invalidateQueries({ queryKey: ['claim', id] });
+          showToast(t('approvals.auto_scrub', { defaultValue: 'All approved — claim re-scrubbed' }));
+        } catch {
+          qc.invalidateQueries({ queryKey: ['claim', id] });
+        }
+      }
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      showToast(e?.response?.data?.detail ?? t('common.error'), false);
+    }
+  };
+
+  const handleRejectRequest = async (approvalId: number) => {
+    try {
+      await api.patch(`/approvals/${approvalId}`, { status: 'rejected' });
+      showToast(t('approvals.rejected', { defaultValue: 'Rejected' }));
+      refetchApprovals();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      showToast(e?.response?.data?.detail ?? t('common.error'), false);
+    }
+  };
+
+  const handleQuickFixPointer = async (suggestedCode: string) => {
+    if (!claim) return;
+    setAddingFixCode(true);
+    try {
+      const currentCodes = claim.diagnosis_codes || [];
+      if (!currentCodes.includes(suggestedCode)) {
+        const newCodes = [...currentCodes, suggestedCode];
+        await api.patch(`/claims/${id}`, { diagnosis_codes: newCodes });
+        qc.invalidateQueries({ queryKey: ['claim', id] });
+        showToast(`Added ${suggestedCode}`);
+        // Re-scrub after fix
+        try {
+          const { data } = await api.post(`/ai/scrub/${id}`);
+          setScrubResult(data);
+        } catch {}
+      }
+    } catch {
+      showToast('Failed to add code', false);
+    } finally {
+      setAddingFixCode(false);
+      setExpandedFix(null);
+    }
+  };
+
   // ── Appeal letter ─────────────────────────────────────────────────────────
 
   const handleGenerateAppealLetter = async () => {
@@ -461,7 +910,7 @@ export default function ClaimDetailPage() {
         claim_id: Number(id),
         payer_name: claim?.payer?.name,
         auth_number: paAuthNumber,
-        cpt_codes: claim?.service_lines.map(sl => sl.cpt_code) ?? [],
+        cpt_codes: (claim?.service_lines || []).map(sl => sl.cpt_code) ?? [],
         status: 'approved',
         requested_date: new Date().toISOString().split('T')[0],
         approved_date: new Date().toISOString().split('T')[0],
@@ -497,7 +946,7 @@ export default function ClaimDetailPage() {
   const hasMedicalDx = () => {
     if (!claim) return false;
     const MEDICAL_DX_PREFIXES = ['E11.3', 'E13.3', 'E10.3', 'H40', 'H35', 'H47', 'G91', 'H30', 'H31'];
-    return claim.diagnosis_codes.some(dx =>
+    return ((claim.diagnosis_codes || []) as string[]).some(dx =>
       MEDICAL_DX_PREFIXES.some(pfx => dx.startsWith(pfx))
     );
   };
@@ -505,7 +954,7 @@ export default function ClaimDetailPage() {
   // ─────────────────────────────────────────────────────────────────────────
 
   const fmt = (n: number) =>
-    new Intl.NumberFormat('es-PR', { style: 'currency', currency: 'USD' }).format(n);
+    new Intl.NumberFormat('es-PR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
   if (isLoading) return (
     <div className="flex items-center justify-center h-64">
@@ -551,17 +1000,9 @@ export default function ClaimDetailPage() {
           {(claim.status === 'draft' || claim.status === 'ready') && (
             <>
               <button
-                onClick={handleValidate}
-                disabled={validating}
-                className="flex items-center gap-1.5 px-3 py-2 border border-emerald-200 text-sm rounded-lg hover:bg-emerald-50 text-emerald-700"
-              >
-                <ClipboardCheck className="w-4 h-4" />
-                {validating ? t('validation.running') : t('validation.run')}
-              </button>
-              <button
                 onClick={handleScrub}
                 disabled={scrubbing}
-                className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-sm rounded-lg hover:bg-slate-50 text-slate-700"
+                className="flex items-center gap-1.5 px-3 py-2 border border-emerald-200 text-sm rounded-lg hover:bg-emerald-50 text-emerald-700"
               >
                 <Sparkles className="w-4 h-4 text-amber-500" />
                 {scrubbing ? t('claims.scrubbing') : t('claims.scrub')}
@@ -720,7 +1161,7 @@ export default function ClaimDetailPage() {
       </div>
 
       {/* Scrub result */}
-      {(scrubResult || (claim.scrub_issues && claim.scrub_issues.length > 0)) && (
+      {(scrubResult || ((claim.scrub_issues || []).length > 0)) && (
         <div className={`rounded-xl border p-4 mb-4 ${(scrubResult?.score ?? claim.scrub_score ?? 0) >= 100 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
           <div className="flex items-center gap-2 mb-2">
             <ShieldCheck className={`w-4 h-4 ${(scrubResult?.score ?? claim.scrub_score ?? 0) >= 100 ? 'text-emerald-600' : 'text-amber-600'}`} />
@@ -728,12 +1169,56 @@ export default function ClaimDetailPage() {
               {t('claims.scrub_score', { score: (scrubResult?.score ?? claim.scrub_score ?? 0).toFixed(0) })}
             </span>
           </div>
-          {(scrubResult?.issues ?? claim.scrub_issues ?? []).map((issue, i) => (
-            <div key={i} className="flex items-start gap-2 text-sm mt-1">
-              <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${issue.type === 'error' ? 'text-red-500' : 'text-amber-500'}`} />
-              <span className="text-slate-700">{issue.msg_key ? t(issue.msg_key, { defaultValue: issue.msg, ...(issue.msg_params || {}) }) : issue.msg}</span>
-            </div>
-          ))}
+          {(scrubResult?.issues ?? claim.scrub_issues ?? []).map((issue, i) => {
+            // Detect diagnosis pointer mismatch warnings
+            const isPointerIssue = /diagnosis pointer|pointer mismatch|refractive diagnosis/i.test(issue.msg || '');
+            const suggestedFixMatch = issue.msg?.match(/\(([A-Z]\d[\d.]+)/);
+            // Suggest a refractive code if the issue mentions needing one
+            const suggestedFix = /refractive/i.test(issue.msg || '') ? 'H52.209' : suggestedFixMatch?.[1] || null;
+
+            return (
+              <div key={i} className="mt-1">
+                <div className="flex items-start gap-2 text-sm">
+                  <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${issue.type === 'error' ? 'text-red-500' : 'text-amber-500'}`} />
+                  <span className="text-slate-700 flex-1">{issue.msg_key ? t(issue.msg_key, { defaultValue: issue.msg, ...(issue.msg_params || {}) }) : issue.msg}</span>
+                  {isPointerIssue && (
+                    <button
+                      onClick={() => setExpandedFix(expandedFix === i ? null : i)}
+                      className="flex items-center gap-1 text-xs font-medium text-sky-600 hover:text-sky-800 px-2 py-0.5 border border-sky-200 rounded shrink-0"
+                    >
+                      <Zap className="w-3 h-3" />
+                      Fix
+                    </button>
+                  )}
+                </div>
+                {isPointerIssue && expandedFix === i && (
+                  <div className="ml-6 mt-2 p-3 bg-white border border-sky-200 rounded-lg text-sm">
+                    <p className="text-slate-600 mb-2">
+                      <span className="font-semibold text-slate-800">Issue:</span> {issue.msg}
+                    </p>
+                    {suggestedFix && (
+                      <>
+                        <p className="text-slate-600 mb-2">
+                          <span className="font-semibold text-slate-800">Suggested fix:</span> Add <span className="font-mono font-bold text-sky-700">{suggestedFix}</span>
+                          {suggestedFix.startsWith('H52') && ' (refractive diagnosis to support this service line)'}
+                        </p>
+                        <button
+                          onClick={() => handleQuickFixPointer(suggestedFix)}
+                          disabled={addingFixCode}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-500 hover:bg-sky-600 text-white text-xs font-medium rounded-lg disabled:opacity-50"
+                        >
+                          {addingFixCode
+                            ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            : <Plus className="w-3 h-3" />}
+                          Add {suggestedFix} & Re-scrub
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
           {(scrubResult?.suggestions ?? []).map((s, i) => (
             <p key={i} className="text-xs text-slate-600 mt-1 ml-5">💡 {s}</p>
           ))}
@@ -765,10 +1250,11 @@ export default function ClaimDetailPage() {
           <h2 className="text-sm font-semibold text-slate-700 mb-3">{t('claims.patient')}</h2>
           {claim.patient ? (
             <div className="space-y-1 text-sm">
-              <p className="font-medium text-slate-900">{claim.patient.first_name} {claim.patient.last_name}</p>
-              <p className="text-slate-500">{t('patients.mrn')}: {claim.patient.mrn}</p>
-              <p className="text-slate-500">{t('patients.dob_abbr')}: {formatDate(claim.patient.dob)}</p>
-              {claim.patient.phone && <p className="text-slate-500">{claim.patient.phone}</p>}
+              <p className="font-medium text-slate-900">{claim.patient?.first_name} {claim.patient?.last_name}</p>
+              <p className="text-slate-500">{t('patients.mrn')}: {claim.patient?.mrn}</p>
+              <p className="text-slate-500">{t('patients.dob_abbr')}: {formatDate(claim.patient?.dob)}</p>
+              {claim.patient?.address_line1 && <p className="text-slate-500">{claim.patient.address_line1}</p>}
+              {claim.patient.phone && <p className="text-slate-500">{displayPhone(claim.patient.phone)}</p>}
             </div>
           ) : <p className="text-slate-400 text-sm">{t('claims.patient')} #{claim.patient_id}</p>}
         </div>
@@ -790,10 +1276,29 @@ export default function ClaimDetailPage() {
               {claim.payer_claim_number && (
                 <p className="text-slate-400 font-mono text-xs">Payer #: {claim.payer_claim_number}</p>
               )}
+              {(() => {
+                const ins = claim.patient?.insurances?.find(i => i.payer_id === claim.payer_id) ?? claim.patient?.insurances?.[0];
+                return ins?.member_id ? (
+                  <p className="text-slate-500 text-xs mt-1">Núm. Contrato: <span className="font-mono font-medium text-slate-700">{ins.member_id}</span></p>
+                ) : null;
+              })()}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Patient Documents (Insurance Card, License, Signature) */}
+      {claim.source === 'vistanet' && (
+        <ErrorBoundary fallback={<div className="p-4 text-red-500 text-sm">Error loading patient documents</div>}>
+          <PatientDocuments
+            claimId={claim.id}
+            showDocs={showDocs}
+            setShowDocs={setShowDocs}
+            fullSizeImg={fullSizeImg}
+            setFullSizeImg={setFullSizeImg}
+          />
+        </ErrorBoundary>
+      )}
 
       {/* Financials */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
@@ -815,6 +1320,7 @@ export default function ClaimDetailPage() {
 
       {/* Service Lines — grouped by category */}
       {(() => {
+        try {
         // Categorize service lines by code format
         const categorize = (code: string): 'diagnoses' | 'procedures' | 'materials' => {
           if (/^[A-Za-z]\d/.test(code)) {
@@ -828,9 +1334,9 @@ export default function ClaimDetailPage() {
         };
 
         const categories = [
-          { key: 'diagnoses' as const,  labelKey: 'claims.category_diagnoses',  items: claim.service_lines.filter(sl => categorize(sl.cpt_code) === 'diagnoses') },
-          { key: 'procedures' as const, labelKey: 'claims.category_procedures', items: claim.service_lines.filter(sl => categorize(sl.cpt_code) === 'procedures') },
-          { key: 'materials' as const,  labelKey: 'claims.category_materials',  items: claim.service_lines.filter(sl => categorize(sl.cpt_code) === 'materials') },
+          { key: 'diagnoses' as const,  labelKey: 'claims.category_diagnoses',  items: (claim.service_lines || []).filter(sl => categorize(sl.cpt_code) === 'diagnoses') },
+          { key: 'procedures' as const, labelKey: 'claims.category_procedures', items: (claim.service_lines || []).filter(sl => categorize(sl.cpt_code) === 'procedures') },
+          { key: 'materials' as const,  labelKey: 'claims.category_materials',  items: (claim.service_lines || []).filter(sl => categorize(sl.cpt_code) === 'materials') },
         ].filter(c => c.items.length > 0);
 
         // If only one category (or none), show flat like before
@@ -851,7 +1357,7 @@ export default function ClaimDetailPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {lines.map(sl => {
-                const lineIssues = (scrubResult?.issues ?? claim.scrub_issues ?? []).filter(issue => {
+                const lineIssues = (scrubResult?.issues ?? (claim.scrub_issues || [])).filter(issue => {
                   if (issue.field === `line_${sl.line_number}`) return true;
                   const lineMatch = issue.msg?.match(/Line\s+(\d+)/i);
                   return lineMatch && parseInt(lineMatch[1]) === sl.line_number;
@@ -868,9 +1374,18 @@ export default function ClaimDetailPage() {
                     <td className="px-4 py-2 text-slate-500">{sl.line_number}</td>
                     <td className="px-4 py-2 font-mono font-medium text-slate-900">{sl.cpt_code}</td>
                     <td className="px-4 py-2 text-slate-600">{sl.description ?? '—'}</td>
-                    <td className="px-4 py-2 font-mono text-xs text-slate-500">{sl.modifiers.join(' ') || '—'}</td>
+                    <td className="px-4 py-2 font-mono text-xs text-slate-500">{(sl.modifiers || []).join(' ') || '—'}</td>
                     <td className="px-4 py-2 text-center text-slate-600">{sl.units}</td>
-                    <td className="px-4 py-2 text-right font-medium text-slate-900">{fmt(sl.billed_amount)}</td>
+                    <td className="px-4 py-2 text-right">
+                      <InlineEditAmount
+                        value={sl.billed_amount}
+                        claimId={claim.id}
+                        lineId={sl.id}
+                        cptCode={sl.cpt_code}
+                        fmt={fmt}
+                        onSaved={() => qc.invalidateQueries({ queryKey: ['claim', id] })}
+                      />
+                    </td>
                     <td className="px-4 py-2 text-right font-medium text-emerald-700">{fmt(sl.paid_amount)}</td>
                   </tr>
                 );
@@ -885,7 +1400,7 @@ export default function ClaimDetailPage() {
               onClick={() => setShowLines(s => !s)}
               className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
-              {t('claims.service_lines')} ({claim.service_lines.length})
+              {t('claims.service_lines')} ({(claim.service_lines || []).length})
               {showLines ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
             {showLines && (
@@ -909,17 +1424,385 @@ export default function ClaimDetailPage() {
             )}
           </div>
         );
+        } catch (err) {
+          console.error('Render error in service lines:', err);
+          return <div className="p-4 text-red-500 text-sm">Error rendering service lines: {String(err)}</div>;
+        }
       })()}
 
       {/* Diagnosis codes */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
-        <h2 className="text-sm font-semibold text-slate-700 mb-2">{t('claims.diagnosis_codes')}</h2>
-        <div className="flex flex-wrap gap-2">
-          {claim.diagnosis_codes.map((dx, i) => (
-            <span key={i} className="font-mono text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded">{dx}</span>
-          ))}
+      {(() => {
+        try {
+
+        const handleDxSearch = (q: string) => {
+          setDxQuery(q);
+          if (q.length >= 1) {
+            setDxResults(searchICD10(q, i18n.language || 'en'));
+            setDxActiveIdx(-1);
+          } else {
+            setDxResults([]);
+          }
+        };
+
+        const addDxCode = async (code: string) => {
+          if ((claim.diagnosis_codes || []).includes(code)) return;
+          const newCodes = [...(claim.diagnosis_codes || []), code];
+          setSavingDx(true);
+          try {
+            await api.patch(`/claims/${id}`, { diagnosis_codes: newCodes });
+            qc.invalidateQueries({ queryKey: ['claim', id] });
+            // If from Wink, track as suggestion
+            if (claim.source === 'wink') {
+              setDxSuggestions(prev => [...prev, code]);
+              showToast(`Added ${code} as suggestion (needs doctor approval in Wink)`);
+            } else {
+              showToast(`Added ${code}`);
+            }
+          } catch {
+            showToast('Failed to add diagnosis code', false);
+          } finally {
+            setSavingDx(false);
+            setDxQuery('');
+            setDxResults([]);
+          }
+        };
+
+        const removeDxCode = async (code: string) => {
+          const newCodes = (claim.diagnosis_codes || []).filter(c => c !== code);
+          setSavingDx(true);
+          try {
+            await api.patch(`/claims/${id}`, { diagnosis_codes: newCodes });
+            qc.invalidateQueries({ queryKey: ['claim', id] });
+            setDxSuggestions(prev => prev.filter(c => c !== code));
+            showToast(`Removed ${code}`);
+          } catch {
+            showToast('Failed to remove diagnosis code', false);
+          } finally {
+            setSavingDx(false);
+          }
+        };
+
+        const handleDxKeyDown = (e: React.KeyboardEvent) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setDxActiveIdx(i => Math.min(i + 1, dxResults.length - 1));
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setDxActiveIdx(i => Math.max(i - 1, -1));
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (dxActiveIdx >= 0 && dxResults[dxActiveIdx]) {
+              addDxCode(dxResults[dxActiveIdx].code);
+            } else if (dxQuery.trim()) {
+              addDxCode(dxQuery.trim().toUpperCase());
+            }
+          } else if (e.key === 'Escape') {
+            setShowDxSearch(false);
+            setDxQuery('');
+            setDxResults([]);
+          }
+        };
+
+        const hasMissingDx = (claim.diagnosis_codes || []).length === 0;
+
+        return (
+          <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-slate-700">{t('claims.diagnosis_codes')}</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setShowSuggestModal(true); setSuggestCurrentCode(''); setSuggestNewCode(''); setSuggestNote(''); setSuggestQuery(''); setSuggestResults([]); }}
+                  className="flex items-center gap-1 text-xs font-medium text-amber-600 hover:text-amber-800 px-2 py-1 border border-amber-200 rounded"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {t('approvals.suggest_change', { defaultValue: 'Suggest Code Change' })}
+                </button>
+                <button
+                  onClick={() => { setShowDxSearch(v => !v); setTimeout(() => dxInputRef.current?.focus(), 100); }}
+                  className="flex items-center gap-1 text-xs font-medium text-sky-600 hover:text-sky-800 px-2 py-1 border border-sky-200 rounded"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  {t('claims.add_diagnosis', { defaultValue: 'Add Diagnosis Code' })}
+                </button>
+              </div>
+            </div>
+
+            {hasMissingDx && !showDxSearch && (
+              <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs mb-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <span className="text-amber-800">No diagnosis codes — add at least one ICD-10 code</span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              {(claim.diagnosis_codes || []).map((dx, i) => (
+                <span key={i} className={`inline-flex items-center gap-1 font-mono text-xs px-2 py-1 rounded ${
+                  dxSuggestions.includes(dx)
+                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                    : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {dx}
+                  {dxSuggestions.includes(dx) && (
+                    <span className="text-amber-600 text-[10px] font-semibold">suggestion</span>
+                  )}
+                  <button
+                    onClick={() => removeDxCode(dx)}
+                    className="text-slate-400 hover:text-red-500 ml-0.5"
+                    title="Remove"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            {/* ICD-10 search */}
+            {showDxSearch && (
+              <div className="relative mt-3">
+                <div className="relative">
+                  <input
+                    ref={dxInputRef}
+                    type="text"
+                    value={dxQuery}
+                    onChange={e => handleDxSearch(e.target.value)}
+                    onKeyDown={handleDxKeyDown}
+                    placeholder={t('claims.search_icd10', { defaultValue: 'Search ICD-10 code...' })}
+                    className="w-full pl-3 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    disabled={savingDx}
+                  />
+                </div>
+                {dxResults.length > 0 && (
+                  <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white rounded-xl border border-slate-200 shadow-xl max-h-64 overflow-y-auto">
+                    {dxResults.map((code, idx) => (
+                      <button
+                        key={code.code}
+                        type="button"
+                        onClick={() => addDxCode(code.code)}
+                        className={`w-full text-left px-3 py-2.5 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 ${
+                          dxActiveIdx === idx ? 'bg-sky-50' : ''
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <span className="font-mono text-xs font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded shrink-0 mt-0.5">
+                            {code.code}
+                          </span>
+                          <span className="text-sm text-slate-700 leading-snug">
+                            {(i18n.language || 'en').startsWith('es') ? code.es : code.en}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {claim.source === 'wink' && dxSuggestions.length > 0 && (
+              <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs mt-3">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <span className="text-amber-800">
+                  {dxSuggestions.length} Dx code{dxSuggestions.length > 1 ? 's' : ''} added as suggestion{dxSuggestions.length > 1 ? 's' : ''} — needs doctor approval in Wink
+                </span>
+              </div>
+            )}
+          </div>
+        );
+        } catch (err) {
+          console.error('Render error in diagnosis codes:', err);
+          return <div className="p-4 text-red-500 text-sm">Error rendering diagnosis codes: {String(err)}</div>;
+        }
+      })()}
+
+      {/* Approval Requests */}
+      {approvalRequests && approvalRequests.length > 0 && (
+        <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 mb-4">
+          <h2 className="text-sm font-semibold text-amber-700 mb-3 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4" />
+            {t('approvals.title', { defaultValue: 'Approval Requests' })} ({approvalRequests.length})
+          </h2>
+          <div className="space-y-2">
+            {approvalRequests.map(ar => (
+              <div key={ar.id} className={`flex items-center gap-3 text-xs bg-white border rounded-lg px-3 py-2.5 ${
+                ar.status === 'approved' ? 'border-emerald-200' :
+                ar.status === 'rejected' ? 'border-rose-200' : 'border-amber-200'
+              }`}>
+                <span className={`px-1.5 py-0.5 rounded font-semibold shrink-0 ${
+                  ar.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                  ar.status === 'rejected' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'
+                }`}>{ar.status}</span>
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-slate-700">{ar.request_type.replace(/_/g, ' ')}</span>
+                  {ar.current_code && (
+                    <span className="text-slate-400 ml-1">({ar.current_code})</span>
+                  )}
+                  {(ar.suggested_codes || []).length ? (
+                    <span className="text-sky-600 ml-1">
+                      → {(ar.suggested_codes || []).join(', ')}
+                    </span>
+                  ) : null}
+                  {ar.details && <p className="text-slate-500 mt-0.5 truncate">{ar.details}</p>}
+                </div>
+                <span className="text-slate-400 shrink-0">{ar.requested_by}</span>
+                {ar.status === 'pending' && (
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      onClick={() => handleApproveRequest(ar.id)}
+                      className="p-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded"
+                      title="Approve"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleRejectRequest(ar.id)}
+                      className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded"
+                      title="Reject"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Suggest Code Change Modal */}
+      {showSuggestModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowSuggestModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-5">
+              <h3 className="text-base font-semibold text-slate-900 mb-1 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                {t('approvals.suggest_change', { defaultValue: 'Suggest Code Change' })}
+              </h3>
+              <p className="text-xs text-slate-500 mb-4">{t('approvals.suggest_description', { defaultValue: 'Request a diagnosis code change — needs doctor approval' })}</p>
+
+              {/* Select current code to change */}
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('approvals.current_code', { defaultValue: 'Current Code (optional)' })}</label>
+              <select
+                value={suggestCurrentCode}
+                onChange={e => setSuggestCurrentCode(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm mb-3"
+              >
+                <option value="">{t('approvals.select_code', { defaultValue: '— Select code to change —' })}</option>
+                {(claim?.diagnosis_codes || []).map(dx => (
+                  <option key={dx} value={dx}>{dx}</option>
+                ))}
+              </select>
+
+              {/* Search for new code */}
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('approvals.new_code', { defaultValue: 'Suggested New Code' })}</label>
+              <div className="relative mb-3">
+                <input
+                  type="text"
+                  value={suggestQuery}
+                  onChange={e => {
+                    setSuggestQuery(e.target.value);
+                    if (e.target.value.length >= 1) {
+                      setSuggestResults(searchICD10(e.target.value, i18n.language || 'en'));
+                    } else {
+                      setSuggestResults([]);
+                    }
+                  }}
+                  placeholder={t('claims.search_icd10', { defaultValue: 'Search ICD-10 code...' })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+                {suggestNewCode && (
+                  <span className="absolute right-2 top-2 text-xs font-mono font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded">{suggestNewCode}</span>
+                )}
+                {suggestResults.length > 0 && (
+                  <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white rounded-xl border border-slate-200 shadow-xl max-h-48 overflow-y-auto">
+                    {suggestResults.map(code => (
+                      <button
+                        key={code.code}
+                        type="button"
+                        onClick={() => {
+                          setSuggestNewCode(code.code);
+                          setSuggestQuery(code.code);
+                          setSuggestResults([]);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0"
+                      >
+                        <span className="font-mono text-xs font-bold text-sky-700 mr-2">{code.code}</span>
+                        <span className="text-sm text-slate-700">{(i18n.language || 'en').startsWith('es') ? code.es : code.en}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Note */}
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('approvals.note', { defaultValue: 'Reason / Note' })}</label>
+              <textarea
+                value={suggestNote}
+                onChange={e => setSuggestNote(e.target.value)}
+                placeholder={t('approvals.note_placeholder', { defaultValue: 'Explain why this change is needed...' })}
+                rows={3}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500 mb-3"
+              />
+            </div>
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex gap-3 justify-end">
+              <button
+                onClick={() => setShowSuggestModal(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50"
+              >
+                {t('common.cancel', { defaultValue: 'Cancel' })}
+              </button>
+              <button
+                onClick={handleSubmitApproval}
+                disabled={submittingApproval || (!suggestNewCode && !suggestNote)}
+                className="px-4 py-2 text-sm font-medium text-white bg-amber-500 hover:bg-amber-600 rounded-xl disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {submittingApproval
+                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <Send className="w-3.5 h-3.5" />}
+                {t('approvals.submit_request', { defaultValue: 'Submit Request' })}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Patient Sale Data */}
+      {claim.sale_items && Array.isArray(claim.sale_items) && claim.sale_items.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-4">
+          <button
+            onClick={() => setShowSaleData(s => !s)}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <span className="flex items-center gap-2">
+              <span className="text-base">🛒</span>
+              {t('claims.patient_sale', 'Patient Sale')}
+            </span>
+            {showSaleData ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+          {showSaleData && (
+            <div className="px-4 pb-4 border-t border-slate-100">
+              {claim.sale_items && Array.isArray(claim.sale_items) && claim.sale_items.length > 0 ? (
+                <table className="w-full text-sm mt-3">
+                  <thead><tr className="text-left text-xs text-slate-400 border-b">
+                    <th className="pb-2">#</th>
+                    <th className="pb-2">{t('common.description', 'Description')}</th>
+                    <th className="pb-2 text-right">{t('common.amount', 'Amount')}</th>
+                  </tr></thead>
+                  <tbody>
+                    {(claim.sale_items as {name:string;amount:number}[]).map((item, i) => (
+                      <tr key={i} className="border-b border-slate-50">
+                        <td className="py-1.5 text-slate-400">{i + 1}</td>
+                        <td className="py-1.5 text-slate-700">{item.name}</td>
+                        <td className="py-1.5 text-right font-mono text-slate-600">${(item.amount || 0).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-sm text-slate-400 mt-3 italic">{t('claims.no_sale_data', 'No sale data available')}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Unified Submit Claim Section ── */}
       {(claim.status === 'draft' || claim.status === 'ready') && (() => {
@@ -951,76 +1834,21 @@ export default function ClaimDetailPage() {
             </h2>
 
             <div className="flex flex-wrap gap-2 mb-3">
-              {/* Stedi button */}
-              {isStedi && (
-                <button
-                  onClick={() => submitMutation.mutate()}
-                  disabled={submitMutation.isPending}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg disabled:opacity-60"
-                >
-                  {submitMutation.isPending
-                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : <Send className="w-4 h-4" />}
-                  {t('submit_section.via_stedi')}
-                </button>
-              )}
-
-              {/* Reforma / Stedi Portal Export */}
-              {isReforma && (
-                <a
-                  href={`/claims/${claim.id}`}
-                  onClick={e => {
-                    e.preventDefault();
-                    window.print();
-                  }}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg"
-                >
-                  <span className="text-base">📋</span>
-                  {t('routing.export_stedi_portal')}
-                </a>
-              )}
-
-              {/* Inmediata buttons */}
-              {isInm && (
-                <>
-                  <button
-                    onClick={handleGenerateEDI}
-                    disabled={generatingEDI}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded-lg disabled:opacity-60"
-                  >
-                    {generatingEDI
-                      ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      : <FileCode className="w-4 h-4" />}
-                    {t('submit_section.via_inmediata')}
-                  </button>
-                  {ediContent && (
-                    <button
-                      onClick={handleUploadEDI}
-                      disabled={uploadingEDI}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm rounded-lg disabled:opacity-60"
-                    >
-                      {uploadingEDI
-                        ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        : <Upload className="w-4 h-4" />}
-                      {t('inmediata.upload')}
-                    </button>
-                  )}
-                </>
-              )}
-
-              {/* Envolve button */}
-              {(isEnvolve || medicalDx) && (
-                <button
-                  onClick={handleAvailitySubmit}
-                  disabled={availitySubmitting}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg disabled:opacity-60"
-                >
-                  {availitySubmitting
-                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : <Eye className="w-4 h-4" />}
-                  {medicalDx ? t('submit_section.via_envolve_vision') : t('submit_section.via_envolve')}
-                </button>
-              )}
+              {/* ONE submit button — app auto-routes */}
+              <button
+                onClick={() => {
+                  if (isEnvolve || medicalDx) handleAvailitySubmit();
+                  else if (isInm || isReforma) handleGenerateEDI();
+                  else submitMutation.mutate();
+                }}
+                disabled={submitMutation.isPending || generatingEDI || availitySubmitting}
+                className="flex items-center gap-1.5 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg disabled:opacity-60 shadow-sm"
+              >
+                {(submitMutation.isPending || generatingEDI || availitySubmitting)
+                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <Send className="w-4 h-4" />}
+                {t('common.submit', 'Submit')}
+              </button>
 
               {ediContent && (
                 <button
@@ -1277,17 +2105,17 @@ export default function ClaimDetailPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
               <div>
                 <label className="block text-xs text-slate-500 mb-1">{t('payments.payment_amount')}</label>
-                <input type="number" step="0.01" value={pmtAmount} onChange={e => setPmtAmount(e.target.value)}
+                <input type="text" inputMode="decimal" pattern="[0-9.]*" value={pmtAmount} onChange={e => setPmtAmount(e.target.value)}
                   placeholder="0.00" className="w-full px-2 py-1 border border-slate-200 rounded text-sm" />
               </div>
               <div>
                 <label className="block text-xs text-slate-500 mb-1">{t('payments.adjustment')}</label>
-                <input type="number" step="0.01" value={pmtAdjust} onChange={e => setPmtAdjust(e.target.value)}
+                <input type="text" inputMode="decimal" pattern="[0-9.]*" value={pmtAdjust} onChange={e => setPmtAdjust(e.target.value)}
                   placeholder="0.00" className="w-full px-2 py-1 border border-slate-200 rounded text-sm" />
               </div>
               <div>
                 <label className="block text-xs text-slate-500 mb-1">{t('payments.patient_resp')}</label>
-                <input type="number" step="0.01" value={pmtPatientResp} onChange={e => setPmtPatientResp(e.target.value)}
+                <input type="text" inputMode="decimal" pattern="[0-9.]*" value={pmtPatientResp} onChange={e => setPmtPatientResp(e.target.value)}
                   placeholder="0.00" className="w-full px-2 py-1 border border-slate-200 rounded text-sm" />
               </div>
               <div>
@@ -1382,46 +2210,6 @@ export default function ClaimDetailPage() {
         </div>
       )}
 
-      {/* Patient Sale Data */}
-      {claim.sale_items && Array.isArray(claim.sale_items) && claim.sale_items.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-4">
-          <button
-            onClick={() => setShowSaleData(s => !s)}
-            className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            <span className="flex items-center gap-2">
-              <span className="text-base">🛒</span>
-              {t('claims.patient_sale', 'Patient Sale')}
-            </span>
-            {showSaleData ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
-          {showSaleData && (
-            <div className="px-4 pb-4 border-t border-slate-100">
-              {claim.sale_items && Array.isArray(claim.sale_items) && claim.sale_items.length > 0 ? (
-                <table className="w-full text-sm mt-3">
-                  <thead><tr className="text-left text-xs text-slate-400 border-b">
-                    <th className="pb-2">#</th>
-                    <th className="pb-2">{t('common.description', 'Description')}</th>
-                    <th className="pb-2 text-right">{t('common.amount', 'Amount')}</th>
-                  </tr></thead>
-                  <tbody>
-                    {(claim.sale_items as {name:string;amount:number}[]).map((item, i) => (
-                      <tr key={i} className="border-b border-slate-50">
-                        <td className="py-1.5 text-slate-400">{i + 1}</td>
-                        <td className="py-1.5 text-slate-700">{item.name}</td>
-                        <td className="py-1.5 text-right font-mono text-slate-600">${(item.amount || 0).toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p className="text-sm text-slate-400 mt-3 italic">{t('claims.no_sale_data', 'No sale data available')}</p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Notes & Activity */}
       <div className="bg-white rounded-xl border border-slate-200 p-4">
         <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
@@ -1461,5 +2249,13 @@ export default function ClaimDetailPage() {
         onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
       />
     </div>
+  );
+}
+
+export default function ClaimDetailPage() {
+  return (
+    <ErrorBoundary>
+      <ClaimDetailPageInner />
+    </ErrorBoundary>
   );
 }

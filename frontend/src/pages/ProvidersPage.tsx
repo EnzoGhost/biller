@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Search, Stethoscope, Phone, Plus, X, Check } from 'lucide-react';
+import { formatPhone, displayPhone } from '../lib/format';
 import api from '../lib/api';
 import type { Provider, PaginatedResponse } from '../types';
 
@@ -216,7 +217,7 @@ export default function ProvidersPage() {
                 {provider.phone && (
                   <div className="flex items-center gap-2">
                     <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    {provider.phone}
+                    {displayPhone(provider.phone)}
                   </div>
                 )}
                 {provider.city && (
@@ -336,7 +337,7 @@ export default function ProvidersPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.phone')}</label>
-                  <input value={form.phone} onChange={field('phone')}
+                  <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: formatPhone(e.target.value) }))} maxLength={14}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
                 <div>

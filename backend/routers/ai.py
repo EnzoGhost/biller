@@ -61,9 +61,17 @@ def _scrub_patient(claim: Claim, issues: list) -> None:
     # Gender: Not required for PR payers. VistaNet doesn't track it.
     # Removed — was causing unnecessary warnings.
 
-    # Address
-    if not (patient.city or "").strip() or not (patient.state or "").strip() or not (patient.zip_code or "").strip():
-        issues.append({"type": "warning" if (patient.address_line1 or "").strip() else "error", "field": "patient.address", "msg_key": "scrub.patient_no_address", "msg": "Patient address incomplete — need at least city, state, zip"})
+    # Address — pragmatic: if address_line1 has content with a zip pattern, treat as complete
+    import re as _re
+    addr1 = (patient.address_line1 or "").strip()
+    has_city = bool((patient.city or "").strip())
+    has_state = bool((patient.state or "").strip())
+    has_zip = bool((patient.zip_code or "").strip())
+    addr_has_zip = bool(_re.search(r'\d{5}', addr1)) if addr1 else False
+    if not addr1 and not has_city:
+        issues.append({"type": "error", "field": "patient.address", "msg_key": "scrub.patient_no_address", "msg": "Patient address is missing"})
+    elif not has_city and not has_zip and not addr_has_zip:
+        issues.append({"type": "warning", "field": "patient.address", "msg_key": "scrub.patient_no_address", "msg": "Patient address incomplete — need at least city, state, zip"})
 
     # Member/insurance ID for this payer
     if claim.payer_id and patient.insurances:

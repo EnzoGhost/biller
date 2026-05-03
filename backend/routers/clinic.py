@@ -1,9 +1,12 @@
 """
 Clinic / Provider Setup Wizard
 First-time setup: clinic info, providers, payer enrollments, clearinghouse credentials.
+Join-code pairing for external clinic connections.
 """
-from datetime import datetime
-from typing import List, Optional
+import random
+import string
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -12,6 +15,26 @@ from pydantic import BaseModel
 from database import get_db
 from models import ClinicSettings, User
 from auth import get_current_user
+
+# ── In-memory join-code store (code -> {clinic_name, expires_at, wink_clinic_id}) ──
+_join_codes: Dict[str, dict] = {}
+
+# Default Wink clinic ID (from the sync server)
+WINK_DEFAULT_CLINIC_ID = "1a905d29-0a9a-42b3-8bc3-83c0ceb9acba"
+
+
+def _clean_expired_codes():
+    """Remove expired codes from the store."""
+    now = datetime.utcnow()
+    expired = [k for k, v in _join_codes.items() if v["expires_at"] < now]
+    for k in expired:
+        del _join_codes[k]
+
+
+def _generate_code(length: int = 6) -> str:
+    """Generate a human-friendly join code (no confusing chars)."""
+    alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # excludes 0/O, 1/I/L
+    return ''.join(random.choices(alphabet, k=length))
 
 router = APIRouter(prefix="/clinic", tags=["clinic"])
 
@@ -174,6 +197,75 @@ async def mark_setup_complete(
     return {"setup_complete": True}
 
 
+@router.post("/config")
+async def save_clinic_config(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """
+    Simple config save from Settings page.
+    Saves clinic info and optionally updates the default provider's name.
+    """
+    from models import Provider
+
+    s = await _get_or_create_settings(db)
+
+    if body.get("clinic_name"):
+        s.clinic_name = body["clinic_name"]
+    if body.get("npi"):
+        s.npi_org = body["npi"]
+    if body.get("tax_id"):
+        s.tax_id = body["tax_id"]
+    if body.get("address"):
+        s.address_line1 = body["address"]
+    if body.get("phone"):
+        s.phone = body["phone"]
+
+    # Update default provider name if provided
+    provider_name = body.get("provider_name", "").strip()
+    if provider_name:
+        result = await db.execute(
+            select(Provider).where(Provider.is_active == True).limit(1)
+        )
+        provider = result.scalar_one_or_none()
+        if provider:
+            parts = provider_name.split(" ", 1)
+            provider.first_name = parts[0]
+            provider.last_name = parts[1] if len(parts) > 1 else ""
+
+    await db.commit()
+    return {"status": "saved"}
+
+
+@router.get("/config")
+async def get_clinic_config(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Get current clinic info + default provider name for the settings page."""
+    from models import Provider
+
+    s = await _get_or_create_settings(db)
+    result = await db.execute(
+        select(Provider).where(Provider.is_active == True).limit(1)
+    )
+    provider = result.scalar_one_or_none()
+    provider_name = ""
+    if provider:
+        provider_name = f"{provider.first_name or ''} {provider.last_name or ''}".strip()
+
+    await db.commit()
+    return {
+        "clinic_name": s.clinic_name or "",
+        "npi": s.npi_org or "",
+        "tax_id": s.tax_id or "",
+        "address": s.address_line1 or "",
+        "phone": s.phone or "",
+        "provider_name": provider_name,
+    }
+
+
 @router.get("/settings/wizard-status")
 async def get_wizard_status(
     db: AsyncSession = Depends(get_db),
@@ -193,4 +285,93 @@ async def get_wizard_status(
         "has_tax_id": bool(s.tax_id),
         "has_npi": bool(s.npi_org),
         "has_clearinghouse": bool(s.stedi_api_key or s.inmediata_sftp_user),
+    }
+
+
+# ── Join Code Endpoints ───────────────────────────────────────────────────────
+
+@router.post("/join-codes/generate")
+async def generate_join_code(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Admin-only: generate a 6-char join code that expires in 5 minutes.
+    Used for pairing external clinic systems (e.g. Wink).
+    """
+    if user.role not in ("admin", "owner"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    _clean_expired_codes()
+
+    s = await _get_or_create_settings(db)
+    await db.commit()
+
+    code = _generate_code()
+    expires_at = datetime.utcnow() + timedelta(minutes=5)
+    _join_codes[code] = {
+        "clinic_name": s.clinic_name or "Unnamed Clinic",
+        "wink_clinic_id": WINK_DEFAULT_CLINIC_ID,
+        "expires_at": expires_at,
+        "created_by": user.id,
+    }
+
+    return {
+        "code": code,
+        "expires_at": expires_at.isoformat(),
+        "expires_in": 300,
+    }
+
+
+@router.post("/join-codes/verify")
+async def verify_join_code(body: dict):
+    """
+    Verify a join code by checking the Wink sync server.
+    The code was generated in Wink and stored on the sync server's PostgreSQL.
+    No auth required — the code IS the auth.
+    """
+    import requests as _requests
+    code = body.get("code", "").upper().strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="Code is required")
+
+    # First try the Wink sync server (where the code actually lives)
+    try:
+        resp = _requests.post(
+            "http://localhost:3100/api/sync/join-codes/verify",
+            json={"code": code},
+            timeout=5,
+        )
+        if resp.ok:
+            data = resp.json()
+            if data.get("clinic_id"):
+                return {
+                    "valid": True,
+                    "clinic_name": data.get("name", "Wink Clinic"),
+                    "wink_clinic_id": data["clinic_id"],
+                }
+            else:
+                return {"valid": False, "message": data.get("error", "Invalid or expired code")}
+        else:
+            error_data = resp.json() if resp.headers.get('content-type', '').startswith('application/json') else {}
+            return {"valid": False, "message": error_data.get("error", "Invalid or expired code")}
+    except Exception as e:
+        pass  # Fall through to local check
+
+    # Fallback: check SometeoPR's own join codes (for SometeoPR-generated codes)
+    _clean_expired_codes()
+    entry = _join_codes.get(code)
+    if not entry:
+        return {"valid": False, "message": "Invalid or expired code"}
+    if entry["expires_at"] < datetime.utcnow():
+        del _join_codes[code]
+        return {"valid": False, "message": "Code expired"}
+    clinic_name = entry["clinic_name"]
+    wink_clinic_id = entry.get("wink_clinic_id", WINK_DEFAULT_CLINIC_ID)
+    del _join_codes[code]
+
+    return {
+        "valid": True,
+        "clinic_name": clinic_name,
+        "wink_clinic_id": wink_clinic_id,
     }

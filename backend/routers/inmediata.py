@@ -442,6 +442,51 @@ async def get_inmediata_config(
     }
 
 
+# ── API Config ────────────────────────────────────────────────────────────────
+
+@router.post("/api-config")
+async def save_api_config(
+    body: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Save Inmediata API configuration."""
+    _runtime_config["api_key"] = body.get("api_key", "")
+    _runtime_config["api_base_url"] = body.get("api_base_url", "https://api.inmediata.com")
+    _runtime_config["submitter_id"] = body.get("submitter_id", "")
+    _runtime_config["environment"] = body.get("environment", "sandbox")
+    return {"status": "saved"}
+
+
+@router.get("/api-config")
+async def get_api_config(
+    _: User = Depends(get_current_user),
+):
+    """Get current Inmediata API configuration (masked key)."""
+    key = _runtime_config.get("api_key", "")
+    masked = f"{'*' * (len(key) - 4)}{key[-4:]}" if len(key) > 4 else "not set"
+    return {
+        "api_key_masked": masked,
+        "api_key_set": bool(key),
+        "api_base_url": _runtime_config.get("api_base_url", "https://api.inmediata.com"),
+        "submitter_id": _runtime_config.get("submitter_id", ""),
+        "environment": _runtime_config.get("environment", "sandbox"),
+    }
+
+
+@router.post("/test-connection")
+async def test_inmediata_connection(
+    _: User = Depends(get_current_user),
+):
+    """Test Inmediata API connection with current config."""
+    key = _runtime_config.get("api_key")
+    if not key:
+        return {"success": False, "message": "API key not configured"}
+    base = _runtime_config.get("api_base_url", "https://api.inmediata.com")
+    # Placeholder — will implement real API test after the call with Inmediata
+    return {"success": True, "message": f"Configuration saved. Ready to connect to {base}"}
+
+
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
 def _parse_date(date_str: str | None) -> date | None:

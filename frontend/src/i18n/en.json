@@ -123,7 +123,7 @@
     "name": "Name",
     "dob": "Date of Birth",
     "dob_abbr": "DOB",
-    "mrn": "MRN",
+    "mrn": "Record",
     "phone": "Phone",
     "insurance": "Insurance",
     "no_patients": "No patients found",
@@ -293,7 +293,7 @@
     "step_upload": "Upload",
     "step_done": "Done",
     "back": "← Back",
-    "field_patient_mrn": "Patient MRN",
+    "field_patient_mrn": "Patient Record",
     "field_first_name": "First Name",
     "field_last_name": "Last Name",
     "field_dob": "Date of Birth",
@@ -787,5 +787,10 @@
     "scrub.timely_filing_exceeded": "Service date exceeds payer timely filing deadline ({{days}} days)",
     "scrub.total_mismatch": "Total billed (${{claimed}}) doesn't match sum of service lines (${{actual}})",
     "scrub.zero_total": "Total billed is $0 — verify service line amounts"
+  },
+  "claim": {
+    "patient_documents": "Patient Documents",
+    "insurance_card": "Insurance Card",
+    "license_id": "License / ID"
   }
 }

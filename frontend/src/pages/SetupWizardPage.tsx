@@ -7,6 +7,7 @@ import {
   ChevronRight, ChevronLeft, Check, Loader2,
 } from 'lucide-react';
 import api from '../lib/api';
+import { formatPhone } from '../lib/format';
 
 const STEPS = [
   { id: 'clinic',        label: 'Clinic Info',       icon: Building2 },
@@ -181,7 +182,7 @@ export default function SetupWizardPage() {
               </div>
               <div>
                 <label className={labelClass}>{t('wizard.phone')}</label>
-                <input value={phone} onChange={e => setPhone(e.target.value)} className={inputClass} />
+                <input value={phone} onChange={e => setPhone(formatPhone(e.target.value))} className={inputClass} maxLength={14} />
               </div>
             </div>
           </div>

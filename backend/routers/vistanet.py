@@ -16,22 +16,33 @@ from sqlalchemy import select, func, text
 
 from database import get_db
 from models import (
-    Claim, ClaimStatus, Patient, PatientInsurance,
-    Payer, Provider, ServiceLine, User,
+    Claim, ClaimAttachment, ClaimStatus, ClinicSettings, Patient,
+    PatientInsurance, Payer, Provider, ServiceLine, User,
 )
 from auth import get_current_user
 
 logger = logging.getLogger("vistanet")
 router = APIRouter(prefix="/vistanet", tags=["vistanet"])
 
+# Attachments directory — on VPS this is /opt/someteopr/data/attachments
+import os as _os
+ATTACHMENTS_DIR = _os.environ.get("ATTACHMENTS_DIR", "/opt/someteopr/data/attachments")
+
 # ── Constants ────────────────────────────────────────────────────────────────
 
 VISTANET_BASE_URL = "https://visualzone.vistanet.cloud"
+# Fallback hardcoded credentials (used if DB has no config)
 VISTANET_USER = "rcortes"
 VISTANET_PASSWORD = "hola"
 VISTANET_LOCATION = "MANATI"
 VISTANET_ENCODING = "iso-8859-1"
 REQUEST_TIMEOUT = 30
+
+VISTANET_LOCATIONS = [
+    "MANATI", "BARCELONETA", "ARECIBO", "CIALES", "MOROVIS",
+    "VEGA BAJA", "VEGA ALTA", "SAN JUAN", "BAYAMON", "CAROLINA",
+    "PONCE", "MAYAGUEZ", "CAGUAS", "HUMACAO", "FAJARDO",
+]
 
 # Legacy hardcoded fee schedule — used as fallback only if DB has no entry
 _LEGACY_FEE_SCHEDULE = {
@@ -66,10 +77,23 @@ class PullBitacoraResponse(BaseModel):
 
 # ── VistaNet Session ─────────────────────────────────────────────────────────
 
+async def _get_vistanet_creds(db: AsyncSession) -> tuple[str, str, str]:
+    """Get VistaNet credentials from DB, falling back to hardcoded constants."""
+    result = await db.execute(select(ClinicSettings).limit(1))
+    settings = result.scalar_one_or_none()
+    if settings and settings.vistanet_username and settings.vistanet_password:
+        return (
+            settings.vistanet_username,
+            settings.vistanet_password,
+            settings.vistanet_location or VISTANET_LOCATION,
+        )
+    return (VISTANET_USER, VISTANET_PASSWORD, VISTANET_LOCATION)
+
+
 class VistaNetSession:
     """Manages authenticated session with VistaNet Cloud."""
 
-    def __init__(self):
+    def __init__(self, username: str = None, password: str = None, location: str = None):
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": (
@@ -79,6 +103,9 @@ class VistaNetSession:
             ),
         })
         self._logged_in = False
+        self._username = username or VISTANET_USER
+        self._password = password or VISTANET_PASSWORD
+        self._location = location or VISTANET_LOCATION
 
     def login(self) -> bool:
         """Authenticate with VistaNet. Returns True on success."""
@@ -95,9 +122,9 @@ class VistaNetSession:
             the_time = now.strftime("%-I:%M:%S")
             data = {
                 "dbi": "remoto",
-                "localidad": VISTANET_LOCATION,
-                "username": VISTANET_USER,
-                "password": VISTANET_PASSWORD,
+                "localidad": self._location,
+                "username": self._username,
+                "password": self._password,
                 "theTime": the_time,
             }
             self.session.headers.update({
@@ -420,6 +447,32 @@ def extract_patient_from_row(row) -> Optional[dict]:
         for mat in materials:
             mat["charge_amount"] = per_material
 
+    # ── Image URLs (insurance card, license, signature) ──
+    insurance_card_url = None
+    license_url = None
+    signature_url = None
+
+    # col1 (tds[1]) has insurance card image
+    col1_imgs = col1.find_all("img")
+    for img in col1_imgs:
+        src = img.get("src", "")
+        if "getimage.php" in src and "base64" not in src:
+            insurance_card_url = src
+            break
+
+    # col2 (tds[2]) has license and signature images
+    if len(tds) > 2:
+        col2 = tds[2]
+        col2_imgs = col2.find_all("img")
+        for img in col2_imgs:
+            src = img.get("src", "")
+            if "getimage.php" not in src or "base64" in src:
+                continue
+            if "doc=licencia" in src:
+                license_url = src
+            elif "doc=firma" in src:
+                signature_url = src
+
     # Determine section (exam vs no-exam)
     has_exam = bool(diagnoses) or bool(procedures)
 
@@ -439,6 +492,9 @@ def extract_patient_from_row(row) -> Optional[dict]:
         "materials": materials,
         "sale_total": sale_total,
         "has_exam": has_exam,
+        "insurance_card_url": insurance_card_url,
+        "license_url": license_url,
+        "signature_url": signature_url,
     }
 
 
@@ -479,6 +535,56 @@ def generate_claim_number() -> str:
     return f"VN-{uuid.uuid4().hex[:8].upper()}"
 
 
+def _backfill_patient_address(patient: Patient, parsed: dict) -> None:
+    """Backfill empty city/state/zip on existing patients from new import data."""
+    address = parsed.get("address", "")
+    if not address:
+        return
+    # Clean address — strip doctor name suffix (e.g. "DRA. BRENDA CUBERO" appended by VistaNet)
+    import re as _re
+    address_clean = _re.sub(r'\s*DRA?\.?\s+[A-Z]+\s+[A-Z]+\s*$', '', address.strip(), flags=_re.IGNORECASE)
+    # Update address_line1 if current one has junk (doctor name appended)
+    if patient.address_line1 and 'DRA' in (patient.address_line1 or '').upper():
+        patient.address_line1 = address_clean
+    elif not (patient.address_line1 or '').strip():
+        patient.address_line1 = address_clean
+    # Backfill zip if empty
+    if not (patient.zip_code or '').strip():
+        zip_match = _re.search(r'(\d{5})(?:-\d{4})?\s*$', address_clean)
+        if zip_match:
+            patient.zip_code = zip_match.group(1)
+    # Backfill state if empty
+    if not (patient.state or '').strip():
+        patient.state = 'PR'
+    # Backfill city if empty
+    if not (patient.city or '').strip():
+        import unicodedata
+        def _strip_accents_bf(s: str) -> str:
+            return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+        addr_upper = address_clean.upper()
+        addr_normalized = addr_upper.replace("'", "")
+        pr_cities = [
+            'SAN JUAN', 'BAYAMÓN', 'CAROLINA', 'PONCE', 'CAGUAS', 'GUAYNABO',
+            'MAYAGÜEZ', 'ARECIBO', 'AGUADILLA', 'HATILLO', 'MANATÍ', 'FAJARDO',
+            'HUMACAO', 'RÍO GRANDE', 'ISABELA', 'VEGA BAJA', 'VEGA ALTA',
+            'DORADO', 'TOA ALTA', 'TOA BAJA', 'TRUJILLO ALTO', 'CATAÑO',
+            'BARCELONETA', 'MOROVIS', 'CIDRA', 'CAMUY', 'UTUADO', 'JUNCOS',
+            'COAMO', 'YAUCO', 'GUAYAMA', 'CABO ROJO', 'SAN GERMÁN',
+            'SAN SEBASTIÁN', 'LARES', 'ADJUNTAS', 'COMERÍO', 'NARANJITO',
+            'BARRANQUITAS', 'OROCOVIS', 'JAYUYA', 'VILLALBA', 'JUANA DÍAZ',
+            'SANTA ISABEL', 'SALINAS', 'ARROYO', 'PATILLAS', 'MAUNABO',
+            'YABUCOA', 'LAS PIEDRAS', 'NAGUABO', 'CEIBA', 'LUQUILLO',
+            'CANÓVANAS', 'LOÍZA', 'RINCÓN', 'AÑASCO', 'LAS MARÍAS',
+            'HORMIGUEROS', 'LAJAS', 'SABANA GRANDE', 'SAN LORENZO',
+            'PEÑUELAS', 'CAYEY', 'GURABO',
+        ]
+        for c in pr_cities:
+            c_stripped = _strip_accents_bf(c)
+            if c in addr_upper or c_stripped in addr_upper or c_stripped in addr_normalized:
+                patient.city = c.title()
+                break
+
+
 async def find_or_create_patient(
     db: AsyncSession,
     parsed: dict,
@@ -493,6 +599,7 @@ async def find_or_create_patient(
     )
     patient = result.scalars().first()
     if patient:
+        _backfill_patient_address(patient, parsed)
         return patient
 
     # Try by MRN
@@ -502,6 +609,7 @@ async def find_or_create_patient(
     )
     patient = result.scalars().first()
     if patient:
+        _backfill_patient_address(patient, parsed)
         return patient
 
     # Try by name + DOB (fuzzy match for patients without record IDs)
@@ -516,6 +624,7 @@ async def find_or_create_patient(
         )
         patient = result.scalars().first()
         if patient:
+            _backfill_patient_address(patient, parsed)
             return patient
 
     # Create new patient
@@ -529,6 +638,8 @@ async def find_or_create_patient(
     if address_line1:
         # Clean up the address (remove extra whitespace, newlines)
         address_clean = re.sub(r'\s+', ' ', address_line1).strip()
+        # Strip doctor name suffix (VistaNet appends "DRA. BRENDA CUBERO" etc.)
+        address_clean = re.sub(r'\s*DRA?\.?\s+[A-Z]+\s+[A-Z]+\s*$', '', address_clean, flags=re.IGNORECASE).strip()
 
         # Try to extract zip code
         zip_match = re.search(r'(\d{5})(?:-\d{4})?\s*$', address_clean)
@@ -564,10 +675,30 @@ async def find_or_create_patient(
                 'PEÑUELAS', 'CAYEY', 'GURABO', 'SAN LORENZO',
             ]
             addr_upper = address_clean.upper()
+            # Normalize VistaNet encoding quirks: apostrophes for tildes
+            # e.g. MANAT' -> MANAT, CANOVANAS' -> CANOVANAS
+            addr_normalized = addr_upper.replace("'", "")
+
+            # Build accent-stripped lookup for comparison
+            import unicodedata
+            def _strip_accents(s: str) -> str:
+                return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+
+            matched_city = False
             for c in pr_cities:
-                if c in addr_upper:
+                c_stripped = _strip_accents(c)
+                # Match against both original and normalized (apostrophe-removed) address
+                if c in addr_upper or c_stripped in addr_upper or c_stripped in addr_normalized:
                     city = c.title()
+                    matched_city = True
                     break
+            # If still no match, try the normalized address against stripped city names
+            if not matched_city:
+                for c in pr_cities:
+                    c_stripped = _strip_accents(c)
+                    if c_stripped in addr_normalized:
+                        city = c.title()
+                        break
 
         state = "PR"
         address_line1 = address_clean
@@ -815,6 +946,58 @@ async def create_claim_from_parsed(
     return claim
 
 
+# ── Attachment Download ──────────────────────────────────────────────────────
+
+async def _download_claim_attachments(
+    db: AsyncSession,
+    vs: "VistaNetSession",
+    claim: Claim,
+    parsed: dict,
+) -> None:
+    """Download insurance card, license, and signature images from VistaNet."""
+    import pathlib
+
+    image_map = [
+        ("insurance_card_url", "insurance_card", "insurance_card.jpg"),
+        ("license_url", "license", "license.jpg"),
+        ("signature_url", "signature", "signature.jpg"),
+    ]
+
+    claim_dir = pathlib.Path(ATTACHMENTS_DIR) / str(claim.id)
+
+    for url_key, att_type, filename in image_map:
+        url = parsed.get(url_key)
+        if not url:
+            continue
+
+        try:
+            resp = vs.session.get(url, timeout=REQUEST_TIMEOUT)
+            if resp.status_code != 200:
+                logger.warning("Image download %s returned %s", att_type, resp.status_code)
+                continue
+
+            # Skip tiny placeholder images (the 1x1 base64 fallback)
+            if len(resp.content) < 500:
+                logger.debug("Skipping tiny image for %s (likely placeholder)", att_type)
+                continue
+
+            claim_dir.mkdir(parents=True, exist_ok=True)
+            file_path = claim_dir / filename
+            file_path.write_bytes(resp.content)
+
+            attachment = ClaimAttachment(
+                claim_id=claim.id,
+                filename=filename,
+                file_path=str(file_path),
+                attachment_type=att_type,
+            )
+            db.add(attachment)
+            logger.info("Saved %s for claim %s (%d bytes)", att_type, claim.claim_number, len(resp.content))
+
+        except Exception as e:
+            logger.warning("Failed to download %s for claim %s: %s", att_type, claim.claim_number, e)
+
+
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("/pull-bitacora", response_model=PullBitacoraResponse)
@@ -829,8 +1012,9 @@ async def pull_bitacora(
     """
     errors: list[str] = []
 
-    # Step 1: Authenticate to VistaNet
-    vs = VistaNetSession()
+    # Step 1: Authenticate to VistaNet (use DB credentials if available)
+    vn_user, vn_pass, vn_loc = await _get_vistanet_creds(db)
+    vs = VistaNetSession(username=vn_user, password=vn_pass, location=vn_loc)
     if not vs.login():
         raise HTTPException(status_code=502, detail="Failed to authenticate to VistaNet")
 
@@ -903,6 +1087,13 @@ async def pull_bitacora(
             _new_claims.append(claim)
             claims_created += 1
 
+            # Download and save patient document images
+            try:
+                await _download_claim_attachments(db, vs, claim, parsed)
+            except Exception as img_err:
+                logger.warning("Failed to download images for %s: %s", parsed.get("patient_name", "?"), img_err)
+                errors.append(f"{parsed.get('patient_name', 'unknown')}: image download failed — {str(img_err)}")
+
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
@@ -911,43 +1102,59 @@ async def pull_bitacora(
 
     await db.commit()
 
-    # Auto-advance: pure SQL checks only (no ORM lazy loading)
+    # Auto-advance: re-query each claim with eager loading, run full scrub
+    from sqlalchemy.orm import selectinload as _sil_scrub
     for claim_obj in _new_claims:
         try:
             cid = claim_obj.id
-            # Check: has diagnosis codes, has service lines with amount > 0, has payer
+            # Get total from service lines via SQL
             sl_check = await db.execute(
                 text("SELECT COUNT(*), COALESCE(SUM(billed_amount), 0) FROM service_lines WHERE claim_id = :cid"),
                 {"cid": cid}
             )
             sl_count, sl_total = sl_check.one()
-            claim_check = await db.execute(
-                text("SELECT diagnosis_codes, payer_id, provider_id FROM claims WHERE id = :cid"),
-                {"cid": cid}
-            )
-            row = claim_check.one()
-            has_dx = bool(row[0] and row[0] != '[]' and row[0] != 'null')
-            has_payer = bool(row[1])
-            has_provider = bool(row[2])
 
-            # Run full scrub instead of naive auto-advance
+            # Re-query claim with eager loading to avoid lazy-load crashes
+            _fresh_result = await db.execute(
+                select(Claim)
+                .options(
+                    _sil_scrub(Claim.patient).selectinload(Patient.insurances),
+                    _sil_scrub(Claim.provider),
+                    _sil_scrub(Claim.payer),
+                    _sil_scrub(Claim.service_lines),
+                )
+                .where(Claim.id == cid)
+            )
+            fresh_claim = _fresh_result.scalar_one_or_none()
+            if not fresh_claim:
+                logger.warning("Could not re-query claim %s for scrub", cid)
+                continue
+
             try:
-                from routers.ai import _scrub_patient, _scrub_provider, _scrub_claim_level
+                from routers.ai import _scrub_patient, _scrub_provider, _scrub_payer, _scrub_claim_level, _scrub_service_lines
                 scrub_issues = []
-                _scrub_patient(claim_obj, scrub_issues)
-                _scrub_provider(claim_obj, scrub_issues)
-                _scrub_claim_level(claim_obj, scrub_issues)
+                _scrub_patient(fresh_claim, scrub_issues)
+                _scrub_provider(fresh_claim, scrub_issues)
+                _scrub_payer(fresh_claim, scrub_issues)
+                _scrub_claim_level(fresh_claim, scrub_issues)
+                _scrub_service_lines(fresh_claim, scrub_issues)
                 err_c = sum(1 for i in scrub_issues if i.get('type') == 'error')
                 warn_c = sum(1 for i in scrub_issues if i.get('type') == 'warning')
-                score = max(0, 100 - err_c * 15 - warn_c * 5)
+                score = max(0, 100 - err_c * 25 - warn_c * 5)
                 import json
-                await db.execute(
-                    text("UPDATE claims SET scrub_score = :score, scrub_issues = :issues, total_billed = :total, status = CASE WHEN :err = 0 AND :warn = 0 THEN 'READY' ELSE status END WHERE id = :cid"),
-                    {"cid": cid, "total": float(sl_total), "score": score, "issues": json.dumps(scrub_issues), "err": err_c, "warn": warn_c}
-                )
-                if err_c == 0 and warn_c == 0:
+                # Auto-advance to READY only if zero errors AND zero warnings
+                new_status = 'READY' if (err_c == 0 and warn_c == 0) else None
+                if new_status:
+                    await db.execute(
+                        text("UPDATE claims SET scrub_score = :score, scrub_issues = :issues, total_billed = :total, status = 'READY' WHERE id = :cid"),
+                        {"cid": cid, "total": float(sl_total), "score": score, "issues": json.dumps(scrub_issues)}
+                    )
                     logger.info("Auto-advance claim %s → READY (score=%d)", claim_obj.claim_number, score)
                 else:
+                    await db.execute(
+                        text("UPDATE claims SET scrub_score = :score, scrub_issues = :issues, total_billed = :total WHERE id = :cid"),
+                        {"cid": cid, "total": float(sl_total), "score": score, "issues": json.dumps(scrub_issues)}
+                    )
                     logger.info("Claim %s stays DRAFT (score=%d, %d errors, %d warnings)", claim_obj.claim_number, score, err_c, warn_c)
             except Exception:
                 import traceback; traceback.print_exc()
@@ -955,18 +1162,6 @@ async def pull_bitacora(
                     text("UPDATE claims SET total_billed = :total WHERE id = :cid"),
                     {"cid": cid, "total": float(sl_total)}
                 )
-            else:
-                issues = []
-                if not has_dx: issues.append("no diagnosis")
-                if sl_count == 0: issues.append("no service lines")
-                if sl_total <= 0: issues.append("$0 billed")
-                if not has_payer: issues.append("no payer")
-                score = max(0, 100 - len(issues) * 25)
-                await db.execute(
-                    text("UPDATE claims SET scrub_score = :score, total_billed = :total WHERE id = :cid"),
-                    {"score": score, "total": float(sl_total), "cid": cid}
-                )
-                logger.info("Claim %s stays DRAFT: %s", claim_obj.claim_number, ", ".join(issues))
         except Exception as e:
             logger.warning("Auto-advance failed for claim %s: %s", claim_obj.id, e)
     await db.commit()
@@ -980,11 +1175,126 @@ async def pull_bitacora(
 
 @router.get("/status")
 async def vistanet_status(
+    db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     """Check if VistaNet credentials are configured."""
+    vn_user, _, vn_loc = await _get_vistanet_creds(db)
     return {
-        "configured": bool(VISTANET_USER and VISTANET_PASSWORD),
+        "configured": bool(vn_user),
         "base_url": VISTANET_BASE_URL,
-        "location": VISTANET_LOCATION,
+        "location": vn_loc,
+        "username": vn_user,
     }
+
+
+@router.get("/config")
+async def get_vistanet_config(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Get current VistaNet connection config (password masked)."""
+    result = await db.execute(select(ClinicSettings).limit(1))
+    settings = result.scalar_one_or_none()
+    if settings and settings.vistanet_username:
+        return {
+            "connected": True,
+            "username": settings.vistanet_username,
+            "password_masked": "••••••••" if settings.vistanet_password else None,
+            "location": settings.vistanet_location or VISTANET_LOCATION,
+            "locations": VISTANET_LOCATIONS,
+        }
+    # Fallback to hardcoded
+    return {
+        "connected": bool(VISTANET_USER),
+        "username": VISTANET_USER,
+        "password_masked": "••••••••" if VISTANET_PASSWORD else None,
+        "location": VISTANET_LOCATION,
+        "locations": VISTANET_LOCATIONS,
+    }
+
+
+@router.post("/config")
+async def save_vistanet_config(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Save VistaNet credentials to clinic_settings."""
+    result = await db.execute(select(ClinicSettings).limit(1))
+    settings = result.scalar_one_or_none()
+    if not settings:
+        settings = ClinicSettings()
+        db.add(settings)
+        await db.flush()
+
+    if body.get("username"):
+        settings.vistanet_username = body["username"]
+    if body.get("password"):
+        settings.vistanet_password = body["password"]
+    if body.get("location"):
+        settings.vistanet_location = body["location"]
+
+    await db.commit()
+    return {"status": "saved"}
+
+
+@router.post("/disconnect")
+async def disconnect_vistanet(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Clear VistaNet credentials."""
+    result = await db.execute(select(ClinicSettings).limit(1))
+    settings = result.scalar_one_or_none()
+    if settings:
+        settings.vistanet_username = None
+        settings.vistanet_password = None
+        settings.vistanet_location = None
+        await db.commit()
+    return {"status": "disconnected"}
+
+
+@router.get("/attachments/{claim_id}")
+async def list_claim_attachments(
+    claim_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """List attachments for a claim."""
+    result = await db.execute(
+        select(ClaimAttachment).where(ClaimAttachment.claim_id == claim_id)
+    )
+    attachments = result.scalars().all()
+    return [
+        {
+            "id": a.id,
+            "filename": a.filename,
+            "attachment_type": a.attachment_type,
+            "url": f"/vistanet/attachments/{claim_id}/{a.filename}",
+        }
+        for a in attachments
+    ]
+
+
+@router.get("/attachments/{claim_id}/{filename}")
+async def serve_attachment(
+    claim_id: int,
+    filename: str,
+):
+    """Serve an attachment file."""
+    import pathlib
+    from fastapi.responses import FileResponse
+
+    # Sanitize filename to prevent path traversal
+    safe_filename = pathlib.Path(filename).name
+    file_path = pathlib.Path(ATTACHMENTS_DIR) / str(claim_id) / safe_filename
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    return FileResponse(
+        str(file_path),
+        media_type="image/jpeg",
+        filename=safe_filename,
+    )

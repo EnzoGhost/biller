@@ -22,6 +22,36 @@ class BulkDeleteRequest(BaseModel):
 router = APIRouter(prefix="/claims", tags=["claims"])
 
 
+# ── Push claim status back to Wink sync server ────────────────────────────────
+
+async def push_claim_status_to_wink(claim_id: int, status: str, external_ref: str):
+    """Push claim status back to Wink sync server so invoices show billing status."""
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                "http://159.65.235.231:3100/api/sync/claim-status",
+                json={
+                    "external_ref": external_ref,
+                    "claim_status": status,
+                    "claim_id": claim_id,
+                }
+            )
+            if resp.status_code == 200:
+                print(f"[claims] Pushed status '{status}' to Wink for {external_ref}")
+            else:
+                print(f"[claims] Wink status push returned {resp.status_code}: {resp.text}")
+    except Exception as e:
+        print(f"[claims] Failed to push status to Wink: {e}")
+
+
+async def _maybe_push_wink_status(claim: 'Claim', new_status: str):
+    """If claim is from Wink, push the new status."""
+    if getattr(claim, 'source', None) == 'wink' and getattr(claim, 'external_ref', None):
+        import asyncio
+        asyncio.create_task(push_claim_status_to_wink(claim.id, new_status, claim.external_ref))
+
+
 def generate_claim_number() -> str:
     ts = datetime.utcnow().strftime("%Y%m%d")
     suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
@@ -185,6 +215,7 @@ async def update_claim(
             new_value=updates["status"],
             user=current_user,
         )
+        await _maybe_push_wink_status(claim, updates["status"])
     elif updates:
         await log_action(
             db, "claim", claim_id, "updated",
@@ -235,6 +266,7 @@ async def submit_claim(
         claim_id=claim_id, old_value=str(old_status),
         new_value=ClaimStatus.SUBMITTED, user=current_user,
     )
+    await _maybe_push_wink_status(claim, "submitted")
     await db.commit()
     result = await db.execute(
         select(Claim).options(*claim_with_relations()).where(Claim.id == claim_id)
@@ -262,6 +294,7 @@ async def resubmit_claim(
         new_value=ClaimStatus.READY, user=current_user,
         notes="Claim reset for resubmission",
     )
+    await _maybe_push_wink_status(claim, "ready")
     await db.commit()
     result = await db.execute(
         select(Claim).options(*claim_with_relations()).where(Claim.id == claim_id)
@@ -291,6 +324,7 @@ async def reopen_claim(
         new_value=ClaimStatus.DRAFT, user=current_user,
         notes="Claim reopened as draft for editing",
     )
+    await _maybe_push_wink_status(claim, "draft")
     await db.commit()
     result = await db.execute(
         select(Claim).options(*claim_with_relations()).where(Claim.id == claim_id)
@@ -315,6 +349,7 @@ async def void_claim(
         claim_id=claim_id, old_value=str(old_status),
         new_value=ClaimStatus.VOID, user=current_user,
     )
+    await _maybe_push_wink_status(claim, "void")
     await db.commit()
     result = await db.execute(
         select(Claim).options(*claim_with_relations()).where(Claim.id == claim_id)
@@ -350,6 +385,7 @@ async def post_payment(
     claim.patient_responsibility = body.patient_responsibility
     if claim.total_paid >= claim.total_billed * 0.9:
         claim.status = ClaimStatus.PAID
+        await _maybe_push_wink_status(claim, "paid")
     await db.commit()
     await db.refresh(payment)
     return PaymentOut.model_validate(payment)
@@ -404,6 +440,63 @@ async def batch_submit_claims(
         "failed": len(failed_list),
         "errors": failed_list,
         "total": len(ready_claims),
+    }
+
+
+# ── Service Line Update ───────────────────────────────────────────────────────
+
+class ServiceLineUpdate(BaseModel):
+    billed_amount: Optional[float] = None
+    description: Optional[str] = None
+    units: Optional[int] = None
+    modifiers: Optional[List[str]] = None
+
+
+@router.patch("/{claim_id}/service-lines/{line_id}", response_model=dict)
+async def update_service_line(
+    claim_id: int,
+    line_id: int,
+    body: ServiceLineUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update a specific service line (e.g. billed_amount). Recalculates claim total."""
+    result = await db.execute(
+        select(ServiceLine).where(ServiceLine.id == line_id, ServiceLine.claim_id == claim_id)
+    )
+    sl = result.scalar_one_or_none()
+    if not sl:
+        raise HTTPException(404, "Línea de servicio no encontrada")
+
+    updates = body.model_dump(exclude_none=True)
+    old_billed = sl.billed_amount
+    for field, value in updates.items():
+        setattr(sl, field, value)
+
+    # Recalculate claim total_billed
+    claim_result = await db.execute(
+        select(Claim).options(selectinload(Claim.service_lines)).where(Claim.id == claim_id)
+    )
+    claim = claim_result.scalar_one_or_none()
+    if claim:
+        claim.total_billed = sum(s.billed_amount * s.units for s in claim.service_lines)
+
+    await log_action(
+        db, "service_line", line_id, "billed_amount_updated",
+        claim_id=claim_id,
+        old_value=f"${old_billed:.2f}",
+        new_value=f"${sl.billed_amount:.2f}",
+        user=current_user,
+        notes=f"CPT {sl.cpt_code} billed amount updated",
+    )
+
+    await db.commit()
+
+    return {
+        "id": sl.id,
+        "cpt_code": sl.cpt_code,
+        "billed_amount": sl.billed_amount,
+        "claim_total_billed": claim.total_billed if claim else 0,
     }
 
 

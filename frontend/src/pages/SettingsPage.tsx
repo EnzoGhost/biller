@@ -1,7 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Save, CheckCircle, Building2, Shield, Cpu, Globe, Zap, ExternalLink, Users } from 'lucide-react';
+import { Save, CheckCircle, Building2, Shield, Cpu, Globe, Zap, Users, Wifi, Stethoscope, DollarSign, Link2, Unplug, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import api from '../lib/api';
+import { formatPhone } from '../lib/format';
+
+const ProvidersPage = lazy(() => import('./ProvidersPage'));
+const PayersPage = lazy(() => import('./PayersPage'));
+const FeeSchedulePage = lazy(() => import('./FeeSchedulePage'));
 
 export default function SettingsPage() {
   const { t, i18n } = useTranslation();
@@ -9,15 +14,12 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
 
   // Clinic
-  const [clinicName,  setClinicName]  = useState('');
-  const [clinicNpi,   setClinicNpi]   = useState('');
-  const [clinicTax,   setClinicTax]   = useState('');
-  const [clinicAddr,  setClinicAddr]  = useState('');
-  const [clinicPhone, setClinicPhone] = useState('');
-
-  // Stedi
-  const [stediKey,   setStediKey]   = useState('');
-  const [stediEnv,   setStediEnv]   = useState<'sandbox' | 'production'>('sandbox');
+  const [clinicName,    setClinicName]    = useState('');
+  const [clinicNpi,     setClinicNpi]     = useState('');
+  const [clinicTax,     setClinicTax]     = useState('');
+  const [clinicAddr,    setClinicAddr]    = useState('');
+  const [clinicPhone,   setClinicPhone]   = useState('');
+  const [providerName,  setProviderName]  = useState('');
 
   // Availity
   const [availityClientId,     setAvailityClientId]     = useState('');
@@ -28,28 +30,98 @@ export default function SettingsPage() {
   const [aiModel,    setAiModel]    = useState('gpt-4o');
   const [aiEnabled,  setAiEnabled]  = useState(true);
 
-  // Inmediata
-  const [sftpHost,   setSftpHost]   = useState('');
-  const [sftpUser,   setSftpUser]   = useState('');
-  const [sftpPass,   setSftpPass]   = useState('');
-  const [sftpUpDir,  setSftpUpDir]  = useState('/UPLOAD/837');
-  const [sftpDnDir,  setSftpDnDir]  = useState('/DOWNLOAD/835');
-  const [submitterId,setSubmitterId]= useState('');
+  // Inmediata API
+  const [inmApiKey,      setInmApiKey]      = useState('');
+  const [inmSubmitterId, setInmSubmitterId]  = useState('');
+  const [inmEnv,         setInmEnv]          = useState<'sandbox' | 'production'>('sandbox');
+  const [inmBaseUrl,     setInmBaseUrl]      = useState('https://api.inmediata.com');
+  const [inmTestResult,  setInmTestResult]   = useState<{ success: boolean; message: string } | null>(null);
+  const [inmTesting,     setInmTesting]      = useState(false);
+
+  // VistaNet connection state
+  const [vnConnected, setVnConnected] = useState(false);
+  const [vnUsername, setVnUsername] = useState('');
+  const [vnPassword, setVnPassword] = useState('');
+  const [vnLocation, setVnLocation] = useState('MANATI');
+  const [vnLocations, setVnLocations] = useState<string[]>([]);
+  const [vnPasswordMasked, setVnPasswordMasked] = useState('');
+  const [vnShowPassword, setVnShowPassword] = useState(false);
+  const [vnSaving, setVnSaving] = useState(false);
+  const [vnDisconnecting, setVnDisconnecting] = useState(false);
+  const [vnEditing, setVnEditing] = useState(false);
+
+  // Wink connection state
+  const [winkClinicId, setWinkClinicId] = useState<string | null>(null);
+  const [winkClinicName, setWinkClinicName] = useState<string | null>(null);
+  const [winkJoinCode, setWinkJoinCode] = useState('');
+  const [winkPairing, setWinkPairing] = useState(false);
+
+  // Load clinic config on mount
+  useEffect(() => {
+    api.get('/clinic/config').then(res => {
+      const d = res.data;
+      setClinicName(d.clinic_name || '');
+      setClinicNpi(d.npi || '');
+      setClinicTax(d.tax_id || '');
+      setClinicAddr(d.address || '');
+      setClinicPhone(d.phone || '');
+      setProviderName(d.provider_name || '');
+    }).catch(() => {});
+  }, []);
+
+  // Load VistaNet config when connections tab selected
+  useEffect(() => {
+    if (active === 'connections') {
+      api.get('/vistanet/config').then(res => {
+        const d = res.data;
+        setVnConnected(d.connected || false);
+        setVnUsername(d.username || '');
+        setVnPasswordMasked(d.password_masked || '');
+        setVnLocation(d.location || 'MANATI');
+        setVnLocations(d.locations || []);
+        setVnEditing(false);
+        setVnPassword('');
+      }).catch(() => {});
+
+      // Load Wink state from localStorage
+      setWinkClinicId(localStorage.getItem('wink_clinic_id'));
+      setWinkClinicName(localStorage.getItem('wink_clinic_name'));
+    }
+  }, [active]);
+
+  // Load Inmediata config when tab selected
+  useEffect(() => {
+    if (active === 'inmediata') {
+      api.get('/inmediata/api-config').then(res => {
+        const d = res.data;
+        setInmSubmitterId(d.submitter_id || '');
+        setInmBaseUrl(d.api_base_url || 'https://api.inmediata.com');
+        setInmEnv(d.environment || 'sandbox');
+        // Don't populate the key field — it's masked on the server
+      }).catch(() => {});
+    }
+  }, [active]);
 
   const handleSave = async () => {
     try {
-      if (active === 'stedi') {
-        await api.post('/stedi/config', { api_key: stediKey, environment: stediEnv });
+      if (active === 'clinic') {
+        // Save clinic config including provider name
+        await api.post('/clinic/config', {
+          clinic_name: clinicName,
+          npi: clinicNpi,
+          tax_id: clinicTax,
+          address: clinicAddr,
+          phone: clinicPhone,
+          provider_name: providerName,
+        });
       } else if (active === 'ai') {
         await api.post('/ai/config', { api_key: aiKey, model: aiModel, enabled: aiEnabled });
       } else if (active === 'inmediata') {
-        await api.post('/inmediata/config', {
-          sftp_host: sftpHost,
-          sftp_user: sftpUser,
-          sftp_password: sftpPass,
-          sftp_upload_dir: sftpUpDir,
-          sftp_download_dir: sftpDnDir,
-          submitter_id: submitterId,
+        await api.post('/inmediata/api-config', {
+          api_key: inmApiKey,
+          submitter_id: inmSubmitterId,
+          environment: inmEnv,
+          api_base_url: inmBaseUrl,
         });
       }
       setSaved(true);
@@ -61,17 +133,138 @@ export default function SettingsPage() {
     }
   };
 
+  // VistaNet handlers
+  const handleVnSave = async () => {
+    setVnSaving(true);
+    try {
+      await api.post('/vistanet/config', {
+        username: vnUsername,
+        password: vnPassword || undefined,
+        location: vnLocation,
+      });
+      setVnConnected(true);
+      setVnEditing(false);
+      setVnPasswordMasked('••••••••');
+      setVnPassword('');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch { /* best-effort */ }
+    finally { setVnSaving(false); }
+  };
+
+  const handleVnDisconnect = async () => {
+    setVnDisconnecting(true);
+    try {
+      await api.post('/vistanet/disconnect');
+      setVnConnected(false);
+      setVnUsername('');
+      setVnPassword('');
+      setVnPasswordMasked('');
+      setVnLocation('MANATI');
+      setVnEditing(false);
+    } catch { /* best-effort */ }
+    finally { setVnDisconnecting(false); }
+  };
+
+  // Wink handlers
+  const handleWinkPair = async () => {
+    if (!winkJoinCode.trim()) return;
+    setWinkPairing(true);
+    try {
+      const res = await api.post('/clinic/join-codes/verify', { code: winkJoinCode });
+      if (res.data.valid) {
+        localStorage.setItem('wink_clinic_id', res.data.wink_clinic_id);
+        localStorage.setItem('wink_clinic_name', res.data.clinic_name);
+        setWinkClinicId(res.data.wink_clinic_id);
+        setWinkClinicName(res.data.clinic_name);
+        setWinkJoinCode('');
+      }
+    } catch { /* best-effort */ }
+    finally { setWinkPairing(false); }
+  };
+
+  const handleWinkDisconnect = () => {
+    localStorage.removeItem('wink_clinic_id');
+    localStorage.removeItem('wink_clinic_name');
+    setWinkClinicId(null);
+    setWinkClinicName(null);
+  };
+
+  const handleTestConnection = async () => {
+    setInmTesting(true);
+    setInmTestResult(null);
+    try {
+      // Save first, then test
+      await api.post('/inmediata/api-config', {
+        api_key: inmApiKey,
+        submitter_id: inmSubmitterId,
+        environment: inmEnv,
+        api_base_url: inmBaseUrl,
+      });
+      const res = await api.post('/inmediata/test-connection');
+      setInmTestResult(res.data);
+    } catch (err: any) {
+      setInmTestResult({ success: false, message: err?.response?.data?.detail || 'Connection failed' });
+    } finally {
+      setInmTesting(false);
+    }
+  };
+
+  // formatPhone imported from shared lib
+
   const inputClass = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500';
   const labelClass = 'block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1';
 
+  // Join code state
+  const [joinCode, setJoinCode] = useState<string | null>(null);
+  const [joinExpiresIn, setJoinExpiresIn] = useState(0);
+  const [joinGenerating, setJoinGenerating] = useState(false);
+  const joinTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const handleGenerateJoinCode = async () => {
+    setJoinGenerating(true);
+    try {
+      const res = await api.post('/clinic/join-codes/generate');
+      setJoinCode(res.data.code);
+      setJoinExpiresIn(res.data.expires_in);
+
+      // Start countdown
+      if (joinTimerRef.current) clearInterval(joinTimerRef.current);
+      joinTimerRef.current = setInterval(() => {
+        setJoinExpiresIn(prev => {
+          if (prev <= 1) {
+            if (joinTimerRef.current) clearInterval(joinTimerRef.current);
+            setJoinCode(null);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch {
+      // best-effort
+    } finally {
+      setJoinGenerating(false);
+    }
+  };
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (joinTimerRef.current) clearInterval(joinTimerRef.current);
+    };
+  }, []);
+
   const SECTIONS = [
     { key: 'clinic',       labelKey: 'settings.clinic_info',  icon: Building2 },
-    { key: 'stedi',        labelKey: 'settings.stedi',         icon: Shield },
-    { key: 'stedi_portal', labelKey: 'settings.stedi_portal',  icon: ExternalLink },
-    { key: 'availity',     labelKey: 'settings.availity',      icon: Users },
-    { key: 'inmediata',    labelKey: 'inmediata.title',        icon: Zap },
-    { key: 'ai',           labelKey: 'settings.ai',            icon: Cpu },
-    { key: 'lang',         labelKey: 'settings.language',      icon: Globe },
+    { key: 'providers',    labelKey: 'nav.providers',         icon: Stethoscope },
+    { key: 'payers',       labelKey: 'nav.payers',            icon: Building2 },
+    { key: 'fee-schedule', labelKey: 'nav.fee_schedule',      icon: DollarSign },
+    { key: 'connections',  labelKey: 'Connections',           icon: Wifi },
+    { key: 'pairing',      labelKey: 'Clinic Pairing',        icon: Link2 },
+    { key: 'availity',     labelKey: 'settings.availity',     icon: Users },
+    { key: 'inmediata',    labelKey: 'inmediata.title',       icon: Zap },
+    { key: 'ai',           labelKey: 'settings.ai',           icon: Cpu },
+    { key: 'lang',         labelKey: 'settings.language',     icon: Globe },
   ];
 
   return (
@@ -111,6 +304,10 @@ export default function SettingsPage() {
                   <input value={clinicName} onChange={e => setClinicName(e.target.value)} className={inputClass} placeholder="Clínica Ejemplo" />
                 </div>
                 <div>
+                  <label className={labelClass}>Provider / Doctor Name</label>
+                  <input value={providerName} onChange={e => setProviderName(e.target.value)} className={inputClass} placeholder="Dra. María Cortés" />
+                </div>
+                <div>
                   <label className={labelClass}>NPI (Billing)</label>
                   <input value={clinicNpi} onChange={e => setClinicNpi(e.target.value)} className={inputClass} placeholder="1234567890" />
                 </div>
@@ -120,82 +317,12 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <label className={labelClass}>{t('common.phone')}</label>
-                  <input value={clinicPhone} onChange={e => setClinicPhone(e.target.value)} className={inputClass} placeholder="(787) 555-0000" />
+                  <input value={clinicPhone} onChange={e => setClinicPhone(formatPhone(e.target.value))} className={inputClass} placeholder="(787) 555-0000" maxLength={14} />
                 </div>
                 <div className="sm:col-span-2">
                   <label className={labelClass}>{t('settings.address')}</label>
                   <input value={clinicAddr} onChange={e => setClinicAddr(e.target.value)} className={inputClass} placeholder="Ave. Principal 123, San Juan, PR 00901" />
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Stedi */}
-          {active === 'stedi' && (
-            <div className="space-y-4">
-              <h2 className="font-semibold text-slate-800 mb-4">{t('settings.stedi')}</h2>
-              <div>
-                <label className={labelClass}>API Key</label>
-                <input
-                  type="password"
-                  value={stediKey}
-                  onChange={e => setStediKey(e.target.value)}
-                  className={inputClass}
-                  placeholder="sk_live_..."
-                />
-                <p className="text-xs text-slate-400 mt-1">
-                  {t('settings.get_api_key_at')}{' '}
-                  <a href="https://www.stedi.com" target="_blank" rel="noreferrer" className="text-sky-600 hover:underline">stedi.com</a>
-                </p>
-              </div>
-              <div>
-                <label className={labelClass}>{t('settings.environment')}</label>
-                <select value={stediEnv} onChange={e => setStediEnv(e.target.value as 'sandbox' | 'production')} className={inputClass}>
-                  <option value="sandbox">{t('settings.sandbox')}</option>
-                  <option value="production">{t('settings.production')}</option>
-                </select>
-              </div>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
-                {t('settings.sandbox_warning')}
-              </div>
-            </div>
-          )}
-
-          {/* Stedi Portal Info */}
-          {active === 'stedi_portal' && (
-            <div className="space-y-4">
-              <h2 className="font-semibold text-slate-800 mb-4">{t('settings.stedi_portal')}</h2>
-              <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 space-y-3">
-                <p className="text-sm text-sky-900">{t('settings.stedi_portal_desc')}</p>
-                <a
-                  href="https://www.stedi.com"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  {t('settings.stedi_portal_link')}
-                </a>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-xl p-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                  {t('settings.stedi_portal_payers')}
-                </p>
-                <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                    <span className="font-medium">First Medical VITAL</span>
-                    <span className="text-slate-400 text-xs">— Reforma / ASES</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                    <span className="font-medium">ASES / GHP (Gobierno)</span>
-                    <span className="text-slate-400 text-xs">— Reforma</span>
-                  </li>
-                </ul>
-              </div>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
-                {t('settings.stedi_portal_note')}
               </div>
             </div>
           )}
@@ -233,35 +360,56 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Inmediata */}
+          {/* Inmediata API */}
           {active === 'inmediata' && (
             <div className="space-y-4">
               <h2 className="font-semibold text-slate-800 mb-4">{t('inmediata.title')}</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={labelClass}>{t('inmediata.sftp_host')}</label>
-                  <input value={sftpHost} onChange={e => setSftpHost(e.target.value)} className={inputClass} placeholder="sftp.inmediata.com" />
+                  <label className={labelClass}>API Key</label>
+                  <input
+                    type="password"
+                    value={inmApiKey}
+                    onChange={e => setInmApiKey(e.target.value)}
+                    className={inputClass}
+                    placeholder="Enter API key..."
+                  />
                 </div>
                 <div>
-                  <label className={labelClass}>{t('inmediata.sftp_user')}</label>
-                  <input value={sftpUser} onChange={e => setSftpUser(e.target.value)} className={inputClass} placeholder="username" />
+                  <label className={labelClass}>Submitter ID</label>
+                  <input value={inmSubmitterId} onChange={e => setInmSubmitterId(e.target.value)} className={inputClass} placeholder="YOURID" />
                 </div>
                 <div>
-                  <label className={labelClass}>{t('inmediata.sftp_password')}</label>
-                  <input type="password" value={sftpPass} onChange={e => setSftpPass(e.target.value)} className={inputClass} placeholder="••••••••" />
+                  <label className={labelClass}>Environment</label>
+                  <select value={inmEnv} onChange={e => setInmEnv(e.target.value as 'sandbox' | 'production')} className={inputClass}>
+                    <option value="sandbox">Sandbox</option>
+                    <option value="production">Production</option>
+                  </select>
                 </div>
                 <div>
-                  <label className={labelClass}>{t('inmediata.submitter_id')}</label>
-                  <input value={submitterId} onChange={e => setSubmitterId(e.target.value)} className={inputClass} placeholder="YOURID" />
+                  <label className={labelClass}>API Base URL</label>
+                  <input value={inmBaseUrl} onChange={e => setInmBaseUrl(e.target.value)} className={inputClass} placeholder="https://api.inmediata.com" />
                 </div>
-                <div>
-                  <label className={labelClass}>{t('inmediata.upload_dir')}</label>
-                  <input value={sftpUpDir} onChange={e => setSftpUpDir(e.target.value)} className={inputClass} placeholder="/UPLOAD/837" />
+              </div>
+              {inmEnv === 'sandbox' && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                  Sandbox mode — claims will NOT be submitted to Inmediata for real processing.
                 </div>
-                <div>
-                  <label className={labelClass}>{t('inmediata.download_dir')}</label>
-                  <input value={sftpDnDir} onChange={e => setSftpDnDir(e.target.value)} className={inputClass} placeholder="/DOWNLOAD/835" />
-                </div>
+              )}
+              <div className="flex items-center gap-3 mt-2">
+                <button
+                  onClick={handleTestConnection}
+                  disabled={inmTesting}
+                  className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-300 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                >
+                  <Wifi className="w-4 h-4" />
+                  {inmTesting ? 'Testing...' : 'Test Connection'}
+                </button>
+                {inmTestResult && (
+                  <span className={`text-sm ${inmTestResult.success ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {inmTestResult.success ? '✓' : '✗'} {inmTestResult.message}
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -297,6 +445,224 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {/* Providers */}
+          {active === 'providers' && (
+            <Suspense fallback={<div className="p-4 text-sm text-slate-400">Loading...</div>}>
+              <div className="-m-6"><ProvidersPage /></div>
+            </Suspense>
+          )}
+
+          {/* Payers */}
+          {active === 'payers' && (
+            <Suspense fallback={<div className="p-4 text-sm text-slate-400">Loading...</div>}>
+              <div className="-m-6"><PayersPage /></div>
+            </Suspense>
+          )}
+
+          {/* Fee Schedule */}
+          {active === 'fee-schedule' && (
+            <Suspense fallback={<div className="p-4 text-sm text-slate-400">Loading...</div>}>
+              <div className="-m-6"><FeeSchedulePage /></div>
+            </Suspense>
+          )}
+
+          {/* Connections — VistaNet + Wink */}
+          {active === 'connections' && (
+            <div className="space-y-6">
+              <h2 className="font-semibold text-slate-800 mb-4">Connections</h2>
+
+              {/* VistaNet */}
+              <div className="border border-slate-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2.5 h-2.5 rounded-full ${vnConnected ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                    <h3 className="font-semibold text-slate-700">VistaNet</h3>
+                  </div>
+                  {vnConnected && !vnEditing && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { setVnEditing(true); setVnPassword(''); }}
+                        className="text-xs font-medium text-sky-600 hover:text-sky-800 px-2 py-1 border border-sky-200 rounded"
+                      >
+                        Change Credentials
+                      </button>
+                      <button
+                        onClick={handleVnDisconnect}
+                        disabled={vnDisconnecting}
+                        className="flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-800 px-2 py-1 border border-red-200 rounded"
+                      >
+                        <Unplug className="w-3 h-3" />
+                        {vnDisconnecting ? '...' : 'Disconnect'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {vnConnected && !vnEditing ? (
+                  <div className="space-y-1 text-sm">
+                    <p className="text-slate-600">Username: <span className="font-medium text-slate-800">{vnUsername}</span></p>
+                    <p className="text-slate-600">Location: <span className="font-medium text-slate-800">{vnLocation}</span></p>
+                    <p className="text-slate-600">Password: <span className="text-slate-400">{vnPasswordMasked}</span></p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {!vnConnected && (
+                      <p className="text-sm text-slate-500">Connect to VistaNet Cloud to import bitácora data.</p>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Username</label>
+                        <input
+                          value={vnUsername}
+                          onChange={e => setVnUsername(e.target.value)}
+                          className={inputClass}
+                          placeholder="vistanet username"
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Password</label>
+                        <div className="relative">
+                          <input
+                            type={vnShowPassword ? 'text' : 'password'}
+                            value={vnPassword}
+                            onChange={e => setVnPassword(e.target.value)}
+                            className={inputClass}
+                            placeholder={vnEditing ? 'Enter new password' : 'password'}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setVnShowPassword(v => !v)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          >
+                            {vnShowPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Location</label>
+                        <select
+                          value={vnLocation}
+                          onChange={e => setVnLocation(e.target.value)}
+                          className={inputClass}
+                        >
+                          {vnLocations.length > 0 ? vnLocations.map(loc => (
+                            <option key={loc} value={loc}>{loc}</option>
+                          )) : (
+                            <option value="MANATI">MANATI</option>
+                          )}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleVnSave}
+                        disabled={vnSaving || !vnUsername}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+                      >
+                        <Save className="w-4 h-4" />
+                        {vnSaving ? 'Saving...' : vnEditing ? 'Update' : 'Connect'}
+                      </button>
+                      {vnEditing && (
+                        <button
+                          onClick={() => setVnEditing(false)}
+                          className="text-sm text-slate-500 hover:text-slate-700"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Wink */}
+              <div className="border border-slate-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2.5 h-2.5 rounded-full ${winkClinicId ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                    <h3 className="font-semibold text-slate-700">Wink</h3>
+                  </div>
+                  {winkClinicId && (
+                    <button
+                      onClick={handleWinkDisconnect}
+                      className="flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-800 px-2 py-1 border border-red-200 rounded"
+                    >
+                      <Unplug className="w-3 h-3" />
+                      Disconnect
+                    </button>
+                  )}
+                </div>
+
+                {winkClinicId ? (
+                  <div className="space-y-1 text-sm">
+                    <p className="text-slate-600">Clinic: <span className="font-medium text-slate-800">{winkClinicName || 'Connected'}</span></p>
+                    <p className="text-slate-600">Clinic ID: <span className="font-mono text-xs text-slate-400">{winkClinicId}</span></p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm text-slate-500">Connect to a Wink clinic using a join code.</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={winkJoinCode}
+                        onChange={e => setWinkJoinCode(e.target.value.toUpperCase())}
+                        className={`${inputClass} max-w-[200px] font-mono tracking-widest`}
+                        placeholder="ABC123"
+                        maxLength={6}
+                      />
+                      <button
+                        onClick={handleWinkPair}
+                        disabled={winkPairing || !winkJoinCode.trim()}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+                      >
+                        <Link2 className="w-4 h-4" />
+                        {winkPairing ? 'Pairing...' : 'Connect'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Clinic Pairing / Join Codes */}
+          {active === 'pairing' && (
+            <div className="space-y-4">
+              <h2 className="font-semibold text-slate-800 mb-4">Clinic Pairing</h2>
+              <p className="text-sm text-slate-600">
+                Generate a temporary join code to pair an external system (like Wink) with this clinic.
+                Codes expire after 5 minutes.
+              </p>
+              {joinCode ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl py-8">
+                    <span className="text-4xl font-mono font-bold tracking-[0.3em] text-sky-700 select-all">
+                      {joinCode}
+                    </span>
+                  </div>
+                  <div className="text-center text-sm text-slate-500">
+                    Expires in <span className="font-medium text-slate-700">{Math.floor(joinExpiresIn / 60)}:{String(joinExpiresIn % 60).padStart(2, '0')}</span>
+                  </div>
+                  <button
+                    onClick={handleGenerateJoinCode}
+                    disabled={joinGenerating}
+                    className="w-full flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Generate New Code
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleGenerateJoinCode}
+                  disabled={joinGenerating}
+                  className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 disabled:bg-sky-300 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+                >
+                  <Link2 className="w-4 h-4" />
+                  {joinGenerating ? 'Generating...' : 'Generate Join Code'}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Language */}
           {active === 'lang' && (
             <div className="space-y-4">
@@ -325,7 +691,7 @@ export default function SettingsPage() {
           )}
 
           {/* Save */}
-          {active !== 'lang' && (
+          {active !== 'lang' && active !== 'providers' && active !== 'payers' && active !== 'fee-schedule' && active !== 'pairing' && active !== 'connections' && (
             <div className="mt-6 flex items-center gap-3">
               <button
                 onClick={handleSave}

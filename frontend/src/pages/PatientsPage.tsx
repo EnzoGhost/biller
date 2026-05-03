@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Search, Users, Phone, FileText, Plus, X, Check, Trash2 } from 'lucide-react';
+import { formatPhone, displayPhone } from '../lib/format';
 import api from '../lib/api';
 import { formatDate } from '../lib/dates';
 import DatePicker from '../components/ui/DatePicker';
@@ -260,7 +261,7 @@ export default function PatientsPage() {
                       {patient.phone ? (
                         <div className="flex items-center gap-1">
                           <Phone className="w-3.5 h-3.5 text-slate-400" />
-                          {patient.phone}
+                          {displayPhone(patient.phone)}
                         </div>
                       ) : '—'}
                     </td>
@@ -355,7 +356,7 @@ export default function PatientsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.phone')}</label>
-                  <input value={form.phone} onChange={setField('phone')}
+                  <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: formatPhone(e.target.value) }))} maxLength={14}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
                 <div>

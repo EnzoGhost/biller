@@ -3,10 +3,9 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, FileText, Users, Building2,
-  CheckCircle, Upload, BarChart3, Settings,
-  ChevronLeft, ChevronRight, LogOut, Stethoscope, RefreshCw, CreditCard, XCircle,
-  Bell, Wand2, DollarSign,
+  LayoutDashboard, FileText,
+  Settings,
+  ChevronLeft, ChevronRight, LogOut,
 } from 'lucide-react';
 import { useAuthStore } from '../../hooks/useAuth';
 import clsx from 'clsx';
@@ -14,18 +13,6 @@ import clsx from 'clsx';
 const NAV_ITEMS = [
   { to: '/',            icon: LayoutDashboard, labelKey: 'nav.dashboard',        exact: true },
   { to: '/claims',      icon: FileText,        labelKey: 'nav.claims' },
-  { to: '/follow-up',   icon: Bell,            labelKey: 'followup.title' },
-  { to: '/patients',    icon: Users,           labelKey: 'nav.patients' },
-  { to: '/providers',   icon: Stethoscope,     labelKey: 'nav.providers' },
-  { to: '/payers',      icon: Building2,       labelKey: 'nav.payers' },
-  { to: '/eligibility', icon: CheckCircle,     labelKey: 'nav.eligibility' },
-  { to: '/import',      icon: Upload,          labelKey: 'nav.import' },
-  { to: '/reports',     icon: BarChart3,       labelKey: 'nav.reports' },
-  { to: '/era',         icon: RefreshCw,       labelKey: 'inmediata.era_dashboard' },
-  { to: '/payments',    icon: CreditCard,      labelKey: 'nav.payments' },
-  { to: '/denials',     icon: XCircle,         labelKey: 'nav.denials' },
-  { to: '/fee-schedule', icon: DollarSign,     labelKey: 'nav.fee_schedule' },
-  { to: '/setup',       icon: Wand2,           labelKey: 'wizard.title' },
   { to: '/settings',    icon: Settings,        labelKey: 'nav.settings' },
 ];
 

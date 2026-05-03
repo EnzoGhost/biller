@@ -2,6 +2,7 @@ import { useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Upload, FileText, Download, CheckCircle, XCircle, AlertCircle, RefreshCw, ClipboardList, ChevronRight } from 'lucide-react';
 import api from '../lib/api';
+import DatePicker from '../components/ui/DatePicker';
 
 interface ImportResult {
   imported: number;
@@ -13,7 +14,7 @@ interface ImportResult {
 // ── Column mapping fields ─────────────────────────────────────────────────────
 
 const TARGET_FIELDS = [
-  { key: 'patient_mrn',         label: 'Patient MRN' },
+  { key: 'patient_mrn',         label: 'Patient Record' },
   { key: 'patient_first_name',  label: 'First Name' },
   { key: 'patient_last_name',   label: 'Last Name' },
   { key: 'dob',                 label: 'Date of Birth' },
@@ -121,6 +122,17 @@ export default function ImportPage() {
   const [csvResult, setCsvResult] = useState<ImportResult | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
 
+  // Wink connection state
+  const [winkConnected, setWinkConnected] = useState<string | null>(() => {
+    return localStorage.getItem('wink_clinic_name');
+  });
+  const [winkClinicId, setWinkClinicId] = useState<string | null>(() => {
+    return localStorage.getItem('wink_clinic_id');
+  });
+  const [joinCodeInput, setJoinCodeInput] = useState('');
+  const [joinVerifying, setJoinVerifying] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+
   // Wink patients state
   const [winkLoading, setWinkLoading] = useState(false);
   const [winkResult, setWinkResult] = useState<ImportResult | null>(null);
@@ -130,6 +142,13 @@ export default function ImportPage() {
   const [encLoading, setEncLoading] = useState(false);
   const [encResult, setEncResult] = useState<ImportResult | null>(null);
   const [encError, setEncError] = useState<string | null>(null);
+
+  // Wink invoices (date range) state
+  const [invDateFrom, setInvDateFrom] = useState('');
+  const [invDateTo, setInvDateTo] = useState('');
+  const [invLoading, setInvLoading] = useState(false);
+  const [invResult, setInvResult] = useState<ImportResult | null>(null);
+  const [invError, setInvError] = useState<string | null>(null);
 
   const handleFile = useCallback((f: File) => {
     setFile(f);
@@ -222,6 +241,37 @@ export default function ImportPage() {
     }
   };
 
+  const handleVerifyJoinCode = async () => {
+    if (!joinCodeInput.trim()) return;
+    setJoinVerifying(true);
+    setJoinError(null);
+    try {
+      const { data } = await api.post('/clinic/join-codes/verify', { code: joinCodeInput.trim() });
+      if (data.valid) {
+        setWinkConnected(data.clinic_name);
+        localStorage.setItem('wink_clinic_name', data.clinic_name);
+        if (data.wink_clinic_id) {
+          setWinkClinicId(data.wink_clinic_id);
+          localStorage.setItem('wink_clinic_id', data.wink_clinic_id);
+        }
+        setJoinCodeInput('');
+      } else {
+        setJoinError(data.message || 'Invalid code');
+      }
+    } catch {
+      setJoinError('Failed to verify code');
+    } finally {
+      setJoinVerifying(false);
+    }
+  };
+
+  const handleDisconnectWink = () => {
+    setWinkConnected(null);
+    setWinkClinicId(null);
+    localStorage.removeItem('wink_clinic_name');
+    localStorage.removeItem('wink_clinic_id');
+  };
+
   const handleWinkPatients = async () => {
     setWinkLoading(true);
     setWinkResult(null);
@@ -252,6 +302,30 @@ export default function ImportPage() {
     }
   };
 
+  const handleWinkInvoices = async () => {
+    if (!invDateFrom || !invDateTo) return;
+    setInvLoading(true);
+    setInvResult(null);
+    setInvError(null);
+    try {
+      const { data } = await api.post<ImportResult>('/import/wink-invoices', null, {
+        params: {
+          date_from: invDateFrom,
+          date_to: invDateTo,
+          provider_id: 1,
+          payer_id: 1,
+          ...(winkClinicId ? { clinic_id: winkClinicId } : {}),
+        },
+      });
+      setInvResult(data);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setInvError(msg ?? t('import.error_wink', { defaultValue: 'Error importing from Wink' }));
+    } finally {
+      setInvLoading(false);
+    }
+  };
+
   const downloadTemplate = () => {
     const headers = TARGET_FIELDS.map(f => f.key);
     const csv = headers.join(',') + '\n';
@@ -279,40 +353,121 @@ export default function ImportPage() {
           <p className="font-semibold text-slate-800">{t('import.wink')}</p>
         </div>
         <p className="text-xs text-slate-500 mb-4">{t('import.wink_desc')}</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <button
-              onClick={handleWinkPatients}
-              disabled={winkLoading}
-              className="w-full flex items-center justify-center gap-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white text-xs font-medium py-2 rounded-lg"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${winkLoading ? 'animate-spin' : ''}`} />
-              {winkLoading ? t('import.importing') : t('import.sync_patients')}
-            </button>
-            {winkError && (
+
+        {!winkConnected ? (
+          /* Join Code Entry — Wink not connected */
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+            <p className="text-sm font-medium text-slate-700 mb-2">Enter Clinic Code</p>
+            <p className="text-xs text-slate-500 mb-3">
+              Ask the clinic admin to generate a join code from Settings → Clinic Pairing.
+            </p>
+            <div className="flex gap-2">
+              <input
+                value={joinCodeInput}
+                onChange={e => setJoinCodeInput(e.target.value.toUpperCase())}
+                placeholder="ABC123"
+                maxLength={6}
+                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono tracking-widest text-center uppercase focus:outline-none focus:ring-2 focus:ring-sky-500"
+                onKeyDown={e => e.key === 'Enter' && handleVerifyJoinCode()}
+              />
+              <button
+                onClick={handleVerifyJoinCode}
+                disabled={joinVerifying || joinCodeInput.length < 6}
+                className="bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              >
+                {joinVerifying ? 'Verifying...' : 'Connect'}
+              </button>
+            </div>
+            {joinError && (
               <div className="mt-2 flex items-center gap-1.5 text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg p-2">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />{winkError}
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />{joinError}
               </div>
             )}
-            {winkResult && <ResultBadges result={winkResult} />}
           </div>
-          <div>
-            <button
-              onClick={handleWinkEncounters}
-              disabled={encLoading}
-              className="w-full flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white text-xs font-medium py-2 rounded-lg"
-            >
-              <ClipboardList className={`w-3.5 h-3.5 ${encLoading ? 'animate-pulse' : ''}`} />
-              {encLoading ? t('import.importing') : t('import.import_encounters')}
-            </button>
-            {encError && (
-              <div className="mt-2 flex items-center gap-1.5 text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg p-2">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />{encError}
+        ) : (
+          /* Connected — show import buttons */
+          <>
+            <div className="flex items-center gap-2 mb-4 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+              <CheckCircle className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm text-emerald-700 font-medium">Connected to {winkConnected}</span>
+              <button
+                onClick={handleDisconnectWink}
+                className="ml-auto text-xs text-slate-500 hover:text-red-600"
+              >
+                Disconnect
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <button
+                  onClick={handleWinkPatients}
+                  disabled={winkLoading}
+                  className="w-full flex items-center justify-center gap-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white text-xs font-medium py-2 rounded-lg"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${winkLoading ? 'animate-spin' : ''}`} />
+                  {winkLoading ? t('import.importing') : t('import.sync_patients')}
+                </button>
+                {winkError && (
+                  <div className="mt-2 flex items-center gap-1.5 text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg p-2">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />{winkError}
+                  </div>
+                )}
+                {winkResult && <ResultBadges result={winkResult} />}
               </div>
-            )}
-            {encResult && <ResultBadges result={encResult} />}
+              <div>
+                <button
+                  onClick={handleWinkEncounters}
+                  disabled={encLoading}
+                  className="w-full flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white text-xs font-medium py-2 rounded-lg"
+                >
+                  <ClipboardList className={`w-3.5 h-3.5 ${encLoading ? 'animate-pulse' : ''}`} />
+                  {encLoading ? t('import.importing') : t('import.import_encounters')}
+                </button>
+                {encError && (
+                  <div className="mt-2 flex items-center gap-1.5 text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg p-2">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />{encError}
+                  </div>
+                )}
+                {encResult && <ResultBadges result={encResult} />}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Wink Invoices Import (date range) */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center">
+            <ClipboardList className="w-4 h-4 text-purple-600" />
           </div>
+          <p className="font-semibold text-slate-800">{t('import.wink_invoices', { defaultValue: 'Import Wink Invoices' })}</p>
         </div>
+        <p className="text-xs text-slate-500 mb-4">{t('import.wink_invoices_desc', { defaultValue: 'Import invoices from Wink database by date range. Creates claims with service lines, auto-scrubs, and auto-advances if clean.' })}</p>
+        <div className="flex flex-wrap items-end gap-3 mb-3">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">{t('common.date_from', { defaultValue: 'From' })}</label>
+            <DatePicker value={invDateFrom} onChange={setInvDateFrom} />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">{t('common.date_to', { defaultValue: 'To' })}</label>
+            <DatePicker value={invDateTo} onChange={setInvDateTo} />
+          </div>
+          <button
+            onClick={handleWinkInvoices}
+            disabled={invLoading || !invDateFrom || !invDateTo}
+            className="flex items-center gap-2 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white text-xs font-medium py-2.5 px-4 rounded-lg"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${invLoading ? 'animate-spin' : ''}`} />
+            {invLoading ? t('import.importing') : t('import.import_invoices', { defaultValue: 'Import Invoices' })}
+          </button>
+        </div>
+        {invError && (
+          <div className="flex items-center gap-1.5 text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg p-2 mb-2">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />{invError}
+          </div>
+        )}
+        {invResult && <ResultBadges result={invResult} />}
       </div>
 
       {/* Template download */}

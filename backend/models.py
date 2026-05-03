@@ -231,6 +231,7 @@ class Claim(Base):
     denials: Mapped[list["Denial"]] = relationship("Denial", back_populates="claim")
     appeals: Mapped[list["Appeal"]] = relationship("Appeal", back_populates="claim")
     audit_logs: Mapped[list["AuditLog"]] = relationship("AuditLog", back_populates="claim", foreign_keys="AuditLog.claim_id")
+    attachments: Mapped[list["ClaimAttachment"]] = relationship("ClaimAttachment", back_populates="claim", cascade="all, delete-orphan")
 
 
 class ServiceLine(Base):
@@ -404,6 +405,10 @@ class ClinicSettings(Base):
     stedi_api_key: Mapped[str] = mapped_column(String(255), nullable=True)
     availity_client_id: Mapped[str] = mapped_column(String(255), nullable=True)
     availity_client_secret: Mapped[str] = mapped_column(String(255), nullable=True)
+    # VistaNet credentials
+    vistanet_username: Mapped[str] = mapped_column(String(100), nullable=True)
+    vistanet_password: Mapped[str] = mapped_column(String(255), nullable=True)
+    vistanet_location: Mapped[str] = mapped_column(String(100), nullable=True)
     # Setup wizard completion
     setup_complete: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -431,6 +436,19 @@ class FeeScheduleEntry(Base):
     payer: Mapped[Optional["Payer"]] = relationship("Payer")
 
 
+class ClaimAttachment(Base):
+    __tablename__ = "claim_attachments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(Integer, ForeignKey("claims.id"), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    attachment_type: Mapped[str] = mapped_column(String(50), nullable=True)  # "insurance_card", "license", "signature"
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    claim: Mapped["Claim"] = relationship("Claim", back_populates="attachments")
+
+
 class Appeal(Base):
     __tablename__ = "appeals"
 
@@ -451,3 +469,22 @@ class Appeal(Base):
 
     claim: Mapped["Claim"] = relationship("Claim", back_populates="appeals")
     denial: Mapped["Denial"] = relationship("Denial", back_populates="appeals")
+
+
+class ApprovalRequest(Base):
+    __tablename__ = "approval_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(Integer, ForeignKey("claims.id"), nullable=False)
+    patient_id: Mapped[int] = mapped_column(Integer, nullable=True)
+    request_type: Mapped[str] = mapped_column(String(50), nullable=False)  # dx_change, code_suggestion, etc.
+    requested_by: Mapped[str] = mapped_column(String(100), nullable=True)
+    details: Mapped[str] = mapped_column(Text, nullable=True)
+    suggested_codes: Mapped[dict] = mapped_column(JSON, nullable=True)  # JSON array of suggested codes
+    current_code: Mapped[str] = mapped_column(String(20), nullable=True)  # code being changed
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, approved, rejected
+    reviewed_by: Mapped[str] = mapped_column(String(100), nullable=True)
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    claim: Mapped["Claim"] = relationship("Claim")

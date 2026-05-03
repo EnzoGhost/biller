@@ -123,7 +123,7 @@
     "name": "Nombre",
     "dob": "Fecha de Nacimiento",
     "dob_abbr": "F/N",
-    "mrn": "MRN",
+    "mrn": "Record",
     "phone": "Teléfono",
     "insurance": "Seguro",
     "no_patients": "No hay pacientes",
@@ -293,7 +293,7 @@
     "step_upload": "Subir",
     "step_done": "Listo",
     "back": "← Atrás",
-    "field_patient_mrn": "MRN Paciente",
+    "field_patient_mrn": "Record Paciente",
     "field_first_name": "Nombre",
     "field_last_name": "Apellido",
     "field_dob": "Fecha de Nacimiento",
@@ -787,5 +787,10 @@
     "scrub.timely_filing_exceeded": "Fecha de servicio excede el plazo de radicación oportuna del pagador ({{days}} días)",
     "scrub.total_mismatch": "Total facturado (${{claimed}}) no coincide con la suma de líneas de servicio (${{actual}})",
     "scrub.zero_total": "Total facturado es $0 — verificar montos de líneas de servicio"
+  },
+  "claim": {
+    "patient_documents": "Documentos del Paciente",
+    "insurance_card": "Tarjeta de Seguro",
+    "license_id": "Licencia / ID"
   }
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Search, Building2, Phone, Mail } from 'lucide-react';
+import { displayPhone } from '../lib/format';
 import api from '../lib/api';
 import type { Payer, PayerType, PaginatedResponse } from '../types';
 
@@ -106,7 +107,7 @@ export default function PayersPage() {
                 {payer.phone && (
                   <div className="flex items-center gap-2">
                     <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    {payer.phone}
+                    {displayPhone(payer.phone)}
                   </div>
                 )}
                 {payer.city && (
