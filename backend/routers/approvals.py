@@ -90,6 +90,32 @@ async def create_approval(
     db.add(approval)
     await db.commit()
     await db.refresh(approval)
+
+    # Forward to Wink sync server so the doctor gets notified
+    import httpx
+    try:
+        WINK_CLINIC_ID = "1a905d29-0a9a-42b3-8bc3-83c0ceb9acba"
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                "http://159.65.235.231:3100/api/sync/approval-bridge",
+                json={
+                    "clinic_id": WINK_CLINIC_ID,
+                        "patient_id": str(approval.patient_id) if approval.patient_id else None,
+                        "claim_id": approval.claim_id,
+                        "request_type": approval.request_type,
+                        "requested_by": approval.requested_by,
+                        "details": approval.details,
+                        "suggested_codes": approval.suggested_codes,
+                        "current_code": approval.current_code,
+                    }
+                )
+            if resp.status_code == 200:
+                print(f"[approvals] Forwarded to Wink sync server")
+            else:
+                print(f"[approvals] Sync server returned {resp.status_code}: {resp.text}")
+    except Exception as e:
+        print(f"[approvals] Failed to forward to sync server: {e}")
+
     return approval
 
 
