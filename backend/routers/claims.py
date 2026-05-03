@@ -529,6 +529,12 @@ async def _delete_claim(db: AsyncSession, claim_id: int) -> None:
     for log in audit_logs:
         await db.delete(log)
 
+    # Delete approval requests
+    from models import ApprovalRequest
+    approval_reqs = (await db.execute(select(ApprovalRequest).where(ApprovalRequest.claim_id == claim_id))).scalars().all()
+    for ar in approval_reqs:
+        await db.delete(ar)
+
     # Now delete the claim itself (service_lines cascade)
     claim = (await db.execute(select(Claim).where(Claim.id == claim_id))).scalar_one_or_none()
     if claim:

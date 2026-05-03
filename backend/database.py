@@ -1,9 +1,13 @@
+import logging
 import sqlalchemy
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from config import settings
 
-engine = create_async_engine(settings.DATABASE_URL, echo=settings.DEBUG)
+# Suppress verbose SQLAlchemy logging in production
+logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+
+engine = create_async_engine(settings.DATABASE_URL, echo=False)
 
 AsyncSessionLocal = async_sessionmaker(
     engine,

@@ -153,8 +153,8 @@ class Patient(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    insurances: Mapped[list["PatientInsurance"]] = relationship("PatientInsurance", back_populates="patient")
-    claims: Mapped[list["Claim"]] = relationship("Claim", back_populates="patient")
+    insurances: Mapped[list["PatientInsurance"]] = relationship("PatientInsurance", back_populates="patient", cascade="all, delete-orphan")
+    claims: Mapped[list["Claim"]] = relationship("Claim", back_populates="patient", cascade="all, delete-orphan")
 
 
 class PatientInsurance(Base):
@@ -232,6 +232,7 @@ class Claim(Base):
     appeals: Mapped[list["Appeal"]] = relationship("Appeal", back_populates="claim")
     audit_logs: Mapped[list["AuditLog"]] = relationship("AuditLog", back_populates="claim", foreign_keys="AuditLog.claim_id")
     attachments: Mapped[list["ClaimAttachment"]] = relationship("ClaimAttachment", back_populates="claim", cascade="all, delete-orphan")
+    approval_requests: Mapped[list["ApprovalRequest"]] = relationship("ApprovalRequest", back_populates="claim", cascade="all, delete-orphan")
 
 
 class ServiceLine(Base):
@@ -475,7 +476,7 @@ class ApprovalRequest(Base):
     __tablename__ = "approval_requests"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    claim_id: Mapped[int] = mapped_column(Integer, ForeignKey("claims.id"), nullable=False)
+    claim_id: Mapped[int] = mapped_column(Integer, ForeignKey("claims.id", ondelete="CASCADE"), nullable=False)
     patient_id: Mapped[int] = mapped_column(Integer, nullable=True)
     request_type: Mapped[str] = mapped_column(String(50), nullable=False)  # dx_change, code_suggestion, etc.
     requested_by: Mapped[str] = mapped_column(String(100), nullable=True)
@@ -487,4 +488,4 @@ class ApprovalRequest(Base):
     reviewed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    claim: Mapped["Claim"] = relationship("Claim")
+    claim: Mapped["Claim"] = relationship("Claim", back_populates="approval_requests")

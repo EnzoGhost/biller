@@ -77,8 +77,13 @@ def _query_patient_docs(wink_patient_id: str) -> list[dict]:
         docs = []
         for (raw_data,) in cur.fetchall():
             data = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
-            if str(data.get("patient_id")) != str(wink_patient_id):
-                continue
+            # Compare as integers to handle zero-padded IDs (e.g., '0025282' vs '25282')
+            try:
+                if int(str(data.get("patient_id", 0))) != int(str(wink_patient_id).lstrip('0') or '0'):
+                    continue
+            except (ValueError, TypeError):
+                if str(data.get("patient_id")) != str(wink_patient_id):
+                    continue
             cat = data.get("category", "other")
             if cat in SKIP_CATEGORIES:
                 continue

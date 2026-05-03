@@ -763,7 +763,23 @@ async def _resolve_payer_from_wink(
             if p.name.lower() in clean_name.lower():
                 return p.id, f"reverse:{clean_name}→{p.name}"
 
-    # 4. Fallback to default
+    # 4. Auto-create payer if we know the insurance name
+    if candidate_names:
+        # Use the first non-empty candidate name to create a new payer
+        new_name = candidate_names[0].strip()
+        if new_name:
+            import random, string as _s
+            suffix = ''.join(random.choices(_s.ascii_uppercase + _s.digits, k=4))
+            new_payer = PayerModel(
+                name=new_name,
+                payer_id=f"AUTO-{suffix}",
+                is_active=True,
+            )
+            db.add(new_payer)
+            await db.flush()
+            return new_payer.id, f"auto_created:{new_name}"
+
+    # 5. Fallback to default only if we have NO insurance name at all
     return default_payer_id, "default"
 
 
