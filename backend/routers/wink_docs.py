@@ -20,7 +20,7 @@ logger = logging.getLogger("wink_docs")
 router = APIRouter(prefix="/wink", tags=["wink-docs"])
 
 # Sync server connection details
-SYNC_DB_HOST = "159.65.235.231"
+SYNC_DB_HOST = "127.0.0.1"
 SYNC_DB_NAME = "wink_sync"
 SYNC_DB_USER = "wink"
 SYNC_DB_PASS = "wink_sync_2026!"
@@ -63,7 +63,8 @@ def _query_patient_docs(wink_patient_id: str) -> list[dict]:
     conn = _get_sync_connection()
     try:
         cur = conn.cursor()
-        # Get latest version of each document by row_id
+        # Get latest version of each document by row_id — filter by patient_id in SQL
+        # Use data->>patient_id to avoid scanning all 65K+ rows
         cur.execute("""
             SELECT DISTINCT ON (row_id) data
             FROM sync_changes
@@ -71,19 +72,13 @@ def _query_patient_docs(wink_patient_id: str) -> list[dict]:
               AND clinic_id = %s
               AND operation != 'DELETE'
               AND data IS NOT NULL
+              AND (data->>'patient_id' = %s OR data->>'patient_id' = %s)
             ORDER BY row_id, timestamp DESC
-        """, (WINK_CLINIC_ID,))
+        """, (WINK_CLINIC_ID, str(wink_patient_id), str(int(str(wink_patient_id).lstrip('0') or '0'))))
 
         docs = []
         for (raw_data,) in cur.fetchall():
             data = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
-            # Compare as integers to handle zero-padded IDs (e.g., '0025282' vs '25282')
-            try:
-                if int(str(data.get("patient_id", 0))) != int(str(wink_patient_id).lstrip('0') or '0'):
-                    continue
-            except (ValueError, TypeError):
-                if str(data.get("patient_id")) != str(wink_patient_id):
-                    continue
             cat = data.get("category", "other")
             if cat in SKIP_CATEGORIES:
                 continue

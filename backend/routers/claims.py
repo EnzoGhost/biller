@@ -8,7 +8,7 @@ from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 
 from database import get_db
-from models import Claim, ServiceLine, ClaimStatus, Patient, Provider, Payer, Denial, AuditLog
+from models import Claim, ServiceLine, ClaimStatus, Patient, PatientInsurance, Provider, Payer, Denial, AuditLog
 from schemas import ClaimOut, ClaimCreate, ClaimUpdate, PaymentOut, PaymentCreate, ServiceLineCreate
 from auth import get_current_user
 from models import User, Payment
@@ -60,7 +60,7 @@ def generate_claim_number() -> str:
 
 def claim_with_relations():
     return [
-        selectinload(Claim.patient).selectinload(Patient.insurances),
+        selectinload(Claim.patient).selectinload(Patient.insurances).selectinload(PatientInsurance.payer),
         selectinload(Claim.provider),
         selectinload(Claim.payer),
         selectinload(Claim.service_lines),
