@@ -161,10 +161,22 @@ async def get_wink_patient_documents(
 async def proxy_wink_document(
     wink_patient_id: str,
     doc_id: str,
-    _: User = Depends(get_current_user),
+    token: Optional[str] = None,
+    credentials: Optional["HTTPAuthorizationCredentials"] = Depends(lambda: None),
 ):
-    """Proxy a patient document file from B2 via the sync server."""
+    """Proxy a patient document file from B2 via the sync server.
+    Accepts JWT via Authorization header OR ?token= query param (for img tags)."""
     import asyncio
+    from jose import jwt, JWTError
+    from config import settings as app_settings
+    # Validate token (header or query param)
+    jwt_token = token
+    if not jwt_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        jwt.decode(jwt_token, app_settings.SECRET_KEY, algorithms=["HS256"])
+    except (JWTError, Exception):
+        raise HTTPException(status_code=401, detail="Invalid token")
     loop = asyncio.get_event_loop()
 
     # Get the document record to find patient_id and filename

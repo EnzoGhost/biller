@@ -178,11 +178,14 @@ function PatientDocuments({
               {filteredAttachments.map(att => (
                 <div key={att.id} className="text-center">
                   <button
-                    onClick={() => setFullSizeImg(`/api${att.url}`)}
+                    onClick={() => {
+                      const tk = localStorage.getItem('biller_token') || '';
+                      setFullSizeImg(`/api${att.url}?token=${tk}`);
+                    }}
                     className="block w-full rounded-lg border border-slate-200 overflow-hidden hover:border-sky-400 hover:shadow-md transition-all cursor-pointer"
                   >
                     <img
-                      src={`/api${att.url}`}
+                      src={`/api${att.url}?token=${localStorage.getItem('biller_token') || ''}`}
                       alt={DOC_TYPE_LABELS[att.attachment_type] ?? att.attachment_type}
                       className="w-full h-32 object-cover bg-slate-50"
                       loading="lazy"
