@@ -11,7 +11,7 @@ from typing import Optional
 import psycopg2
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from auth import get_current_user
 from models import User
@@ -184,7 +184,7 @@ async def proxy_wink_document(
     if not device_token:
         raise HTTPException(status_code=503, detail="No valid device token for sync server")
 
-    # Request presigned B2 URL from the sync server
+    # Request presigned B2 URL from the sync server, then fetch the actual bytes
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(
             f"{SYNC_SERVER_URL}/api/sync/documents/cloud/{patient_id}/{filename}",
@@ -198,7 +198,44 @@ async def proxy_wink_document(
 
         result = resp.json()
         url = result.get("url")
-        if url:
-            return RedirectResponse(url)
+        if not url:
+            raise HTTPException(status_code=404, detail="Document URL not found in sync server response")
 
-        raise HTTPException(status_code=404, detail="Document URL not found in sync server response")
+        # Fetch the actual file bytes from B2 and serve them directly
+        try:
+            file_resp = await client.get(url, follow_redirects=True)
+            if file_resp.status_code != 200:
+                # B2 fetch failed — return a placeholder
+                return _placeholder_image(f"File not available (HTTP {file_resp.status_code})")
+
+            # Determine content type from B2 response or filename
+            content_type = file_resp.headers.get("content-type", _guess_content_type(filename))
+            return Response(
+                content=file_resp.content,
+                media_type=content_type,
+                headers={"Cache-Control": "private, max-age=3600"},
+            )
+        except Exception as fetch_err:
+            logger.error("[wink-docs] B2 fetch error: %s", fetch_err)
+            return _placeholder_image("File temporarily unavailable")
+
+
+def _guess_content_type(filename: str) -> str:
+    """Guess MIME type from filename extension."""
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    types = {
+        "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+        "gif": "image/gif", "webp": "image/webp", "pdf": "application/pdf",
+        "tiff": "image/tiff", "tif": "image/tiff", "bmp": "image/bmp",
+    }
+    return types.get(ext, "application/octet-stream")
+
+
+def _placeholder_image(text: str) -> Response:
+    """Return a simple grey placeholder image with text (SVG)."""
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">
+      <rect width="400" height="300" fill="#e0e0e0"/>
+      <text x="200" y="150" text-anchor="middle" dominant-baseline="middle"
+            font-family="sans-serif" font-size="16" fill="#666">{text}</text>
+    </svg>"""
+    return Response(content=svg.encode(), media_type="image/svg+xml")

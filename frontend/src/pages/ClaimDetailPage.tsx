@@ -186,6 +186,17 @@ function PatientDocuments({
                       alt={DOC_TYPE_LABELS[att.attachment_type] ?? att.attachment_type}
                       className="w-full h-32 object-cover bg-slate-50"
                       loading="lazy"
+                      onError={(e) => {
+                        const el = e.currentTarget;
+                        el.style.display = 'none';
+                        const parent = el.parentElement;
+                        if (parent && !parent.querySelector('.doc-placeholder')) {
+                          const ph = document.createElement('div');
+                          ph.className = 'doc-placeholder w-full h-32 bg-slate-100 flex items-center justify-center text-slate-400 text-xs';
+                          ph.textContent = DOC_TYPE_LABELS[att.attachment_type] ?? att.attachment_type;
+                          parent.appendChild(ph);
+                        }
+                      }}
                     />
                   </button>
                   <p className="text-xs text-slate-500 mt-1 font-medium">
@@ -1335,22 +1346,57 @@ function ClaimDetailPageInner() {
       )}
 
       {/* Financials */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <p className="text-xs text-slate-500 mb-1">{t('claims.billed')}</p>
-            <p className="text-lg font-bold text-slate-900">{fmt(claim.total_billed)}</p>
+      {(() => {
+        const payerName = (claim.payer?.name ?? '').toLowerCase();
+        const isEnvolve = payerName.includes('envolve') || payerName.includes('vision');
+        const insuranceAllowance = claim.total_paid > 0 ? claim.total_paid + (claim.patient_responsibility || 0) : null;
+        const estimatedPatientResp = insuranceAllowance != null ? claim.total_billed - insuranceAllowance : null;
+        const envolveAdjustment = isEnvolve ? claim.total_billed * 0.35 : null;
+
+        return (
+          <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
+            <div className="grid grid-cols-3 gap-4 text-center mb-3">
+              <div>
+                <p className="text-xs text-slate-500 mb-1">{t('claims.billed')}</p>
+                <p className="text-lg font-bold text-slate-900">{fmt(claim.total_billed)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">{t('claims.paid')}</p>
+                <p className="text-lg font-bold text-emerald-700">{fmt(claim.total_paid)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">{t('claims.patient_responsibility')}</p>
+                <p className="text-lg font-bold text-amber-700">{fmt(claim.patient_responsibility)}</p>
+              </div>
+            </div>
+
+            {/* Fee Schedule Breakdown */}
+            <div className="border-t border-slate-100 pt-3 space-y-1.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">{t('claims.insurance_allowance', { defaultValue: 'Insurance Allowance' })}</span>
+                <span className="font-medium text-slate-700">
+                  {insuranceAllowance != null ? fmt(insuranceAllowance) : <span className="text-slate-400 italic text-xs">{t('common.not_set', { defaultValue: 'Not set' })}</span>}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">{t('claims.est_patient_resp', { defaultValue: 'Est. Patient Responsibility' })}</span>
+                <span className="font-medium text-amber-700">
+                  {estimatedPatientResp != null && estimatedPatientResp > 0 ? fmt(estimatedPatientResp) : <span className="text-slate-400 italic text-xs">{t('common.not_set', { defaultValue: 'Not set' })}</span>}
+                </span>
+              </div>
+              {isEnvolve && envolveAdjustment != null && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500 flex items-center gap-1">
+                    <span className="text-xs">⚡</span>
+                    {t('claims.envolve_adjustment', { defaultValue: 'Envolve Adj. (35%)' })}
+                  </span>
+                  <span className="font-medium text-rose-600">{fmt(envolveAdjustment)}</span>
+                </div>
+              )}
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-slate-500 mb-1">{t('claims.paid')}</p>
-            <p className="text-lg font-bold text-emerald-700">{fmt(claim.total_paid)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 mb-1">{t('claims.patient_responsibility')}</p>
-            <p className="text-lg font-bold text-amber-700">{fmt(claim.patient_responsibility)}</p>
-          </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* Service Lines — grouped by category */}
       {(() => {
