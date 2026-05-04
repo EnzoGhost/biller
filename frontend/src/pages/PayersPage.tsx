@@ -118,7 +118,9 @@ export default function PayersPage() {
                 )}
                 <div className="flex items-center gap-2">
                   <span className="text-slate-400">{t('payers.method')}:</span>
-                  <span className="font-medium uppercase">{payer.submission_method}</span>
+                  <span className={`font-medium uppercase ${payer.submission_method === 'manual' ? 'text-amber-600' : ''}`}>
+                    {payer.submission_method === 'manual' ? '⚠ Manual' : payer.submission_method}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-slate-400">{t('payers.timely_filing')}:</span>

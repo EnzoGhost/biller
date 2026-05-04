@@ -229,9 +229,12 @@ async def receive_wink_encounter(
             payer_res2 = await db.execute(select(PayerModel).where(PayerModel.id == payer_id))
             p2 = payer_res2.scalar_one_or_none()
             if p2:
-                routing_suggestion = (
-                    "stedi" if p2.submission_method == SubmissionMethod.STEDI else "inmediata"
-                )
+                if p2.submission_method == SubmissionMethod.STEDI:
+                    routing_suggestion = "stedi"
+                elif p2.submission_method == SubmissionMethod.INMEDIATA:
+                    routing_suggestion = "inmediata"
+                else:
+                    routing_suggestion = "manual"  # unknown payer — needs manual routing
         if not routing_suggestion:
             routing_suggestion = "inmediata"  # default for PR
 

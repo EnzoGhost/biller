@@ -175,6 +175,21 @@ async def check_approval_sync_status(
     return {"synced": False, "updated": False, "approvals": []}
 
 
+@router.get("/all-recent", response_model=List[ApprovalOut])
+async def all_recent_approvals(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Return all recent approval requests (pending + responded) for notification bell."""
+    query = (
+        select(ApprovalRequest)
+        .order_by(ApprovalRequest.created_at.desc())
+        .limit(20)
+    )
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
 @router.get("/recent", response_model=List[ApprovalOut])
 async def recent_approvals(
     db: AsyncSession = Depends(get_db),

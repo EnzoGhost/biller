@@ -35,7 +35,7 @@ export default function NotificationBell() {
 
   const { data: notifications } = useQuery<ApprovalNotification[]>({
     queryKey: ['approval-notifications'],
-    queryFn: () => api.get('/approvals/recent').then(r => Array.isArray(r.data) ? r.data : []),
+    queryFn: () => api.get('/approvals/all-recent').then(r => Array.isArray(r.data) ? r.data : []),
     refetchInterval: 30000, // Poll every 30s
   });
 

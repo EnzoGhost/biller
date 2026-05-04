@@ -30,13 +30,18 @@ const ROUTING_CONFIG = {
   reforma:  { label: 'Reforma',      color: 'bg-amber-100 text-amber-700 border-amber-200' },
   fax:      { label: 'Fax',          color: 'bg-slate-100 text-slate-600 border-slate-200' },
   mail:     { label: 'Mail',         color: 'bg-slate-100 text-slate-600 border-slate-200' },
+  manual:   { label: 'Manual',       color: 'bg-amber-100 text-amber-700 border-amber-300' },
 } as const;
 
 function RoutingBadge({ method }: { method: string }) {
   const cfg = ROUTING_CONFIG[method as keyof typeof ROUTING_CONFIG] ?? ROUTING_CONFIG.fax;
+  const isManual = method === 'manual';
   return (
-    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${cfg.color}`}>
-      {cfg.label}
+    <span
+      className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${cfg.color}`}
+      title={isManual ? 'This payer needs routing setup — submission method not configured' : undefined}
+    >
+      {isManual ? '⚠ Manual' : cfg.label}
     </span>
   );
 }

@@ -54,6 +54,7 @@ class SubmissionMethod(str, enum.Enum):
     INMEDIATA = "inmediata"
     FAX = "fax"
     MAIL = "mail"
+    MANUAL = "manual"
 
 
 # ── Users ────────────────────────────────────────────────────────────────────
@@ -106,7 +107,7 @@ class Payer(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     payer_id: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
     payer_type: Mapped[PayerType] = mapped_column(SAEnum(PayerType), default=PayerType.COMMERCIAL)
-    submission_method: Mapped[SubmissionMethod] = mapped_column(SAEnum(SubmissionMethod), default=SubmissionMethod.STEDI)
+    submission_method: Mapped[SubmissionMethod] = mapped_column(SAEnum(SubmissionMethod), default=SubmissionMethod.MANUAL)
     stedi_payer_id: Mapped[str] = mapped_column(String(50), nullable=True)
     inmediata_payer_id: Mapped[str] = mapped_column(String(50), nullable=True)
     address_line1: Mapped[str] = mapped_column(String(255), nullable=True)

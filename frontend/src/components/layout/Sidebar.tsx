@@ -8,7 +8,6 @@ import {
   ChevronLeft, ChevronRight, LogOut,
 } from 'lucide-react';
 import { useAuthStore } from '../../hooks/useAuth';
-import NotificationBell from '../NotificationBell';
 import clsx from 'clsx';
 
 const NAV_ITEMS = [
@@ -86,9 +85,6 @@ export default function Sidebar() {
 
       {/* Notifications + User */}
       <div className="p-3 border-t border-slate-100">
-        <div className="flex items-center justify-center mb-2">
-          <NotificationBell />
-        </div>
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-xs font-bold shrink-0">
             {initials}
