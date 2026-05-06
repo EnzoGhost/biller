@@ -264,7 +264,7 @@
     "implug_outbound": "Outbound Folder (837P files)",
     "implug_inbound": "Inbound Folder (835 ERA files)",
     "implug_how_it_works": "How it works:",
-    "implug_how_it_works_desc": "When you submit a claim via the Submit button, SometeoPR generates an 837P X12 file and saves it to the outbound folder. ImPlug picks it up and submits to the clearinghouse. 835 ERA responses are dropped in the inbound folder and SometeoPR auto-processes them."
+    "implug_how_it_works_desc": "When you submit a claim via the Submit button, AngelClaims generates an 837P X12 file and saves it to the outbound folder. ImPlug picks it up and submits to the clearinghouse. 835 ERA responses are dropped in the inbound folder and AngelClaims auto-processes them."
   },
   "import": {
     "title": "Import Data",
@@ -731,7 +731,7 @@
     "routing_label": "Routing:"
   },
   "auth": {
-    "login_title": "Medical Biller PR",
+    "login_title": "AngelClaims",
     "login_subtitle": "Medical billing",
     "email": "Email",
     "password": "Password",

@@ -264,7 +264,7 @@
     "implug_outbound": "Carpeta de Salida (archivos 837P)",
     "implug_inbound": "Carpeta de Entrada (archivos 835 ERA)",
     "implug_how_it_works": "Cómo funciona:",
-    "implug_how_it_works_desc": "Al someter una reclamación con el botón Someter, SometeoPR genera un archivo 837P X12 y lo guarda en la carpeta de salida. ImPlug lo recoge y lo envía al clearinghouse. Las respuestas ERA 835 se depositan en la carpeta de entrada y SometeoPR las procesa automáticamente."
+    "implug_how_it_works_desc": "Al someter una reclamación con el botón Someter, AngelClaims genera un archivo 837P X12 y lo guarda en la carpeta de salida. ImPlug lo recoge y lo envía al clearinghouse. Las respuestas ERA 835 se depositan en la carpeta de entrada y AngelClaims las procesa automáticamente."
   },
   "import": {
     "title": "Importar Datos",

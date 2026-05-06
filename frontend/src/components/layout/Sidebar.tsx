@@ -38,15 +38,15 @@ export default function Sidebar() {
     <motion.aside
       animate={{ width: collapsed ? 64 : 220 }}
       transition={{ duration: 0.2, ease: 'easeInOut' }}
-      className="relative flex flex-col bg-white border-r border-slate-200 h-screen shrink-0 overflow-hidden"
+      className="relative flex flex-col bg-slate-900 border-r border-slate-700 h-screen shrink-0 overflow-hidden"
     >
       {/* Logo */}
-      <div className="flex items-center justify-center px-2 py-5 border-b border-slate-100">
-        <img
-          src="/someteopr-logo.png"
-          alt="SometeoPR"
-          className={clsx('object-contain', collapsed ? 'h-8 w-auto' : 'w-full h-auto px-1')}
-        />
+      <div className="flex items-center justify-center px-2 py-5 border-b border-slate-700">
+        {collapsed ? (
+          <img src="/angel-icon.png" alt="AngelClaims" className="h-8 w-auto object-contain" />
+        ) : (
+          <img src="/angel-logo.png" alt="AngelClaims" className="w-full h-auto px-2 object-contain max-h-12" />
+        )}
       </div>
 
       {/* Nav */}
@@ -60,8 +60,8 @@ export default function Sidebar() {
               clsx(
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-sky-50 text-sky-700'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  ? 'bg-sky-500/20 text-sky-400'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
               )
             }
           >
@@ -84,9 +84,9 @@ export default function Sidebar() {
       </nav>
 
       {/* Notifications + User */}
-      <div className="p-3 border-t border-slate-100">
+      <div className="p-3 border-t border-slate-700">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-xs font-bold shrink-0">
+          <div className="w-7 h-7 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs font-bold shrink-0">
             {initials}
           </div>
           <AnimatePresence>
@@ -97,14 +97,14 @@ export default function Sidebar() {
                 exit={{ opacity: 0 }}
                 className="flex-1 min-w-0"
               >
-                <p className="text-xs font-medium text-slate-800 truncate">{user?.full_name}</p>
-                <p className="text-xs text-slate-400 truncate">{user?.role}</p>
+                <p className="text-xs font-medium text-slate-200 truncate">{user?.full_name}</p>
+                <p className="text-xs text-slate-500 truncate">{user?.role}</p>
               </motion.div>
             )}
           </AnimatePresence>
           <button
             onClick={handleLogout}
-            className="p-1 text-slate-400 hover:text-slate-700 rounded shrink-0"
+            className="p-1 text-slate-500 hover:text-slate-300 rounded shrink-0"
             title={t('common.logout')}
           >
             <LogOut className="w-3.5 h-3.5" />
@@ -115,7 +115,7 @@ export default function Sidebar() {
       {/* Collapse toggle */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="absolute top-5 -right-3 w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400 hover:text-slate-700 z-10"
+        className="absolute top-5 -right-3 w-6 h-6 rounded-full bg-slate-800 border border-slate-600 shadow-sm flex items-center justify-center text-slate-400 hover:text-slate-200 z-10"
       >
         {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
       </button>

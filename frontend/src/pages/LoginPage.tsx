@@ -28,39 +28,43 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50 to-slate-100 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+      {/* Background gradient */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-sky-500/8 rounded-full blur-3xl" />
+      </div>
       {/* Logo — big and commanding */}
       <img
-        src="/someteopr-logo.png"
-        alt="SometeoPR"
-        className="w-80 max-w-[90vw] object-contain mb-8"
+        src="/angel-logo.png"
+        alt="AngelClaims"
+        className="relative z-10 w-36 max-w-[50vw] object-contain mb-10"
       />
 
-      <div className="w-full max-w-sm">
+      <div className="relative z-10 w-full max-w-sm">
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div className="bg-slate-900 rounded-2xl shadow-2xl border border-slate-700 p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-300 mb-1">
                 {t('auth.email')}
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white rounded-lg text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-300 mb-1">
                 {t('auth.password')}
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 text-white rounded-lg text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                 required
               />
             </div>
@@ -81,9 +85,11 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
-
-
       </div>
+
+      <p className="relative z-10 mt-8 text-slate-600 text-xs">
+        © 2026 AngelClaims · <a href="https://angelclaims.app" className="hover:text-slate-400 transition-colors">angelclaims.app</a>
+      </p>
     </div>
   );
 }

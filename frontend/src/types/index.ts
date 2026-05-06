@@ -5,7 +5,7 @@ export type ClaimStatus =
 export type Gender = 'M' | 'F' | 'U';
 export type UserRole = 'admin' | 'biller' | 'provider' | 'viewer';
 export type PayerType = 'commercial' | 'medicare' | 'medicaid' | 'vision' | 'dental' | 'other';
-export type SubmissionMethod = 'stedi' | 'inmediata' | 'fax' | 'mail';
+export type SubmissionMethod = 'stedi' | 'inmediata' | 'fax' | 'mail' | 'manual';
 
 export interface User {
   id: number;
