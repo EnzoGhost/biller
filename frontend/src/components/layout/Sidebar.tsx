@@ -45,7 +45,7 @@ export default function Sidebar() {
         {collapsed ? (
           <img src="/angel-icon.png" alt="AngelClaims" className="h-8 w-auto object-contain" />
         ) : (
-          <img src="/angel-logo.png" alt="AngelClaims" className="w-full h-auto px-2 object-contain max-h-12" />
+          <img src="/angel-logo.png" alt="AngelClaims" className="h-8 w-auto object-contain" />
         )}
       </div>
 

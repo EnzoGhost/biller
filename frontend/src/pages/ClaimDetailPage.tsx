@@ -9,7 +9,7 @@ import {
   FileCode, Upload, Zap, CheckCircle, Clock, XCircle,
   MessageSquare, RotateCcw, FileText, Copy,
   ClipboardCheck, Eye, DollarSign, History,
-  ShieldAlert, Plus,
+  ShieldAlert, Plus, Edit2, Save,
 } from 'lucide-react';
 import api from '../lib/api';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -494,6 +494,14 @@ function ClaimDetailPageInner() {
   const [expandedFix, setExpandedFix] = useState<number | null>(null);
   const [addingFixCode, setAddingFixCode] = useState(false);
 
+  // Insurance extraction state
+  const [extractingInsurance, setExtractingInsurance] = useState(false);
+
+  // Insurance editing state
+  const [editingInsurance, setEditingInsurance] = useState(false);
+  const [insuranceEditVals, setInsuranceEditVals] = useState<{member_id: string; group_number: string; payer_name: string; subscriber_name: string}>({member_id:'',group_number:'',payer_name:'',subscriber_name:''});
+  const [savingInsurance, setSavingInsurance] = useState(false);
+
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 4000);
@@ -886,6 +894,37 @@ function ClaimDetailPageInner() {
 
   // ── Appeal letter ─────────────────────────────────────────────────────────
 
+  // ── Insurance extraction ─────────────────────────────────────────────────────
+
+  const handleExtractInsurance = async () => {
+    if (!claim) return;
+    setExtractingInsurance(true);
+    try {
+      const res = await api.post('/ai/extract-and-rescrub', { claim_id: claim.id });
+      setScrubResult(res.data.scrub);
+      qc.invalidateQueries({ queryKey: ['claim', id] });
+      showToast('Insurance extracted — claim re-scrubbed!');
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || 'Failed to extract insurance info', false);
+    } finally {
+      setExtractingInsurance(false);
+    }
+  };
+
+  const handleSaveInsurance = async (insId: number) => {
+    setSavingInsurance(true);
+    try {
+      await api.patch(`/ai/insurance/${insId}`, insuranceEditVals);
+      qc.invalidateQueries({ queryKey: ['claim', id] });
+      setEditingInsurance(false);
+      showToast('Insurance info updated');
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || 'Failed to update insurance', false);
+    } finally {
+      setSavingInsurance(false);
+    }
+  };
+
   const handleGenerateAppealLetter = async () => {
     if (!denials || denials.length === 0) {
       showToast(t('denials.no_denial_to_appeal', { defaultValue: 'No denial found to appeal' }), false);
@@ -1273,6 +1312,29 @@ function ClaimDetailPageInner() {
           {(scrubResult?.suggestions ?? []).map((s, i) => (
             <p key={i} className="text-xs text-slate-600 mt-1 ml-5">💡 {s}</p>
           ))}
+          {/* Extract insurance button — show when no insurance error is present */}
+          {(() => {
+            const allIssues = scrubResult?.issues ?? claim.scrub_issues ?? [];
+            const hasNoInsurance = allIssues.some(issue =>
+              /no insurance records|no insurance record found/i.test(issue.msg || '')
+            );
+            const hasInsuranceCardDocs = (claim.source === 'vistanet' || claim.source === 'wink');
+            if (!hasNoInsurance || !hasInsuranceCardDocs) return null;
+            return (
+              <div className="mt-3 pt-3 border-t border-amber-200">
+                <button
+                  onClick={handleExtractInsurance}
+                  disabled={extractingInsurance}
+                  className="flex items-center gap-2 px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium rounded-lg disabled:opacity-60 transition-colors"
+                >
+                  {extractingInsurance
+                    ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <span>🤖</span>}
+                  {extractingInsurance ? 'Extracting...' : 'Extract from Insurance Card'}
+                </button>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -1327,11 +1389,95 @@ function ClaimDetailPageInner() {
               {claim.payer_claim_number && (
                 <p className="text-slate-400 font-mono text-xs">Payer #: {claim.payer_claim_number}</p>
               )}
+              {/* Editable insurance info */}
               {(() => {
                 const ins = claim.patient?.insurances?.find(i => i.payer_id === claim.payer_id) ?? claim.patient?.insurances?.[0];
-                return ins?.member_id ? (
-                  <p className="text-slate-500 text-xs mt-1">Núm. Contrato: <span className="font-mono font-medium text-slate-700">{ins.member_id}</span></p>
-                ) : null;
+                if (!ins) return (
+                  <p className="text-slate-400 text-xs mt-1 italic">No insurance record on file</p>
+                );
+                if (editingInsurance) {
+                  return (
+                    <div className="mt-2 space-y-1.5">
+                      <div>
+                        <label className="text-xs text-slate-400">Member ID / Núm. Contrato</label>
+                        <input
+                          className="w-full text-xs border border-slate-200 rounded px-2 py-1 mt-0.5 font-mono"
+                          value={insuranceEditVals.member_id}
+                          onChange={e => setInsuranceEditVals(v => ({...v, member_id: e.target.value}))}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-400">Group Number</label>
+                        <input
+                          className="w-full text-xs border border-slate-200 rounded px-2 py-1 mt-0.5 font-mono"
+                          value={insuranceEditVals.group_number}
+                          onChange={e => setInsuranceEditVals(v => ({...v, group_number: e.target.value}))}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-400">Payer Name</label>
+                        <input
+                          className="w-full text-xs border border-slate-200 rounded px-2 py-1 mt-0.5"
+                          value={insuranceEditVals.payer_name}
+                          onChange={e => setInsuranceEditVals(v => ({...v, payer_name: e.target.value}))}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-400">Subscriber Name</label>
+                        <input
+                          className="w-full text-xs border border-slate-200 rounded px-2 py-1 mt-0.5"
+                          value={insuranceEditVals.subscriber_name}
+                          onChange={e => setInsuranceEditVals(v => ({...v, subscriber_name: e.target.value}))}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          onClick={() => handleSaveInsurance(ins.id)}
+                          disabled={savingInsurance}
+                          className="flex items-center gap-1 px-2 py-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs rounded disabled:opacity-60"
+                        >
+                          <Save className="w-3 h-3" />
+                          {savingInsurance ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => setEditingInsurance(false)}
+                          className="flex items-center gap-1 px-2 py-1 border border-slate-200 text-slate-500 text-xs rounded hover:bg-slate-50"
+                        >
+                          <X className="w-3 h-3" />
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="mt-1 group relative">
+                    <button
+                      title="Edit insurance info"
+                      onClick={() => {
+                        setInsuranceEditVals({
+                          member_id: ins.member_id || '',
+                          group_number: ins.group_number || '',
+                          payer_name: claim.payer?.name || '',
+                          subscriber_name: ins.subscriber_name || '',
+                        });
+                        setEditingInsurance(true);
+                      }}
+                      className="absolute top-0 right-0 p-0.5 text-slate-300 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </button>
+                    {ins.member_id && (
+                      <p className="text-slate-500 text-xs">Núm. Contrato: <span className="font-mono font-medium text-slate-700">{ins.member_id}</span></p>
+                    )}
+                    {ins.group_number && (
+                      <p className="text-slate-500 text-xs">Group: <span className="font-mono font-medium text-slate-700">{ins.group_number}</span></p>
+                    )}
+                    {ins.subscriber_name && (
+                      <p className="text-slate-500 text-xs">Subscriber: {ins.subscriber_name}</p>
+                    )}
+                  </div>
+                );
               })()}
             </div>
           </div>

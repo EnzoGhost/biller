@@ -502,6 +502,285 @@ Responde en JSON:
     )
 
 
+# ── Insurance Extraction from Card Image ────────────────────────────────────────
+
+class ExtractInsuranceRequest(BaseModel):
+    claim_id: int
+    image_url: str | None = None  # override image URL (optional)
+
+
+class ExtractInsuranceResponse(BaseModel):
+    claim_id: int
+    insurance_id: int | None
+    extracted: dict
+    created: bool  # True = new record, False = updated existing
+
+
+async def _fetch_insurance_card_bytes(claim, db: AsyncSession) -> tuple[bytes, str] | None:
+    """Return (image_bytes, mime_type) for the first insurance card attached to this claim."""
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    if claim.source == "wink":
+        # Wink claims: fetch from sync server / B2 via the wink_docs logic
+        from routers.wink_docs import _query_patient_docs, _query_doc_by_id, _get_device_token, SYNC_SERVER_URL, _guess_content_type
+        wink_patient_id = claim.patient.wink_patient_id if claim.patient else None
+        if not wink_patient_id:
+            return None
+        loop = asyncio.get_event_loop()
+        executor = ThreadPoolExecutor(max_workers=1)
+        docs = await loop.run_in_executor(executor, lambda: _query_patient_docs(wink_patient_id))
+        card_doc = next((d for d in docs if d.get("attachment_type") == "insurance_card"), None)
+        if not card_doc:
+            return None
+        doc_id = str(card_doc["id"])
+        doc_data = await loop.run_in_executor(executor, lambda: _query_doc_by_id(doc_id))
+        if not doc_data:
+            return None
+        device_token = await loop.run_in_executor(executor, _get_device_token)
+        if not device_token:
+            return None
+        import httpx
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                f"{SYNC_SERVER_URL}/api/sync/documents/cloud/{doc_data['patient_id']}/{doc_data['filename']}",
+                headers={"X-Device-Token": device_token},
+            )
+            if resp.status_code != 200:
+                return None
+            url = resp.json().get("url")
+            if not url:
+                return None
+            file_resp = await client.get(url, follow_redirects=True)
+            if file_resp.status_code != 200:
+                return None
+            mime = file_resp.headers.get("content-type", _guess_content_type(doc_data.get("filename", "")))
+            return file_resp.content, mime.split(";")[0].strip()
+
+    else:
+        # VistaNet / manual: read from ATTACHMENTS_DIR
+        import os
+        import pathlib
+        from sqlalchemy import select as sa_select
+        from models import ClaimAttachment
+        result = await db.execute(
+            sa_select(ClaimAttachment)
+            .where(ClaimAttachment.claim_id == claim.id)
+            .where(ClaimAttachment.attachment_type == "insurance_card")
+        )
+        attachment = result.scalars().first()
+        if not attachment:
+            return None
+        ATTACHMENTS_DIR = os.environ.get("ATTACHMENTS_DIR", "/opt/someteopr/data/attachments")
+        file_path = pathlib.Path(ATTACHMENTS_DIR) / str(claim.id) / attachment.filename
+        if not file_path.exists():
+            return None
+        data = file_path.read_bytes()
+        ext = attachment.filename.rsplit(".", 1)[-1].lower() if "." in attachment.filename else ""
+        mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+                    "gif": "image/gif", "webp": "image/webp", "tiff": "image/tiff", "bmp": "image/bmp"}
+        return data, mime_map.get(ext, "image/jpeg")
+
+
+@router.post("/extract-insurance")
+async def extract_insurance_from_card(
+    body: ExtractInsuranceRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Extract insurance info from the patient's insurance card image using OpenAI Vision."""
+    import base64
+    from models import PatientInsurance
+
+    result = await db.execute(
+        select(Claim)
+        .options(
+            selectinload(Claim.patient).selectinload(Patient.insurances),
+            selectinload(Claim.payer),
+        )
+        .where(Claim.id == body.claim_id)
+    )
+    claim = result.scalar_one_or_none()
+    if not claim:
+        raise HTTPException(404, "Reclamación no encontrada")
+
+    client = get_openai()
+    if not client:
+        raise HTTPException(503, "OpenAI API key not configured")
+
+    # Get image bytes
+    if body.image_url:
+        import httpx
+        async with httpx.AsyncClient(timeout=20) as http:
+            r = await http.get(body.image_url)
+            img_bytes = r.content
+            mime = r.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+    else:
+        img_result = await _fetch_insurance_card_bytes(claim, db)
+        if not img_result:
+            raise HTTPException(404, "No se encontró imagen de tarjeta de seguro para esta reclamación")
+        img_bytes, mime = img_result
+
+    b64 = base64.b64encode(img_bytes).decode()
+
+    prompt = """Extract insurance information from this insurance card image.
+Return JSON with these fields (use null for anything not visible):
+{
+  "member_id": "...",
+  "group_number": "...",
+  "payer_name": "...",
+  "subscriber_name": "...",
+  "subscriber_dob": "YYYY-MM-DD or null",
+  "effective_date": "YYYY-MM-DD or null",
+  "plan_type": "..."
+}
+Return only the JSON object, no explanation."""
+
+    resp = await client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}", "detail": "high"}},
+                ],
+            }
+        ],
+        response_format={"type": "json_object"},
+        max_tokens=400,
+    )
+    extracted = json.loads(resp.choices[0].message.content)
+
+    # Create or update PatientInsurance record
+    patient = claim.patient
+    if not patient:
+        raise HTTPException(404, "No hay paciente en esta reclamación")
+
+    # Find existing insurance for this payer
+    existing = None
+    if patient.insurances:
+        existing = next((ins for ins in patient.insurances if ins.payer_id == claim.payer_id), None)
+        if not existing:
+            existing = patient.insurances[0] if patient.insurances else None
+
+    created = False
+    if existing:
+        # Update existing
+        if extracted.get("member_id"):
+            existing.member_id = extracted["member_id"]
+        if extracted.get("group_number"):
+            existing.group_number = extracted["group_number"]
+        if extracted.get("subscriber_name"):
+            existing.subscriber_name = extracted["subscriber_name"]
+        if extracted.get("effective_date"):
+            from datetime import date as _date
+            try:
+                existing.effective_date = _date.fromisoformat(extracted["effective_date"])
+            except Exception:
+                pass
+        ins_record = existing
+    else:
+        # Create new
+        from datetime import date as _date
+        eff_date = None
+        try:
+            if extracted.get("effective_date"):
+                eff_date = _date.fromisoformat(extracted["effective_date"])
+        except Exception:
+            pass
+        sub_dob = None
+        try:
+            if extracted.get("subscriber_dob"):
+                sub_dob = _date.fromisoformat(extracted["subscriber_dob"])
+        except Exception:
+            pass
+        ins_record = PatientInsurance(
+            patient_id=patient.id,
+            payer_id=claim.payer_id,
+            member_id=extracted.get("member_id") or "UNKNOWN",
+            group_number=extracted.get("group_number"),
+            subscriber_name=extracted.get("subscriber_name"),
+            subscriber_dob=sub_dob,
+            effective_date=eff_date,
+            is_primary=True,
+        )
+        db.add(ins_record)
+        created = True
+
+    await db.commit()
+    await db.refresh(ins_record)
+
+    return {
+        "claim_id": body.claim_id,
+        "insurance_id": ins_record.id,
+        "extracted": extracted,
+        "created": created,
+    }
+
+
+@router.post("/extract-and-rescrub")
+async def extract_and_rescrub(
+    body: ExtractInsuranceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Extract insurance from card image then re-run the claim scrub."""
+    extract_result = await extract_insurance_from_card(body, db, current_user)
+    from schemas import ScrubRequest as SR
+    scrub_result = await scrub_claim(SR(claim_id=body.claim_id), db, current_user)
+    return {
+        "extraction": extract_result,
+        "scrub": scrub_result,
+    }
+
+
+# ── Insurance Info Update ─────────────────────────────────────────────────────
+
+class InsuranceUpdateBody(BaseModel):
+    member_id: str | None = None
+    group_number: str | None = None
+    payer_name: str | None = None
+    subscriber_name: str | None = None
+
+
+@router.patch("/insurance/{insurance_id}")
+async def update_insurance(
+    insurance_id: int,
+    body: InsuranceUpdateBody,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Update editable insurance info fields."""
+    from models import PatientInsurance, Payer
+    result = await db.execute(
+        select(PatientInsurance).where(PatientInsurance.id == insurance_id)
+    )
+    ins = result.scalar_one_or_none()
+    if not ins:
+        raise HTTPException(404, "Insurance record not found")
+
+    if body.member_id is not None:
+        ins.member_id = body.member_id
+    if body.group_number is not None:
+        ins.group_number = body.group_number
+    if body.subscriber_name is not None:
+        ins.subscriber_name = body.subscriber_name
+
+    # payer_name: if provided, try to update the linked payer name
+    if body.payer_name is not None:
+        payer_result = await db.execute(
+            select(Payer).where(Payer.id == ins.payer_id)
+        )
+        payer = payer_result.scalar_one_or_none()
+        if payer:
+            payer.name = body.payer_name
+
+    await db.commit()
+    return {"id": ins.id, "member_id": ins.member_id, "group_number": ins.group_number,
+            "subscriber_name": ins.subscriber_name}
+
+
 # ── Denial Risk Scoring ───────────────────────────────────────────────────────
 
 @router.post("/denial-risk/{claim_id}")
