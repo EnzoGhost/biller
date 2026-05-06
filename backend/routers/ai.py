@@ -11,6 +11,7 @@ import re
 from collections import Counter
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -708,6 +709,11 @@ Return only the JSON object, no explanation."""
         db.add(ins_record)
         created = True
 
+    # Mark as AI-verified
+    from datetime import datetime as _dt
+    ins_record.ai_verified = True
+    ins_record.ai_verified_at = _dt.utcnow()
+
     await db.commit()
     await db.refresh(ins_record)
 
@@ -733,6 +739,28 @@ async def extract_and_rescrub(
         "extraction": extract_result,
         "scrub": scrub_result,
     }
+
+
+# ── Auto-extract insurance (background task) ────────────────────────────────
+
+async def auto_extract_insurance_for_claim(claim_id: int) -> dict:
+    """
+    Background-safe function: extract insurance from the claim's insurance card image.
+    Creates its own DB session. Intended to be called via asyncio.create_task() after import.
+    Returns a dict with status and what was done.
+    """
+    from database import AsyncSessionLocal
+    logger.info("[auto-extract] Starting insurance extraction for claim %s", claim_id)
+    try:
+        async with AsyncSessionLocal() as db:
+            body = ExtractInsuranceRequest(claim_id=claim_id)
+            result = await extract_insurance_from_card(body, db, None)  # type: ignore[arg-type]
+            logger.info("[auto-extract] claim %s → insurance_id=%s created=%s",
+                        claim_id, result.get("insurance_id"), result.get("created"))
+            return result
+    except Exception as exc:
+        logger.warning("[auto-extract] claim %s failed: %s", claim_id, exc)
+        return {"claim_id": claim_id, "error": str(exc)}
 
 
 # ── Insurance Info Update ─────────────────────────────────────────────────────

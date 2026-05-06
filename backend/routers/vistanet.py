@@ -1169,6 +1169,19 @@ async def pull_bitacora(
             logger.warning("Auto-advance failed for claim %s: %s", claim_obj.id, e)
     await db.commit()
 
+    # ── Auto-extract insurance for all newly imported claims ──────────────────
+    # Spawn background tasks (non-blocking) to OCR insurance cards and fill in
+    # insurance info automatically. Each task opens its own DB session.
+    if _new_claims:
+        import asyncio
+        from routers.ai import auto_extract_insurance_for_claim
+        for _bg_claim in _new_claims:
+            asyncio.create_task(
+                auto_extract_insurance_for_claim(_bg_claim.id),
+                name=f"auto-extract-ins-{_bg_claim.id}",
+            )
+        logger.info("[auto-extract] Scheduled insurance extraction for %d claims", len(_new_claims))
+
     return PullBitacoraResponse(
         patients_found=len(parsed_patients),
         claims_created=claims_created,

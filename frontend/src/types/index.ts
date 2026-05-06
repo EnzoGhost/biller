@@ -64,6 +64,8 @@ export interface PatientInsurance {
   effective_date?: string;
   termination_date?: string;
   is_primary: boolean;
+  ai_verified?: boolean;
+  ai_verified_at?: string;
 }
 
 export interface Patient {

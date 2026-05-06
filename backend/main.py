@@ -80,6 +80,10 @@ if STATIC_DIR.is_dir():
     # SPA fallback: serve index.html for all non-API routes
     @app.get("/{path:path}")
     async def serve_spa(path: str):
+        # Never intercept API routes
+        if path.startswith("api/"):
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
         # If a static file exists, serve it
         file_path = STATIC_DIR / path
         if file_path.is_file():

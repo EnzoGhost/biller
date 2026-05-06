@@ -172,6 +172,8 @@ class PatientInsurance(Base):
     effective_date: Mapped[date] = mapped_column(Date, nullable=True)
     termination_date: Mapped[date] = mapped_column(Date, nullable=True)
     is_primary: Mapped[bool] = mapped_column(Boolean, default=True)
+    ai_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_verified_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     patient: Mapped["Patient"] = relationship("Patient", back_populates="insurances")

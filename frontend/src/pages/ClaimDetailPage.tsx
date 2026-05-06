@@ -1312,16 +1312,24 @@ function ClaimDetailPageInner() {
           {(scrubResult?.suggestions ?? []).map((s, i) => (
             <p key={i} className="text-xs text-slate-600 mt-1 ml-5">💡 {s}</p>
           ))}
-          {/* Extract insurance button — show when no insurance error is present */}
+          {/* Extract insurance button — always visible for vistanet/wink claims */}
           {(() => {
-            const allIssues = scrubResult?.issues ?? claim.scrub_issues ?? [];
-            const hasNoInsurance = allIssues.some(issue =>
-              /no insurance records|no insurance record found/i.test(issue.msg || '')
-            );
             const hasInsuranceCardDocs = (claim.source === 'vistanet' || claim.source === 'wink');
-            if (!hasNoInsurance || !hasInsuranceCardDocs) return null;
+            if (!hasInsuranceCardDocs) return null;
+            const ins = claim.patient?.insurances?.find(i => i.payer_id === claim.payer_id) ?? claim.patient?.insurances?.[0];
+            const isAiVerified = ins?.ai_verified === true;
             return (
-              <div className="mt-3 pt-3 border-t border-amber-200">
+              <div className="mt-3 pt-3 border-t border-amber-200 flex items-center gap-3">
+                {isAiVerified && (
+                  <span className="flex items-center gap-1 text-xs text-emerald-700 font-medium">
+                    🤖 AI-verified ✓
+                    {ins?.ai_verified_at && (
+                      <span className="text-slate-400 font-normal ml-1">
+                        {new Date(ins.ai_verified_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </span>
+                )}
                 <button
                   onClick={handleExtractInsurance}
                   disabled={extractingInsurance}
@@ -1330,7 +1338,7 @@ function ClaimDetailPageInner() {
                   {extractingInsurance
                     ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     : <span>🤖</span>}
-                  {extractingInsurance ? 'Extracting...' : 'Extract from Insurance Card'}
+                  {extractingInsurance ? 'Extracting...' : isAiVerified ? 'Re-extract from Card' : 'Extract from Insurance Card'}
                 </button>
               </div>
             );
@@ -1744,13 +1752,15 @@ function ClaimDetailPageInner() {
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-sm font-semibold text-slate-700">{t('claims.diagnosis_codes')}</h2>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => { setShowSuggestModal(true); setSuggestCurrentCode(''); setSuggestNewCode(''); setSuggestNote(''); setSuggestQuery(''); setSuggestResults([]); }}
-                  className="flex items-center gap-1 text-xs font-medium text-amber-600 hover:text-amber-800 px-2 py-1 border border-amber-200 rounded"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  {t('approvals.suggest_change', { defaultValue: 'Suggest Code Change' })}
-                </button>
+                {claim.source !== 'vistanet' && (
+                  <button
+                    onClick={() => { setShowSuggestModal(true); setSuggestCurrentCode(''); setSuggestNewCode(''); setSuggestNote(''); setSuggestQuery(''); setSuggestResults([]); }}
+                    className="flex items-center gap-1 text-xs font-medium text-amber-600 hover:text-amber-800 px-2 py-1 border border-amber-200 rounded"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {t('approvals.suggest_change', { defaultValue: 'Suggest Code Change' })}
+                  </button>
+                )}
                 <button
                   onClick={() => { setShowDxSearch(v => !v); setTimeout(() => dxInputRef.current?.focus(), 100); }}
                   className="flex items-center gap-1 text-xs font-medium text-sky-600 hover:text-sky-800 px-2 py-1 border border-sky-200 rounded"

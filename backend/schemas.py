@@ -129,6 +129,8 @@ class PatientInsuranceOut(BaseModel):
     effective_date: Optional[date]
     termination_date: Optional[date]
     is_primary: bool
+    ai_verified: bool = False
+    ai_verified_at: Optional[datetime] = None
     model_config = {"from_attributes": True}
 
 class PatientInsuranceCreate(BaseModel):

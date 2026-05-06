@@ -46,3 +46,16 @@ async def init_db():
                 )
             except Exception:
                 pass  # Column already exists
+
+    # Migrate: add ai_verified columns to patient_insurances if missing
+    async with engine.begin() as conn:
+        for col_name, col_def in [
+            ("ai_verified", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("ai_verified_at", "DATETIME"),
+        ]:
+            try:
+                await conn.execute(
+                    sqlalchemy.text(f"ALTER TABLE patient_insurances ADD COLUMN {col_name} {col_def}")
+                )
+            except Exception:
+                pass  # Column already exists
