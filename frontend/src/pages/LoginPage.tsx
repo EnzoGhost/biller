@@ -37,7 +37,8 @@ export default function LoginPage() {
       <img
         src="/angel-logo.png"
         alt="AngelClaims"
-        className="relative z-10 w-36 max-w-[50vw] object-contain mb-10"
+        style={{ width: '470px', maxWidth: '90vw' }}
+        className="relative z-10 mb-10"
       />
 
       <div className="relative z-10 w-full max-w-sm">

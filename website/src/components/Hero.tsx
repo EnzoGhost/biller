@@ -34,7 +34,7 @@ export function Hero() {
           className="inline-flex items-center gap-2 bg-sky-500/10 border border-sky-500/20 rounded-full px-4 py-1.5 mb-8"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
-          <span className="text-sky-400 text-sm font-medium">Inmediata · Stedi · Availity integrated</span>
+          <span className="text-sky-400 text-sm font-medium">Inmediata · Envolve · Availity integrated</span>
         </motion.div>
 
         {/* Headline */}

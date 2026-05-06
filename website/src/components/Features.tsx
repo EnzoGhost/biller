@@ -6,7 +6,7 @@ const features = [
   {
     icon: FileText,
     title: 'Claims Submission',
-    desc: 'Submit 837P claims to any payer via Stedi, Inmediata, or Availity. One workflow, any clearinghouse.',
+    desc: 'Submit 837P claims to any payer via Envolve, Inmediata, or Availity. One workflow, any clearinghouse.',
     color: 'sky',
   },
   {
