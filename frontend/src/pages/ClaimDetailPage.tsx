@@ -1083,7 +1083,7 @@ function ClaimDetailPageInner() {
             <RoutingBadge method={submissionMethod} />
           </div>
           <p className="text-sm text-slate-500">
-            {claim.payer?.name} • {claim.service_date_from}
+            {claim.payer?.name} • {formatDate(claim.service_date_from)}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 justify-end">
@@ -1312,37 +1312,7 @@ function ClaimDetailPageInner() {
           {(scrubResult?.suggestions ?? []).map((s, i) => (
             <p key={i} className="text-xs text-slate-600 mt-1 ml-5">💡 {s}</p>
           ))}
-          {/* Extract insurance button — always visible for vistanet/wink claims */}
-          {(() => {
-            const hasInsuranceCardDocs = (claim.source === 'vistanet' || claim.source === 'wink');
-            if (!hasInsuranceCardDocs) return null;
-            const ins = claim.patient?.insurances?.find(i => i.payer_id === claim.payer_id) ?? claim.patient?.insurances?.[0];
-            const isAiVerified = ins?.ai_verified === true;
-            return (
-              <div className="mt-3 pt-3 border-t border-amber-200 flex items-center gap-3">
-                {isAiVerified && (
-                  <span className="flex items-center gap-1 text-xs text-emerald-700 font-medium">
-                    🤖 AI-verified ✓
-                    {ins?.ai_verified_at && (
-                      <span className="text-slate-400 font-normal ml-1">
-                        {new Date(ins.ai_verified_at).toLocaleDateString()}
-                      </span>
-                    )}
-                  </span>
-                )}
-                <button
-                  onClick={handleExtractInsurance}
-                  disabled={extractingInsurance}
-                  className="flex items-center gap-2 px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium rounded-lg disabled:opacity-60 transition-colors"
-                >
-                  {extractingInsurance
-                    ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : <span>🤖</span>}
-                  {extractingInsurance ? 'Extracting...' : isAiVerified ? 'Re-extract from Card' : 'Extract from Insurance Card'}
-                </button>
-              </div>
-            );
-          })()}
+
         </div>
       )}
 

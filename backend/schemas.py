@@ -26,6 +26,7 @@ class UserOut(BaseModel):
     full_name: str
     role: UserRole
     is_active: bool
+    language: str = "en"
     model_config = {"from_attributes": True}
 
 class UserCreate(BaseModel):

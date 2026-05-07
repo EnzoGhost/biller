@@ -13,6 +13,7 @@ export interface User {
   full_name: string;
   role: UserRole;
   is_active: boolean;
+  language?: string; // 'en' | 'es', defaults to 'en'
 }
 
 export interface Provider {

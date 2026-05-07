@@ -59,3 +59,12 @@ async def init_db():
                 )
             except Exception:
                 pass  # Column already exists
+
+    # Migrate: add language column to users if missing
+    async with engine.begin() as conn:
+        try:
+            await conn.execute(
+                sqlalchemy.text("ALTER TABLE users ADD COLUMN language VARCHAR(5) NOT NULL DEFAULT 'en'")
+            )
+        except Exception:
+            pass  # Column already exists

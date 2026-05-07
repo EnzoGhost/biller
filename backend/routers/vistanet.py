@@ -364,11 +364,12 @@ def extract_patient_from_row(row) -> Optional[dict]:
     if proc_match:
         proc_block = proc_match.group(1)
         proc_lines = re.findall(
-            r"(\d+)\.\s*(\d{5})\s*-\s*(.+?)\s*<br",
+            r"(\d+)\.\s*(\d{5})(?:\s*-\s*(.+?))?\s*(?:<br|Pointer|\n|$)",
             proc_block,
-            re.IGNORECASE,
+            re.IGNORECASE | re.DOTALL,
         )
         for line_num, code, desc in proc_lines:
+            desc = desc or ''  # description may be empty for codes without one
             # Find pointer for this procedure
             pointer_match = re.search(
                 rf"{re.escape(code)}.*?Pointer:\s*([A-Z]*)",

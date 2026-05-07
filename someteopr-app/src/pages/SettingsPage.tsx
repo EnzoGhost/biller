@@ -4,11 +4,14 @@ import { Save, CheckCircle, Building2, Shield, Cpu, Globe, Zap, ExternalLink, Us
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { useAuthStore } from '../hooks/useAuth';
 import type { ClinicSettings } from '../types';
 
 export default function SettingsPage() {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
+  const setUser = useAuthStore(s => s.setUser);
+  const currentUser = useAuthStore(s => s.user);
   const [active, setActive] = useState('clinic');
   const [saved, setSaved] = useState(false);
 
@@ -335,7 +338,15 @@ export default function SettingsPage() {
                   { code: 'es', labelKey: 'settings.lang_es', flag: '🇵🇷' },
                   { code: 'en', labelKey: 'settings.lang_en', flag: '🇺🇸' },
                 ].map(({ code, labelKey, flag }) => (
-                  <button key={code} onClick={() => i18n.changeLanguage(code)}
+                  <button key={code} onClick={async () => {
+                    i18n.changeLanguage(code);
+                    try {
+                      const { data } = await api.patch('auth/me/language', { language: code });
+                      if (data && currentUser) setUser({ ...currentUser, language: code });
+                    } catch (e) {
+                      console.warn('[settings] language sync failed', e);
+                    }
+                  }}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${
                       i18n.language === code ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 text-slate-700 hover:bg-slate-50'
                     }`}>

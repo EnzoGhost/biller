@@ -373,6 +373,27 @@ async function put(url: string, data?: unknown): Promise<{ data: unknown }> {
   }
   if (path === 'clinic/settings') return ok(await updateClinicSettings(body as any));
 
+  // User language preference
+  if (path === 'auth/me/language') {
+    const lang = (body as any).language as string;
+    if (lang === 'en' || lang === 'es') {
+      // Read user from Zustand persisted store
+      const stored = localStorage.getItem('someteopr-auth');
+      if (stored) {
+        const state = JSON.parse(stored);
+        const user = state?.state?.user;
+        if (user?.id) {
+          await execute('UPDATE users SET language=? WHERE id=?', [lang, user.id]);
+          // Update persisted store so Zustand re-hydrates correctly
+          state.state.user = { ...user, language: lang };
+          localStorage.setItem('someteopr-auth', JSON.stringify(state));
+          return ok(state.state.user);
+        }
+      }
+    }
+    return ok(null);
+  }
+
   // Denials — PATCH /denials/:id supports { is_resolved: true } to resolve a denial
   if (/^denials\/\d+$/.test(path)) {
     const id = parseInt(path.split('/')[1]);

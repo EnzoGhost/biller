@@ -96,6 +96,12 @@ pub fn run() {
             sql: include_str!("../migrations/002_seed.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "user_language",
+            sql: include_str!("../migrations/003_user_language.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

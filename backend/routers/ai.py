@@ -7,7 +7,10 @@ AI-powered features:
 - Predictive denial risk scoring
 """
 import json
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 from collections import Counter
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
@@ -268,7 +271,7 @@ async def scrub_claim_by_id(
 async def scrub_claim(
     body: ScrubRequest,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),  # type: ignore[assignment]
+    current_user: User = Depends(get_current_user),  # type: ignore[assignment]
 ):
     """
     Comprehensive 837P pre-submission scrub.
@@ -288,7 +291,7 @@ async def scrub_claim(
     )
     claim = result.scalar_one_or_none()
     if not claim:
-        raise HTTPException(404, "Reclamación no encontrada")
+        raise HTTPException(404, "Claim not found")
 
     issues: list[dict] = []
     suggestions: list[str] = []
@@ -312,13 +315,9 @@ async def scrub_claim(
             "msg_key": "scrub.cl_no_fitting",
             "msg": "Contact lens materials billed without fitting code (92310-92314)"})
 
-    # 2. Refraction (92015) without refractive diagnosis
+    # 2. Refraction (92015) — standard optometry code, no warning needed
     has_refraction = "92015" in cpt_codes
     refractive_dx = any(c.startswith(("H52", "H53", "H54")) for c in dx_codes)
-    if has_refraction and not refractive_dx:
-        issues.append({"type": "warning", "field": "clinical",
-            "msg_key": "scrub.refraction_no_dx",
-            "msg": "Refraction (92015) billed but no refractive error diagnosis (H52.x)"})
 
     # 3. Medical exam (92012/92014) without medical diagnosis
     medical_exam_codes = {"92002", "92004", "92012", "92014"}
@@ -355,14 +354,32 @@ async def scrub_claim(
             for sl in claim.service_lines
         )
         dx_summary = ", ".join(claim.diagnosis_codes or [])
-        prompt = f"""Eres un especialista en codificación médica con experiencia en el mercado de Puerto Rico.
-Revisa esta reclamación de salud:
-- Diagnósticos: {dx_summary}
-- Servicios: {lines_summary}
-- Lugar de servicio: {claim.place_of_service}
 
-Identifica problemas potenciales de facturación y sugiere mejoras. Responde en JSON:
-{{"additional_issues": [{{"type": "warning"|"error", "msg": "..."}}], "suggestions": ["..."]}}
+        # Determine language from user preference (default English)
+        user_language = getattr(current_user, 'language', 'en') if current_user else 'en'
+        if user_language == 'es':
+            language_instruction = (
+                "Respond in Puerto Rican medical Spanish. Use natural, professional language "
+                "as spoken by healthcare billing staff in Puerto Rico — not generic Spanish. "
+                "Medical terms (CPT codes, ICD-10, etc.) stay in their standard format."
+            )
+        else:
+            language_instruction = "Respond in English."
+
+        prompt = f"""You are a medical billing specialist for optometry clinics in Puerto Rico.
+Review this health insurance claim:
+- Diagnoses: {dx_summary}
+- Services: {lines_summary}
+- Place of service: {claim.place_of_service}
+
+IMPORTANT CONTEXT:
+- This is an optometry/ophthalmology clinic. Standard optometry CPT codes (92015, 92004, 92014, V2020, V2103, etc.) and place of service 11 (office) are NORMAL.
+- Do NOT flag standard optometry codes or office place of service as issues.
+- Only flag REAL problems: incorrect code combinations, missing required modifiers, obvious coding errors.
+- Be concise. {language_instruction}
+
+Respond in JSON:
+{{"additional_issues": [{{"type": "info", "msg": "..."}}], "suggestions": ["..."]}}
 """
         try:
             resp = await client.chat.completions.create(
@@ -409,19 +426,19 @@ async def analyze_denial(
     )
     denial = result.scalar_one_or_none()
     if not denial:
-        raise HTTPException(404, "Denegación no encontrada")
+        raise HTTPException(404, "Denial not found")
 
     client = get_openai()
     if not client:
         return DenialAnalysisResponse(
             denial_id=body.denial_id,
             root_cause="Análisis de IA no disponible (configure OPENAI_API_KEY)",
-            recommended_action="Revisar manualmente el código de denegación",
+            recommended_action="Review the denial code manually",
             appeal_probability=0.5,
             appeal_letter_draft=None,
         )
 
-    prompt = f"""Eres un experto en apelaciones de reclamaciones médicas en Puerto Rico.
+    prompt = f"""You are an expert in medical claim appeals for optometry clinics in Puerto Rico. Respond in English.
 
 Denegación:
 - Código: {denial.denial_code}
@@ -432,7 +449,7 @@ Denegación:
 
 Responde en JSON:
 {{
-  "root_cause": "Causa raíz de la denegación",
+  "root_cause": "Root cause of the denial",
   "recommended_action": "Acción recomendada",
   "appeal_probability": 0.0-1.0,
   "appeal_letter_draft": "Carta de apelación completa en español..."
@@ -478,7 +495,7 @@ async def coding_assist(
     dx_context = f"\nDiagnósticos ICD-10: {', '.join(body.icd10_codes)}" if body.icd10_codes else ""
     specialty_context = f"\nEspecialidad: {body.specialty}" if body.specialty else ""
 
-    prompt = f"""Eres un experto en codificación médica (CPC). Dado el siguiente texto clínico, sugiere los códigos CPT más apropiados.{specialty_context}{dx_context}
+    prompt = f"""You are a medical coding expert (CPC). Given the following clinical text, suggest the most appropriate CPT codes.{specialty_context}{dx_context}
 
 Descripción del servicio: {body.description}
 
@@ -603,7 +620,7 @@ async def extract_insurance_from_card(
     )
     claim = result.scalar_one_or_none()
     if not claim:
-        raise HTTPException(404, "Reclamación no encontrada")
+        raise HTTPException(404, "Claim not found")
 
     client = get_openai()
     if not client:
@@ -619,13 +636,13 @@ async def extract_insurance_from_card(
     else:
         img_result = await _fetch_insurance_card_bytes(claim, db)
         if not img_result:
-            raise HTTPException(404, "No se encontró imagen de tarjeta de seguro para esta reclamación")
+            raise HTTPException(404, "No insurance card image found for this claim")
         img_bytes, mime = img_result
 
     b64 = base64.b64encode(img_bytes).decode()
 
     prompt = """Extract insurance information from this insurance card image.
-Return JSON with these fields (use null for anything not visible):
+Return JSON with these fields. If any field is unclear or you are not confident, return null for that field instead of guessing:
 {
   "member_id": "...",
   "group_number": "...",
@@ -656,7 +673,7 @@ Return only the JSON object, no explanation."""
     # Create or update PatientInsurance record
     patient = claim.patient
     if not patient:
-        raise HTTPException(404, "No hay paciente en esta reclamación")
+        raise HTTPException(404, "No patient found on this claim")
 
     # Find existing insurance for this payer
     existing = None
@@ -745,7 +762,8 @@ async def extract_and_rescrub(
 
 async def auto_extract_insurance_for_claim(claim_id: int) -> dict:
     """
-    Background-safe function: extract insurance from the claim's insurance card image.
+    Background-safe function: extract insurance from the claim's insurance card image,
+    then re-scrub the claim so scores reflect the newly filled-in insurance data.
     Creates its own DB session. Intended to be called via asyncio.create_task() after import.
     Returns a dict with status and what was done.
     """
@@ -757,6 +775,17 @@ async def auto_extract_insurance_for_claim(claim_id: int) -> dict:
             result = await extract_insurance_from_card(body, db, None)  # type: ignore[arg-type]
             logger.info("[auto-extract] claim %s → insurance_id=%s created=%s",
                         claim_id, result.get("insurance_id"), result.get("created"))
+
+            # Re-scrub the claim now that insurance data is filled in
+            try:
+                from schemas import ScrubRequest as SR
+                scrub = await scrub_claim(SR(claim_id=claim_id), db, None)  # type: ignore[arg-type]
+                logger.info("[auto-extract] claim %s re-scrubbed: score=%s", claim_id, scrub.score)
+                result["scrub_score"] = scrub.score
+                result["scrub_issues_count"] = len(scrub.issues)
+            except Exception as scrub_exc:
+                logger.warning("[auto-extract] re-scrub failed for claim %s: %s", claim_id, scrub_exc)
+
             return result
     except Exception as exc:
         logger.warning("[auto-extract] claim %s failed: %s", claim_id, exc)
@@ -831,7 +860,7 @@ async def score_denial_risk(
     )
     claim = result.scalar_one_or_none()
     if not claim:
-        raise HTTPException(404, "Reclamación no encontrada")
+        raise HTTPException(404, "Claim not found")
 
     client = get_openai()
     if not client:
@@ -844,7 +873,7 @@ async def score_denial_risk(
         f"CPT {sl.cpt_code} (${sl.billed_amount:.2f})"
         for sl in claim.service_lines
     )
-    prompt = f"""Evalúa el riesgo de denegación para esta reclamación médica en Puerto Rico.
+    prompt = f"""Evaluate the denial risk for this medical claim from an optometry clinic in Puerto Rico. Respond in English.
 
 Pagador: {claim.payer.name if claim.payer else 'Desconocido'}
 Diagnósticos: {', '.join(claim.diagnosis_codes)}
