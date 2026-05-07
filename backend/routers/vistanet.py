@@ -360,7 +360,7 @@ def extract_patient_from_row(row) -> Optional[dict]:
 
     # ── Procedures (CPT) ──
     procedures = []
-    proc_match = re.search(r"PROCEDIMIENTOS:(.*?)(?:CODIGOS DE MATERIALES|</div>|<hr|$)", col3_html, re.DOTALL | re.IGNORECASE)
+    proc_match = re.search(r"PROCEDIMIENTOS:(.*?)(?:CODIGOS DE MATERIALES|<hr|$)", col3_html, re.DOTALL | re.IGNORECASE)
     if proc_match:
         proc_block = proc_match.group(1)
         proc_lines = re.findall(
@@ -777,17 +777,17 @@ async def find_payer_by_plan_name(db: AsyncSession, plan_name: str) -> Optional[
     payer_id = VISTANET_PLAN_ALIASES.get(normalized)
     if payer_id:
         result = await db.execute(
-            select(Payer).where(Payer.payer_id == payer_id)
+            select(Payer).where(Payer.payer_id == payer_id).limit(1)
         )
-        payer = result.scalar_one_or_none()
+        payer = result.scalars().first()
         if payer:
             return payer
 
     # 2. Exact name match (case-insensitive)
     result = await db.execute(
-        select(Payer).where(Payer.name.ilike(plan_name))
+        select(Payer).where(Payer.name.ilike(plan_name)).limit(1)
     )
-    payer = result.scalar_one_or_none()
+    payer = result.scalars().first()
     if payer:
         return payer
 
@@ -933,7 +933,7 @@ async def create_claim_from_parsed(
                 PatientInsurance.member_id == parsed["contract_number"],
             )
         )
-        existing_ins = result.scalar_one_or_none()
+        existing_ins = result.scalars().first()
         if not existing_ins:
             ins = PatientInsurance(
                 patient_id=patient.id,
@@ -1056,9 +1056,9 @@ async def pull_bitacora(
                 select(Claim).where(
                     Claim.external_ref == f"vistanet:{parsed['record_id']}",
                     Claim.service_date_from == parsed["service_date"],
-                )
+                ).limit(1)
             )
-            if existing.scalar_one_or_none():
+            if existing.scalars().first():
                 errors.append(
                     f"Skipped {parsed['patient_name']}: claim already exists for this date"
                 )
@@ -1169,18 +1169,38 @@ async def pull_bitacora(
             logger.warning("Auto-advance failed for claim %s: %s", claim_obj.id, e)
     await db.commit()
 
-    # ── Auto-extract insurance for all newly imported claims ──────────────────
-    # Spawn background tasks (non-blocking) to OCR insurance cards and fill in
-    # insurance info automatically. Each task opens its own DB session.
+    # ── Auto-extract insurance + bulk rescrub for all newly imported claims ────────────
+    # Spawn per-claim background tasks (non-blocking). Each task extracts insurance
+    # from the card image AND re-scrubs the claim so scores are accurate after fill.
+    # A final bulk rescrub task runs after all extractions to catch any stragglers.
     if _new_claims:
         import asyncio
         from routers.ai import auto_extract_insurance_for_claim
+        _new_claim_ids = [c.id for c in _new_claims]
         for _bg_claim in _new_claims:
             asyncio.create_task(
                 auto_extract_insurance_for_claim(_bg_claim.id),
                 name=f"auto-extract-ins-{_bg_claim.id}",
             )
-        logger.info("[auto-extract] Scheduled insurance extraction for %d claims", len(_new_claims))
+        logger.info("[auto-extract] Scheduled insurance extraction+rescrub for %d claims", len(_new_claims))
+
+        async def _bulk_rescrub_pass(claim_ids: list) -> None:
+            """Final bulk scrub pass after all per-claim extractions should be complete."""
+            import asyncio as _aio
+            await _aio.sleep(60)  # allow per-claim extraction tasks to finish
+            from database import AsyncSessionLocal
+            from routers.ai import scrub_claim
+            from schemas import ScrubRequest as SR
+            logger.info("[bulk-rescrub] Starting final scrub pass for %d claims", len(claim_ids))
+            for cid in claim_ids:
+                try:
+                    async with AsyncSessionLocal() as _db:
+                        await scrub_claim(SR(claim_id=cid), _db, None)  # type: ignore[arg-type]
+                except Exception as _e:
+                    logger.warning("[bulk-rescrub] claim %s: %s", cid, _e)
+            logger.info("[bulk-rescrub] Done")
+
+        asyncio.create_task(_bulk_rescrub_pass(_new_claim_ids), name="bulk-rescrub-post-extract")
 
     return PullBitacoraResponse(
         patients_found=len(parsed_patients),
