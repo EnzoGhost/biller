@@ -580,7 +580,7 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <div className={`w-2.5 h-2.5 rounded-full ${winkClinicId ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                    <h3 className="font-semibold text-slate-700">Wink</h3>
+                    <h3 className="font-semibold text-slate-700">AngelWink</h3>
                   </div>
                   {winkClinicId && (
                     <button
@@ -600,7 +600,7 @@ export default function SettingsPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <p className="text-sm text-slate-500">Connect to a Wink clinic using a join code.</p>
+                    <p className="text-sm text-slate-500">Connect to an AngelWink clinic using a join code.</p>
                     <div className="flex items-center gap-2">
                       <input
                         value={winkJoinCode}

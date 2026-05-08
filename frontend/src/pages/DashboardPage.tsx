@@ -264,7 +264,7 @@ function WinkPullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <h2 className="text-base font-semibold text-slate-900">
-            🏥 {t('dashboard.import_wink_title', 'Import from Wink')}
+            🏥 {t('dashboard.import_wink_title', 'Import from AngelWink')}
           </h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
@@ -276,7 +276,7 @@ function WinkPullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
             <div className="space-y-3">
               <p className="text-sm font-medium text-slate-700">Enter Clinic Code</p>
               <p className="text-xs text-slate-500">
-                Ask the clinic admin to generate a join code from Wink Settings → Clinic Pairing.
+                Ask the clinic admin to generate a join code from AngelWink Settings → Clinic Pairing.
               </p>
               <div className="flex gap-2">
                 <input
@@ -333,7 +333,7 @@ function WinkPullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
               </div>
               {pullMutation.isError && (
                 <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 text-sm text-rose-700">
-                  {t('dashboard.import_wink_error', 'Error importing from Wink')}
+                  {t('dashboard.import_wink_error', 'Error importing from AngelWink')}
                 </div>
               )}
             </>
@@ -430,7 +430,7 @@ function ImportDropdown({
               className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 text-left"
             >
               <span className="text-base">🏥</span>
-              <span>Wink</span>
+              <img src="/angel-logo.png" alt="AngelWink" className="h-4 object-contain" />
             </button>
             <div className="border-t border-slate-100 my-1" />
             <button

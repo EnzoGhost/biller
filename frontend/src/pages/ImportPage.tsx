@@ -2,7 +2,6 @@ import { useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Upload, FileText, Download, CheckCircle, XCircle, AlertCircle, RefreshCw, ClipboardList, ChevronRight } from 'lucide-react';
 import api from '../lib/api';
-import DatePicker from '../components/ui/DatePicker';
 
 interface ImportResult {
   imported: number;
@@ -143,12 +142,6 @@ export default function ImportPage() {
   const [encResult, setEncResult] = useState<ImportResult | null>(null);
   const [encError, setEncError] = useState<string | null>(null);
 
-  // Wink invoices (date range) state
-  const [invDateFrom, setInvDateFrom] = useState('');
-  const [invDateTo, setInvDateTo] = useState('');
-  const [invLoading, setInvLoading] = useState(false);
-  const [invResult, setInvResult] = useState<ImportResult | null>(null);
-  const [invError, setInvError] = useState<string | null>(null);
 
   const handleFile = useCallback((f: File) => {
     setFile(f);
@@ -302,30 +295,6 @@ export default function ImportPage() {
     }
   };
 
-  const handleWinkInvoices = async () => {
-    if (!invDateFrom || !invDateTo) return;
-    setInvLoading(true);
-    setInvResult(null);
-    setInvError(null);
-    try {
-      const { data } = await api.post<ImportResult>('/import/wink-invoices', null, {
-        params: {
-          date_from: invDateFrom,
-          date_to: invDateTo,
-          provider_id: 1,
-          payer_id: 1,
-          ...(winkClinicId ? { clinic_id: winkClinicId } : {}),
-        },
-      });
-      setInvResult(data);
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setInvError(msg ?? t('import.error_wink', { defaultValue: 'Error importing from Wink' }));
-    } finally {
-      setInvLoading(false);
-    }
-  };
-
   const downloadTemplate = () => {
     const headers = TARGET_FIELDS.map(f => f.key);
     const csv = headers.join(',') + '\n';
@@ -344,12 +313,10 @@ export default function ImportPage() {
     <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-xl font-bold text-slate-900 mb-6">{t('import.title')}</h1>
 
-      {/* Wink Integration */}
+      {/* AngelWink Integration */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
         <div className="flex items-center gap-3 mb-1">
-          <div className="w-9 h-9 rounded-lg bg-sky-50 flex items-center justify-center">
-            <Upload className="w-4 h-4 text-sky-600" />
-          </div>
+          <img src="/angel-logo.png" alt="AngelWink" className="h-7 object-contain" />
           <p className="font-semibold text-slate-800">{t('import.wink')}</p>
         </div>
         <p className="text-xs text-slate-500 mb-4">{t('import.wink_desc')}</p>
@@ -433,41 +400,6 @@ export default function ImportPage() {
             </div>
           </>
         )}
-      </div>
-
-      {/* Wink Invoices Import (date range) */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center">
-            <ClipboardList className="w-4 h-4 text-purple-600" />
-          </div>
-          <p className="font-semibold text-slate-800">{t('import.wink_invoices', { defaultValue: 'Import Wink Invoices' })}</p>
-        </div>
-        <p className="text-xs text-slate-500 mb-4">{t('import.wink_invoices_desc', { defaultValue: 'Import invoices from Wink database by date range. Creates claims with service lines, auto-scrubs, and auto-advances if clean.' })}</p>
-        <div className="flex flex-wrap items-end gap-3 mb-3">
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">{t('common.date_from', { defaultValue: 'From' })}</label>
-            <DatePicker value={invDateFrom} onChange={setInvDateFrom} />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">{t('common.date_to', { defaultValue: 'To' })}</label>
-            <DatePicker value={invDateTo} onChange={setInvDateTo} />
-          </div>
-          <button
-            onClick={handleWinkInvoices}
-            disabled={invLoading || !invDateFrom || !invDateTo}
-            className="flex items-center gap-2 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white text-xs font-medium py-2.5 px-4 rounded-lg"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${invLoading ? 'animate-spin' : ''}`} />
-            {invLoading ? t('import.importing') : t('import.import_invoices', { defaultValue: 'Import Invoices' })}
-          </button>
-        </div>
-        {invError && (
-          <div className="flex items-center gap-1.5 text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg p-2 mb-2">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0" />{invError}
-          </div>
-        )}
-        {invResult && <ResultBadges result={invResult} />}
       </div>
 
       {/* Template download */}
