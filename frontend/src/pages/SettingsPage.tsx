@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Save, CheckCircle, Building2, Shield, Cpu, Globe, Zap, Users, Wifi, Stethoscope, DollarSign, Link2, Unplug, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { Save, CheckCircle, Building2, Shield, Cpu, Globe, Zap, Users, Wifi, Stethoscope, DollarSign, Link2, Unplug, RefreshCw, Eye, EyeOff, AlertTriangle, Search } from 'lucide-react';
+import DatePicker from '../components/ui/DatePicker';
 import api from '../lib/api';
 import { formatPhone } from '../lib/format';
 
@@ -30,13 +31,15 @@ export default function SettingsPage() {
   const [aiModel,    setAiModel]    = useState('gpt-4o');
   const [aiEnabled,  setAiEnabled]  = useState(true);
 
-  // Inmediata API
-  const [inmApiKey,      setInmApiKey]      = useState('');
-  const [inmSubmitterId, setInmSubmitterId]  = useState('');
-  const [inmEnv,         setInmEnv]          = useState<'sandbox' | 'production'>('sandbox');
-  const [inmBaseUrl,     setInmBaseUrl]      = useState('https://api.inmediata.com');
-  const [inmTestResult,  setInmTestResult]   = useState<{ success: boolean; message: string } | null>(null);
-  const [inmTesting,     setInmTesting]      = useState(false);
+  // Inmediata Web Services
+  const [inmWsUsername,    setInmWsUsername]    = useState('');
+  const [inmWsPassword,    setInmWsPassword]    = useState('');
+  const [inmWsShowPw,      setInmWsShowPw]      = useState(false);
+  const [inmWsEnv,         setInmWsEnv]         = useState<'uat' | 'prod'>('uat');
+  const [inmSubmitterId,   setInmSubmitterId]   = useState('');
+  const [inmWsConfigured,  setInmWsConfigured]  = useState(false);
+  const [inmTestResult,    setInmTestResult]    = useState<{ success: boolean; message: string } | null>(null);
+  const [inmTesting,       setInmTesting]       = useState(false);
 
   // VistaNet connection state
   const [vnConnected, setVnConnected] = useState(false);
@@ -50,11 +53,79 @@ export default function SettingsPage() {
   const [vnDisconnecting, setVnDisconnecting] = useState(false);
   const [vnEditing, setVnEditing] = useState(false);
 
+  // Portal credentials state
+  type PortalId = 'ivision' | 'envolve' | 'triples' | 'innovamd';
+  type PortalState = {
+    url: string;
+    username: string;
+    password: string;
+    passwordMasked: string;
+    connected: boolean;
+    showPassword: boolean;
+    saving: boolean;
+    disconnecting: boolean;
+  };
+  const defaultPortal: PortalState = {
+    url: '', username: '', password: '', passwordMasked: '',
+    connected: false, showPassword: false, saving: false, disconnecting: false,
+  };
+  const [portals, setPortals] = useState<Record<PortalId, PortalState>>({
+    ivision:  { ...defaultPortal, url: 'https://www.ivisionintl.net' },
+    envolve:  { ...defaultPortal, url: 'https://www.centenevision.com' },
+    triples:  { ...defaultPortal, url: '' },
+    innovamd: { ...defaultPortal, url: 'https://provider.innovamd.com' },
+  });
+
   // Wink connection state
   const [winkClinicId, setWinkClinicId] = useState<string | null>(null);
   const [winkClinicName, setWinkClinicName] = useState<string | null>(null);
   const [winkJoinCode, setWinkJoinCode] = useState('');
   const [winkPairing, setWinkPairing] = useState(false);
+
+  // Revenue Audit state
+  const today = new Date().toISOString().split('T')[0];
+  const firstOfMonth = today.substring(0, 8) + '01';
+  const [auditDateFrom, setAuditDateFrom] = useState(firstOfMonth);
+  const [auditDateTo, setAuditDateTo]   = useState(today);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError]     = useState<string | null>(null);
+  interface AuditEntry {
+    invoice_number: string | null;
+    date: string | null;
+    patient_id: string | null;
+    patient_name: string;
+    plan_amount: number;
+    total: number;
+    attended_by: string | null;
+    payer: string | null;
+  }
+  interface AuditResult {
+    date_from: string;
+    date_to: string;
+    flagged_count: number;
+    total_lost: number;
+    flagged: AuditEntry[];
+  }
+  const [auditResult, setAuditResult]   = useState<AuditResult | null>(null);
+
+  const runAudit = async () => {
+    if (!auditDateFrom || !auditDateTo) return;
+    setAuditLoading(true);
+    setAuditError(null);
+    setAuditResult(null);
+    try {
+      const res = await api.post('/missing-claims/audit/lost-revenue', {
+        date_from: auditDateFrom,
+        date_to: auditDateTo,
+      });
+      setAuditResult(res.data);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      setAuditError(err?.response?.data?.detail || 'Error running audit');
+    } finally {
+      setAuditLoading(false);
+    }
+  };
 
   // Load clinic config on mount
   useEffect(() => {
@@ -84,20 +155,47 @@ export default function SettingsPage() {
       }).catch(() => {});
 
       // Load Wink state from localStorage
-      setWinkClinicId(localStorage.getItem('wink_clinic_id'));
-      setWinkClinicName(localStorage.getItem('wink_clinic_name'));
+      setWinkClinicId(localStorage.getItem('angelwink_clinic_id'));
+      setWinkClinicName(localStorage.getItem('angelwink_clinic_name'));
+    }
+  }, [active]);
+
+  // Load portal configs when portals tab selected
+  useEffect(() => {
+    if (active === 'portals') {
+      api.get('/portals/config').then(res => {
+        const data = res.data;
+        setPortals(prev => {
+          const next = { ...prev };
+          (['ivision', 'envolve', 'triples', 'innovamd'] as PortalId[]).forEach(pid => {
+            if (data[pid]) {
+              next[pid] = {
+                ...next[pid],
+                url: data[pid].url || next[pid].url,
+                username: data[pid].username || '',
+                passwordMasked: data[pid].password_masked || '',
+                connected: data[pid].connected || false,
+                password: '',
+                showPassword: false,
+              };
+            }
+          });
+          return next;
+        });
+      }).catch(() => {});
     }
   }, [active]);
 
   // Load Inmediata config when tab selected
   useEffect(() => {
     if (active === 'inmediata') {
-      api.get('/inmediata/api-config').then(res => {
+      api.get('/inmediata/config').then(res => {
         const d = res.data;
         setInmSubmitterId(d.submitter_id || '');
-        setInmBaseUrl(d.api_base_url || 'https://api.inmediata.com');
-        setInmEnv(d.environment || 'sandbox');
-        // Don't populate the key field — it's masked on the server
+        setInmWsEnv(d.ws_env === 'prod' ? 'prod' : 'uat');
+        setInmWsUsername(d.ws_username || '');
+        setInmWsConfigured(d.ws_configured || false);
+        // Don't populate password — it's masked on the server
       }).catch(() => {});
     }
   }, [active]);
@@ -117,11 +215,11 @@ export default function SettingsPage() {
       } else if (active === 'ai') {
         await api.post('/ai/config', { api_key: aiKey, model: aiModel, enabled: aiEnabled });
       } else if (active === 'inmediata') {
-        await api.post('/inmediata/api-config', {
-          api_key: inmApiKey,
+        await api.post('/inmediata/config', {
           submitter_id: inmSubmitterId,
-          environment: inmEnv,
-          api_base_url: inmBaseUrl,
+          ws_username: inmWsUsername,
+          ws_password: inmWsPassword || undefined,
+          ws_env: inmWsEnv,
         });
       }
       setSaved(true);
@@ -173,9 +271,9 @@ export default function SettingsPage() {
     try {
       const res = await api.post('/clinic/join-codes/verify', { code: winkJoinCode });
       if (res.data.valid) {
-        localStorage.setItem('wink_clinic_id', res.data.wink_clinic_id);
-        localStorage.setItem('wink_clinic_name', res.data.clinic_name);
-        setWinkClinicId(res.data.wink_clinic_id);
+        localStorage.setItem('angelwink_clinic_id', res.data.angelwink_clinic_id);
+        localStorage.setItem('angelwink_clinic_name', res.data.clinic_name);
+        setWinkClinicId(res.data.angelwink_clinic_id);
         setWinkClinicName(res.data.clinic_name);
         setWinkJoinCode('');
       }
@@ -184,8 +282,8 @@ export default function SettingsPage() {
   };
 
   const handleWinkDisconnect = () => {
-    localStorage.removeItem('wink_clinic_id');
-    localStorage.removeItem('wink_clinic_name');
+    localStorage.removeItem('angelwink_clinic_id');
+    localStorage.removeItem('angelwink_clinic_name');
     setWinkClinicId(null);
     setWinkClinicName(null);
   };
@@ -195,13 +293,13 @@ export default function SettingsPage() {
     setInmTestResult(null);
     try {
       // Save first, then test
-      await api.post('/inmediata/api-config', {
-        api_key: inmApiKey,
+      await api.post('/inmediata/config', {
         submitter_id: inmSubmitterId,
-        environment: inmEnv,
-        api_base_url: inmBaseUrl,
+        ws_username: inmWsUsername,
+        ws_password: inmWsPassword || undefined,
+        ws_env: inmWsEnv,
       });
-      const res = await api.post('/inmediata/test-connection');
+      const res = await api.post('/inmediata/test-ws-connection');
       setInmTestResult(res.data);
     } catch (err: any) {
       setInmTestResult({ success: false, message: err?.response?.data?.detail || 'Connection failed' });
@@ -254,6 +352,46 @@ export default function SettingsPage() {
     };
   }, []);
 
+  const handlePortalSave = async (pid: PortalId) => {
+    setPortals(prev => ({ ...prev, [pid]: { ...prev[pid], saving: true } }));
+    try {
+      const p = portals[pid];
+      const res = await api.post(`/portals/${pid}/config`, {
+        url: p.url,
+        username: p.username,
+        password: p.password || undefined,
+      });
+      setPortals(prev => ({
+        ...prev,
+        [pid]: {
+          ...prev[pid],
+          connected: res.data.connected,
+          passwordMasked: res.data.password_masked || '',
+          password: '',
+          saving: false,
+        },
+      }));
+    } catch { setPortals(prev => ({ ...prev, [pid]: { ...prev[pid], saving: false } })); }
+  };
+
+  const handlePortalDisconnect = async (pid: PortalId) => {
+    setPortals(prev => ({ ...prev, [pid]: { ...prev[pid], disconnecting: true } }));
+    try {
+      await api.post(`/portals/${pid}/disconnect`);
+      setPortals(prev => ({
+        ...prev,
+        [pid]: {
+          ...prev[pid],
+          connected: false,
+          username: '',
+          password: '',
+          passwordMasked: '',
+          disconnecting: false,
+        },
+      }));
+    } catch { setPortals(prev => ({ ...prev, [pid]: { ...prev[pid], disconnecting: false } })); }
+  };
+
   const SECTIONS = [
     { key: 'clinic',       labelKey: 'settings.clinic_info',  icon: Building2 },
     { key: 'providers',    labelKey: 'nav.providers',         icon: Stethoscope },
@@ -261,9 +399,11 @@ export default function SettingsPage() {
     { key: 'fee-schedule', labelKey: 'nav.fee_schedule',      icon: DollarSign },
     { key: 'connections',  labelKey: 'Connections',           icon: Wifi },
     { key: 'pairing',      labelKey: 'Clinic Pairing',        icon: Link2 },
+    { key: 'portals',      labelKey: 'Insurance Portals',     icon: Shield },
     { key: 'availity',     labelKey: 'settings.availity',     icon: Users },
     { key: 'inmediata',    labelKey: 'inmediata.title',       icon: Zap },
     { key: 'ai',           labelKey: 'settings.ai',           icon: Cpu },
+    { key: 'audit',        labelKey: 'Revenue Audit',         icon: AlertTriangle },
     { key: 'lang',         labelKey: 'settings.language',     icon: Globe },
   ];
 
@@ -327,6 +467,109 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {/* Insurance Portals */}
+          {active === 'portals' && (() => {
+            const PORTAL_DEFS: { id: PortalId; name: string; desc: string }[] = [
+              { id: 'ivision',  name: 'iVision International', desc: 'ivisionintl.net — Vision plan eligibility portal' },
+              { id: 'envolve',  name: 'Envolve Vision',        desc: 'centenevision.com — Envolve/Centene vision benefits' },
+              { id: 'triples',  name: 'Triple-S',              desc: 'Triple-S Salud / Triple-S Vision portal' },
+              { id: 'innovamd', name: 'InnovaMD / MMM',        desc: 'provider.innovamd.com — MMM Healthcare portal' },
+            ];
+            return (
+              <div className="space-y-5">
+                <h2 className="font-semibold text-slate-800">Insurance Portals</h2>
+                <p className="text-sm text-slate-500">Store credentials for insurance portals. Passwords are encrypted at rest.</p>
+                {PORTAL_DEFS.map(({ id, name, desc }) => {
+                  const p = portals[id];
+                  return (
+                    <div key={id} className="border border-slate-200 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2.5 h-2.5 rounded-full ${p.connected ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                          <h3 className="font-semibold text-slate-700">{name}</h3>
+                          {p.connected && (
+                            <span className="text-xs text-emerald-600 font-medium">Connected</span>
+                          )}
+                        </div>
+                        {p.connected && (
+                          <button
+                            onClick={() => handlePortalDisconnect(id)}
+                            disabled={p.disconnecting}
+                            className="flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-800 px-2 py-1 border border-red-200 rounded"
+                          >
+                            <Unplug className="w-3 h-3" />
+                            {p.disconnecting ? '...' : 'Disconnect'}
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400">{desc}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="sm:col-span-2">
+                          <label className={labelClass}>Portal URL</label>
+                          <input
+                            value={p.url}
+                            onChange={e => setPortals(prev => ({ ...prev, [id]: { ...prev[id], url: e.target.value } }))}
+                            className={inputClass}
+                            placeholder="https://..."
+                          />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Username</label>
+                          <input
+                            value={p.username}
+                            onChange={e => setPortals(prev => ({ ...prev, [id]: { ...prev[id], username: e.target.value } }))}
+                            className={inputClass}
+                            placeholder="username"
+                          />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Password</label>
+                          <div className="relative">
+                            <input
+                              type={p.showPassword ? 'text' : 'password'}
+                              value={p.password}
+                              onChange={e => setPortals(prev => ({ ...prev, [id]: { ...prev[id], password: e.target.value } }))}
+                              className={inputClass}
+                              placeholder={p.connected ? 'Enter new password to change' : 'password'}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setPortals(prev => ({ ...prev, [id]: { ...prev[id], showPassword: !prev[id].showPassword } }))}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            >
+                              {p.showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                          {p.connected && !p.password && (
+                            <p className="text-xs text-slate-400 mt-1">Password saved: {p.passwordMasked}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handlePortalSave(id)}
+                          disabled={p.saving || !p.username}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+                        >
+                          <Save className="w-4 h-4" />
+                          {p.saving ? 'Saving...' : p.connected ? 'Update' : 'Save'}
+                        </button>
+                        <button
+                          disabled
+                          title="Coming soon"
+                          className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 text-slate-400 text-sm font-medium rounded-lg cursor-not-allowed"
+                        >
+                          <Wifi className="w-4 h-4" />
+                          Test Connection
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
           {/* Availity (Envolve) */}
           {active === 'availity' && (
             <div className="space-y-4">
@@ -360,46 +603,115 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Inmediata API */}
+          {/* Inmediata Web Services */}
           {active === 'inmediata' && (
             <div className="space-y-4">
-              <h2 className="font-semibold text-slate-800 mb-4">{t('inmediata.title')}</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>API Key</label>
-                  <input
-                    type="password"
-                    value={inmApiKey}
-                    onChange={e => setInmApiKey(e.target.value)}
-                    className={inputClass}
-                    placeholder="Enter API key..."
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Submitter ID</label>
-                  <input value={inmSubmitterId} onChange={e => setInmSubmitterId(e.target.value)} className={inputClass} placeholder="YOURID" />
-                </div>
-                <div>
-                  <label className={labelClass}>Environment</label>
-                  <select value={inmEnv} onChange={e => setInmEnv(e.target.value as 'sandbox' | 'production')} className={inputClass}>
-                    <option value="sandbox">Sandbox</option>
-                    <option value="production">Production</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass}>API Base URL</label>
-                  <input value={inmBaseUrl} onChange={e => setInmBaseUrl(e.target.value)} className={inputClass} placeholder="https://api.inmediata.com" />
-                </div>
-              </div>
-              {inmEnv === 'sandbox' && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
-                  Sandbox mode — claims will NOT be submitted to Inmediata for real processing.
+              <h2 className="font-semibold text-slate-800 mb-2">Inmediata Web Services</h2>
+              <p className="text-sm text-slate-500 mb-4">
+                Configure credentials for Inmediata SecureTrack — real-time X12 270/271 eligibility
+                and 837P/835 EDI submission.
+              </p>
+
+              {inmWsConfigured && (
+                <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-sm text-emerald-700">
+                  <CheckCircle className="w-4 h-4 shrink-0" />
+                  Web Services connected
                 </div>
               )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Environment */}
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>Environment</label>
+                  <div className="flex gap-2">
+                    {(['uat', 'prod'] as const).map(env => (
+                      <button
+                        key={env}
+                        type="button"
+                        onClick={() => setInmWsEnv(env)}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                          inmWsEnv === env
+                            ? env === 'prod'
+                              ? 'bg-red-500 text-white border-red-600'
+                              : 'bg-sky-500 text-white border-sky-600'
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {env === 'uat' ? 'UAT (Testing)' : 'Production'}
+                      </button>
+                    ))}
+                  </div>
+                  {inmWsEnv === 'prod' && (
+                    <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-2 text-xs text-red-700">
+                      ⚠️ Production — claims will be submitted to Inmediata for real processing.
+                    </div>
+                  )}
+                </div>
+
+                {/* Endpoint URL (read-only) */}
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>Endpoint URL</label>
+                  <input
+                    readOnly
+                    value={
+                      inmWsEnv === 'prod'
+                        ? 'https://www.inmediata.com/webservices/EdiTransfer/EdiFileTransfer.asmx'
+                        : 'https://securetrack-uat.inmediata.com/webservices/EdiTransfer/EdiFileTransfer.asmx'
+                    }
+                    className={`${inputClass} bg-slate-50 text-slate-400 cursor-default`}
+                  />
+                </div>
+
+                {/* Username */}
+                <div>
+                  <label className={labelClass}>Username</label>
+                  <input
+                    value={inmWsUsername}
+                    onChange={e => setInmWsUsername(e.target.value)}
+                    className={inputClass}
+                    placeholder="Inmediata username"
+                    autoComplete="off"
+                  />
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className={labelClass}>Password</label>
+                  <div className="relative">
+                    <input
+                      type={inmWsShowPw ? 'text' : 'password'}
+                      value={inmWsPassword}
+                      onChange={e => setInmWsPassword(e.target.value)}
+                      className={inputClass}
+                      placeholder={inmWsConfigured ? 'Enter new password to change' : 'password'}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setInmWsShowPw(v => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {inmWsShowPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Submitter ID */}
+                <div>
+                  <label className={labelClass}>Submitter ID</label>
+                  <input
+                    value={inmSubmitterId}
+                    onChange={e => setInmSubmitterId(e.target.value)}
+                    className={inputClass}
+                    placeholder="YOURID"
+                  />
+                </div>
+              </div>
+
               <div className="flex items-center gap-3 mt-2">
                 <button
                   onClick={handleTestConnection}
-                  disabled={inmTesting}
+                  disabled={inmTesting || !inmWsUsername}
                   className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-300 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
                 >
                   <Wifi className="w-4 h-4" />
@@ -663,6 +975,90 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {/* Revenue Audit */}
+          {active === 'audit' && (
+            <div className="space-y-5">
+              <div>
+                <h2 className="font-semibold text-slate-800 mb-1">Revenue Audit</h2>
+                <p className="text-sm text-slate-500">
+                  Finds invoices where insurance was supposed to pay but no CPT codes were entered — meaning the claim was never submitted.
+                </p>
+              </div>
+
+              {/* Date range */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <DatePicker label="From" value={auditDateFrom} onChange={setAuditDateFrom} />
+                </div>
+                <div className="flex-1">
+                  <DatePicker label="To" value={auditDateTo} onChange={setAuditDateTo} />
+                </div>
+              </div>
+
+              <button
+                onClick={runAudit}
+                disabled={auditLoading || !auditDateFrom || !auditDateTo}
+                className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 disabled:bg-sky-300 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+              >
+                <Search className="w-4 h-4" />
+                {auditLoading ? 'Running...' : 'Run Audit'}
+              </button>
+
+              {auditError && (
+                <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  {auditError}
+                </div>
+              )}
+
+              {auditResult && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">
+                      {auditResult.flagged_count === 0
+                        ? 'No missing claims found ✅'
+                        : `${auditResult.flagged_count} invoice${auditResult.flagged_count !== 1 ? 's' : ''} flagged`}
+                    </span>
+                    {auditResult.total_lost > 0 && (
+                      <span className="text-base font-bold text-red-600">
+                        Total lost: ${auditResult.total_lost.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+
+                  {auditResult.flagged.length > 0 && (
+                    <div className="overflow-x-auto rounded-xl border border-slate-200">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-50 border-b border-slate-200">
+                          <tr>
+                            <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Date</th>
+                            <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Patient</th>
+                            <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Invoice #</th>
+                            <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Payer</th>
+                            <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Attended By</th>
+                            <th className="text-right px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Plan $</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {auditResult.flagged.map((entry, i) => (
+                            <tr key={i} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-3 py-2.5 text-slate-700 whitespace-nowrap">{entry.date || '—'}</td>
+                              <td className="px-3 py-2.5 font-medium text-slate-900">{entry.patient_name}</td>
+                              <td className="px-3 py-2.5 text-slate-600">{entry.invoice_number || '—'}</td>
+                              <td className="px-3 py-2.5 text-slate-600">{entry.payer || '—'}</td>
+                              <td className="px-3 py-2.5 text-slate-600">{entry.attended_by || '—'}</td>
+                              <td className="px-3 py-2.5 text-right font-semibold text-red-600">${entry.plan_amount.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Language */}
           {active === 'lang' && (
             <div className="space-y-4">
@@ -691,7 +1087,7 @@ export default function SettingsPage() {
           )}
 
           {/* Save */}
-          {active !== 'lang' && active !== 'providers' && active !== 'payers' && active !== 'fee-schedule' && active !== 'pairing' && active !== 'connections' && (
+          {active !== 'lang' && active !== 'providers' && active !== 'payers' && active !== 'fee-schedule' && active !== 'pairing' && active !== 'connections' && active !== 'portals' && active !== 'audit' && (
             <div className="mt-6 flex items-center gap-3">
               <button
                 onClick={handleSave}
