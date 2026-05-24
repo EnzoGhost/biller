@@ -8,6 +8,8 @@ export interface OrgInfo {
   name: string;
   slug: string;
   role: string;
+  subscription_tier?: string;
+  subscription_status?: string;
 }
 
 export interface ProviderInfo {
