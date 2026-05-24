@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://api.someteopr.com'
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://app.angelclaims.app'
 
 const AUTH_FLAG_KEY = 'ac_admin_authed'
 const TOKEN_KEY = 'ac_admin_token'

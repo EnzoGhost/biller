@@ -160,11 +160,11 @@ async def audit_lost_revenue(
               AND operation != 'DELETE' AND data IS NOT NULL
               AND data->>'invoice_id' = ANY(%s)
               AND (
-                  LOWER(COALESCE(data->>'payment_method', '')) IN ('insurance', 'check', 'cheque')
+                  LOWER(COALESCE(data->>'method', '')) IN ('insurance', 'check', 'cheque')
+                  OR LOWER(COALESCE(data->>'payment_method', '')) IN ('insurance', 'check', 'cheque')
                   OR LOWER(COALESCE(data->>'payment_type', '')) = 'insurance'
+                  OR LOWER(COALESCE(data->>'notes', '')) LIKE '%%insurance%%'
                   OR LOWER(COALESCE(data->>'notes', '')) LIKE '%%plan m%%dico%%'
-                  OR LOWER(COALESCE(data->>'notes', '')) LIKE '%%p%%rdida%%plan%%'
-                  OR LOWER(COALESCE(data->>'payment_method', '')) LIKE '%%cheque%%'
               )
             ORDER BY row_id, timestamp DESC
         """, (clinic_id, invoice_ids))

@@ -12,7 +12,7 @@ export default function Login() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!email.trim() || !password.trim()) {
-      setError('Please enter your email and password')
+      setError('Please enter your credentials')
       return
     }
     setLoading(true)
@@ -30,37 +30,36 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        {/* Brand */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-sky-500/20 flex items-center justify-center mb-4">
-            <span className="text-sky-400 text-2xl font-bold">AC</span>
-          </div>
-          <h1 className="text-white text-xl font-semibold">AngelClaims Admin</h1>
-          <p className="text-slate-500 text-sm mt-1">Super Admin Console</p>
+        {/* Logo — matches AngelWink admin style */}
+        <div className="flex flex-col items-center mb-10">
+          <img
+            src="/angel-logo.png"
+            alt="AngelClaims"
+            className="h-20 w-auto mb-2"
+          />
         </div>
 
         {/* Form */}
         <form
           onSubmit={handleSubmit}
-          className="bg-slate-900 rounded-xl border border-slate-800 p-6 space-y-4"
+          className="bg-slate-900/60 backdrop-blur-sm rounded-2xl border border-slate-800/50 p-7 space-y-5"
         >
           <div>
-            <label className="block text-sm text-slate-400 mb-1.5" htmlFor="email">
-              Email
+            <label className="block text-sm text-slate-400 mb-1.5 font-medium" htmlFor="username">
+              Username
             </label>
             <input
-              id="email"
-              type="email"
+              id="username"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@angelclaims.app"
-              autoComplete="email"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500"
+              autoComplete="username"
+              className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-3 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500/50 transition-all"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400 mb-1.5" htmlFor="password">
+            <label className="block text-sm text-slate-400 mb-1.5 font-medium" htmlFor="password">
               Password
             </label>
             <input
@@ -68,18 +67,22 @@ export default function Login() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••••••"
+              placeholder="••••••••"
               autoComplete="current-password"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500"
+              className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-3 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500/50 transition-all"
             />
           </div>
 
-          {error && <p className="text-red-400 text-sm">{error}</p>}
+          {error && (
+            <p className="text-red-400 text-sm bg-red-500/10 rounded-lg px-3 py-2 border border-red-500/20">
+              {error}
+            </p>
+          )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+            className="w-full bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm transition-colors shadow-lg shadow-sky-500/20"
           >
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
