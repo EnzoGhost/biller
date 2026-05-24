@@ -54,7 +54,7 @@ export default function LoginPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-sky-50 to-slate-100 flex flex-col items-center justify-center p-4">
         <img
-          src="/someteopr-logo.png"
+          src="/angel-logo.png"
           alt="SometeoPR"
           className="w-60 max-w-[80vw] object-contain mb-8"
         />
@@ -97,7 +97,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 to-slate-100 flex flex-col items-center justify-center p-4">
       <img
-        src="/someteopr-logo.png"
+        src="/angel-logo.png"
         alt="SometeoPR"
         className="w-80 max-w-[90vw] object-contain mb-8"
       />

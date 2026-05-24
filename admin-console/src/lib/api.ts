@@ -218,3 +218,7 @@ export async function fetchProviders(): Promise<AdminProvider[]> {
   const data = await apiFetch<{ providers: AdminProvider[] }>('/api/admin/providers')
   return data.providers
 }
+
+export async function deleteProvider(id: number): Promise<void> {
+  await apiFetch<void>(`/api/admin/providers/${id}`, { method: 'DELETE' })
+}

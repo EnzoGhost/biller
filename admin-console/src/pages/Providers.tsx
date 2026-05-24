@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Stethoscope, Search } from 'lucide-react'
+import { Stethoscope, Search, Trash2 } from 'lucide-react'
 import Badge from '../components/Badge'
-import { fetchProviders, type AdminProvider } from '../lib/api'
+import { fetchProviders, deleteProvider, type AdminProvider } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/utils'
 
 export default function Providers() {
@@ -9,6 +9,20 @@ export default function Providers() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [deleting, setDeleting] = useState<number | null>(null)
+
+  async function handleDelete(p: AdminProvider) {
+    if (!confirm(`Deactivate provider "${p.full_name}"? This is a soft delete.`)) return
+    setDeleting(p.id)
+    try {
+      await deleteProvider(p.id)
+      setProviders((prev) => prev.filter((x) => x.id !== p.id))
+    } catch {
+      alert('Failed to delete provider')
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   useEffect(() => {
     fetchProviders()
@@ -38,7 +52,7 @@ export default function Providers() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-white">Providers</h1>
-        <p className="text-slate-400 text-sm mt-1">{formatNumber(providers.length)} total providers (read-only)</p>
+        <p className="text-slate-400 text-sm mt-1">{formatNumber(providers.length)} total providers</p>
       </div>
 
       {error && (
@@ -76,6 +90,7 @@ export default function Providers() {
                 <th className="text-left text-xs text-slate-500 font-medium px-5 py-3">Claims</th>
                 <th className="text-left text-xs text-slate-500 font-medium px-5 py-3">Status</th>
                 <th className="text-left text-xs text-slate-500 font-medium px-5 py-3">Added</th>
+                <th className="text-left text-xs text-slate-500 font-medium px-5 py-3"></th>
               </tr>
             </thead>
             <tbody>
@@ -96,6 +111,16 @@ export default function Providers() {
                     </Badge>
                   </td>
                   <td className="px-5 py-3.5 text-slate-400 text-sm">{formatDate(p.created_at)}</td>
+                  <td className="px-5 py-3.5">
+                    <button
+                      onClick={() => handleDelete(p)}
+                      disabled={deleting === p.id}
+                      className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                      title="Deactivate provider"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

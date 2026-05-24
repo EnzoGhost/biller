@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# SometeoPR Web App — Deploy to VPS
+# AngelClaims Web App — Deploy to VPS
 set -euo pipefail
 
 VPS="wink@159.65.235.231"
-VPS_DIR="/opt/someteopr/app"
+VPS_DIR="/opt/angelclaims/app"
 
 cd "$(dirname "$0")"
-echo "🚀 SometeoPR Web Deploy"
+echo "🚀 AngelClaims Web Deploy"
 
 # 1. Build frontend
 echo "📦 Building frontend..."
@@ -28,10 +28,10 @@ rsync -avz --delete -e ssh frontend/dist/ "$VPS:$VPS_DIR/static/"
 scp Dockerfile.web docker-compose.web.yml "$VPS:$VPS_DIR/"
 
 # 5. Copy static files into backend dir (FastAPI serves them)
-ssh "$VPS" "cp -r /opt/someteopr/app/static /opt/someteopr/app/backend/static"
+ssh "$VPS" "cp -r /opt/angelclaims/app/static /opt/angelclaims/app/backend/static"
 
 # 6. Fix permissions
-ssh "$VPS" "chmod -R a+r /opt/someteopr/app/ && find /opt/someteopr/app -type d -exec chmod 755 {} +"
+ssh "$VPS" "chmod -R a+r /opt/angelclaims/app/ && find /opt/angelclaims/app -type d -exec chmod 755 {} +"
 
 # 6. Build and start container
 echo "🐳 Building container..."

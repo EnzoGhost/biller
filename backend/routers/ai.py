@@ -589,7 +589,7 @@ async def _fetch_insurance_card_bytes(claim, db: AsyncSession) -> tuple[bytes, s
         attachment = result.scalars().first()
         if not attachment:
             return None
-        ATTACHMENTS_DIR = os.environ.get("ATTACHMENTS_DIR", "/opt/someteopr/data/attachments")
+        ATTACHMENTS_DIR = os.environ.get("ATTACHMENTS_DIR", "/opt/angelclaims/data/attachments")
         file_path = pathlib.Path(ATTACHMENTS_DIR) / str(claim.id) / attachment.filename
         if not file_path.exists():
             return None

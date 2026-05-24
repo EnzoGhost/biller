@@ -378,7 +378,7 @@ async function put(url: string, data?: unknown): Promise<{ data: unknown }> {
     const lang = (body as any).language as string;
     if (lang === 'en' || lang === 'es') {
       // Read user from Zustand persisted store
-      const stored = localStorage.getItem('someteopr-auth');
+      const stored = localStorage.getItem('angelclaims-auth');
       if (stored) {
         const state = JSON.parse(stored);
         const user = state?.state?.user;
@@ -386,7 +386,7 @@ async function put(url: string, data?: unknown): Promise<{ data: unknown }> {
           await execute('UPDATE users SET language=? WHERE id=?', [lang, user.id]);
           // Update persisted store so Zustand re-hydrates correctly
           state.state.user = { ...user, language: lang };
-          localStorage.setItem('someteopr-auth', JSON.stringify(state));
+          localStorage.setItem('angelclaims-auth', JSON.stringify(state));
           return ok(state.state.user);
         }
       }

@@ -57,7 +57,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="flex items-center justify-center px-2 py-5 border-b border-slate-100">
         <img
-          src="/someteopr-logo.png"
+          src="/angel-logo.png"
           alt="SometeoPR"
           className={clsx('object-contain', collapsed ? 'h-8 w-auto' : 'w-full h-auto px-1')}
         />

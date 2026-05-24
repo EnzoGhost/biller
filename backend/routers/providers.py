@@ -334,3 +334,18 @@ async def delete_credential(
     if cred:
         await db.delete(cred)
         await db.commit()
+
+
+@router.delete("/{provider_id}", status_code=204)
+async def delete_provider(
+    provider_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Soft-delete a provider (sets is_active=False)."""
+    result = await db.execute(select(Provider).where(Provider.id == provider_id))
+    provider = result.scalar_one_or_none()
+    if not provider:
+        raise HTTPException(404, "Provider not found")
+    provider.is_active = False
+    await db.commit()

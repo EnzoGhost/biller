@@ -11,11 +11,12 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
+from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 
 from config import settings
 from database import get_db
-from models import User, Organization, Provider, Claim, SubscriptionTier
+from models import User, Organization, Provider, Claim, SubscriptionTier, OrgUser, OrgRole, UserRole
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -337,7 +338,10 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(User).where(User.is_super_admin == False).order_by(User.created_at.desc())
+        select(User)
+        .where(User.is_super_admin == False)
+        .options(selectinload(User.org_memberships))
+        .order_by(User.created_at.desc())
     )
     users = result.scalars().all()
     return {
@@ -346,9 +350,9 @@ async def list_users(
                 "id": u.id,
                 "email": u.email,
                 "full_name": u.full_name,
-                "role": u.role,
+                "role": u.role.value if hasattr(u.role, 'value') else u.role,
                 "is_active": u.is_active,
-                "organization_id": u.organization_id,
+                "organization_id": u.org_memberships[0].organization_id if u.org_memberships else None,
                 "created_at": u.created_at.isoformat(),
             }
             for u in users
@@ -368,24 +372,36 @@ async def create_user(
         raise HTTPException(status_code=400, detail="Email already in use")
 
     hashed = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
+    try:
+        role_enum = UserRole(body.role) if body.role else UserRole.BILLER
+    except ValueError:
+        role_enum = UserRole.BILLER
     user = User(
         email=body.email,
         full_name=body.full_name,
         hashed_password=hashed,
-        role=body.role,
-        organization_id=body.organization_id,
+        role=role_enum,
         is_active=True,
         is_super_admin=False,
     )
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    # If organization_id provided, add membership
+    if body.organization_id:
+        org_membership = OrgUser(
+            organization_id=body.organization_id,
+            user_id=user.id,
+            role=OrgRole.BILLER,
+        )
+        db.add(org_membership)
+        await db.commit()
     return {
         "id": user.id,
         "email": user.email,
         "full_name": user.full_name,
-        "role": user.role,
-        "organization_id": user.organization_id,
+        "role": user.role.value if hasattr(user.role, 'value') else user.role,
+        "organization_id": body.organization_id,
         "created_at": user.created_at.isoformat(),
     }
 
@@ -409,9 +425,20 @@ async def update_user(
     if body.is_active is not None:
         user.is_active = body.is_active
     if body.role is not None:
-        user.role = body.role
+        try:
+            user.role = UserRole(body.role)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid role: {body.role}")
     if body.organization_id is not None:
-        user.organization_id = body.organization_id
+        # Update via OrgUser junction table
+        existing_membership = await db.execute(
+            select(OrgUser).where(OrgUser.user_id == user_id)
+        )
+        membership = existing_membership.scalar_one_or_none()
+        if membership:
+            membership.organization_id = body.organization_id
+        else:
+            db.add(OrgUser(organization_id=body.organization_id, user_id=user_id, role=OrgRole.BILLER))
     user.updated_at = datetime.utcnow()
 
     await db.commit()
@@ -477,3 +504,19 @@ async def list_providers(
             "created_at": p.created_at.isoformat(),
         })
     return {"providers": out}
+
+
+@router.delete("/providers/{provider_id}", status_code=204)
+async def delete_provider(
+    provider_id: int,
+    _: User = Depends(_get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Provider).where(Provider.id == provider_id))
+    provider = result.scalar_one_or_none()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    # Soft delete
+    provider.is_active = False
+    await db.commit()
+    return Response(status_code=204)

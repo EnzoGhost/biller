@@ -1,21 +1,21 @@
-# SometeoPR Web App — Docker Compose
+# AngelClaims Web App — Docker Compose
 # Usage: docker compose -f docker-compose.web.yml up -d --build
 
 services:
-  someteopr:
+  angelclaims:
     build:
       context: .
       dockerfile: Dockerfile.web
-    container_name: someteopr-web
+    container_name: angelclaims-web
     restart: unless-stopped
     ports:
       - "8100:8100"
     volumes:
-      - /opt/someteopr/data:/app/data
+      - /opt/angelclaims/data:/app/data
     env_file:
-      - /opt/someteopr/.env
+      - /opt/angelclaims/.env
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:///./data/someteopr.db
+      - DATABASE_URL=sqlite+aiosqlite:///./data/angelclaims.db
       - DEBUG=false
       - CORS_ORIGINS=*
     healthcheck:

@@ -55,11 +55,13 @@ class MemberOut(BaseModel):
 
 class InviteMemberRequest(BaseModel):
     email: str
+    full_name: Optional[str] = None
     role: OrgRole = OrgRole.BILLER
 
 
 class UpdateMemberRoleRequest(BaseModel):
-    role: OrgRole
+    role: Optional[OrgRole] = None
+    is_active: Optional[bool] = None
 
 
 def _slugify(name: str) -> str:
@@ -68,6 +70,186 @@ def _slugify(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", slug)
     slug = slug.strip("-")
     return slug[:100]
+
+
+# ── /me Endpoints (org from JWT) ─────────────────────────────────────────────
+
+@router.get("/me", response_model=OrgOut)
+async def get_my_org(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org: Organization = Depends(get_current_org),
+):
+    """Get current org details (org from JWT)."""
+    member_count = len((await db.execute(select(OrgUser).where(OrgUser.organization_id == org.id))).scalars().all())
+    provider_count = len((await db.execute(select(Provider).where(Provider.organization_id == org.id, Provider.is_active == True))).scalars().all())
+    return OrgOut(
+        id=org.id, name=org.name, slug=org.slug,
+        subscription_tier=org.subscription_tier.value,
+        subscription_status=org.subscription_status.value,
+        max_providers=org.max_providers,
+        created_at=org.created_at,
+        member_count=member_count,
+        provider_count=provider_count,
+    )
+
+
+@router.patch("/me", response_model=OrgOut)
+async def update_my_org(
+    body: OrgUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org: Organization = Depends(get_current_org),
+):
+    """Update current org. Admin only."""
+    result = await db.execute(
+        select(OrgUser).where(OrgUser.organization_id == org.id, OrgUser.user_id == current_user.id)
+    )
+    membership = result.scalar_one_or_none()
+    if not membership or membership.role != OrgRole.ADMIN:
+        raise HTTPException(403, "Admin access required")
+    if body.name:
+        org.name = body.name
+    if body.slug:
+        org.slug = body.slug
+    await db.commit()
+    await db.refresh(org)
+    return OrgOut(
+        id=org.id, name=org.name, slug=org.slug,
+        subscription_tier=org.subscription_tier.value,
+        subscription_status=org.subscription_status.value,
+        max_providers=org.max_providers,
+        created_at=org.created_at,
+    )
+
+
+@router.get("/me/users", response_model=List[MemberOut])
+async def list_my_org_users(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org: Organization = Depends(get_current_org),
+):
+    """List users in current org (from JWT)."""
+    result = await db.execute(
+        select(OrgUser)
+        .options(selectinload(OrgUser.user))
+        .where(OrgUser.organization_id == org.id)
+    )
+    memberships = result.scalars().all()
+    return [
+        MemberOut(
+            id=m.id,
+            user_id=m.user_id,
+            email=m.user.email if m.user else "",
+            full_name=m.user.full_name if m.user else "",
+            role=m.role.value,
+            invited_at=m.invited_at,
+            accepted_at=m.accepted_at,
+        )
+        for m in memberships
+    ]
+
+
+@router.post("/me/users", status_code=201)
+async def invite_my_org_user(
+    body: InviteMemberRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org: Organization = Depends(get_current_org),
+):
+    """Invite a user by email to the current org. Admin only."""
+    result = await db.execute(
+        select(OrgUser).where(OrgUser.organization_id == org.id, OrgUser.user_id == current_user.id)
+    )
+    membership = result.scalar_one_or_none()
+    if not membership or membership.role != OrgRole.ADMIN:
+        raise HTTPException(403, "Admin access required")
+
+    # Find or note: user must already exist
+    result = await db.execute(select(User).where(User.email == body.email))
+    target_user = result.scalar_one_or_none()
+    if not target_user:
+        raise HTTPException(404, "User with that email not found. They must register first.")
+
+    result = await db.execute(
+        select(OrgUser).where(OrgUser.organization_id == org.id, OrgUser.user_id == target_user.id)
+    )
+    if result.scalar_one_or_none():
+        raise HTTPException(409, "User is already a member of this organization")
+
+    new_membership = OrgUser(
+        organization_id=org.id,
+        user_id=target_user.id,
+        role=body.role,
+        accepted_at=datetime.utcnow(),
+    )
+    db.add(new_membership)
+    await db.commit()
+    return {"message": f"{target_user.full_name} added to organization", "user_id": target_user.id}
+
+
+@router.patch("/me/users/{user_id}")
+async def update_my_org_user(
+    user_id: int,
+    body: UpdateMemberRoleRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org: Organization = Depends(get_current_org),
+):
+    """Update a member's role or active status. Admin only."""
+    result = await db.execute(
+        select(OrgUser).where(OrgUser.organization_id == org.id, OrgUser.user_id == current_user.id)
+    )
+    membership = result.scalar_one_or_none()
+    if not membership or membership.role != OrgRole.ADMIN:
+        raise HTTPException(403, "Admin access required")
+
+    result = await db.execute(
+        select(OrgUser)
+        .options(selectinload(OrgUser.user))
+        .where(OrgUser.organization_id == org.id, OrgUser.user_id == user_id)
+    )
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(404, "Member not found")
+
+    if body.role is not None:
+        target.role = body.role
+    if body.is_active is not None and target.user:
+        if user_id == current_user.id:
+            raise HTTPException(400, "Cannot deactivate yourself")
+        target.user.is_active = body.is_active
+    await db.commit()
+    return {"message": "Updated"}
+
+
+@router.delete("/me/users/{user_id}", status_code=204)
+async def remove_my_org_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org: Organization = Depends(get_current_org),
+):
+    """Remove a member from the current org. Admin only."""
+    result = await db.execute(
+        select(OrgUser).where(OrgUser.organization_id == org.id, OrgUser.user_id == current_user.id)
+    )
+    membership = result.scalar_one_or_none()
+    if not membership or membership.role != OrgRole.ADMIN:
+        raise HTTPException(403, "Admin access required")
+
+    if user_id == current_user.id:
+        raise HTTPException(400, "Cannot remove yourself from the organization")
+
+    result = await db.execute(
+        select(OrgUser).where(OrgUser.organization_id == org.id, OrgUser.user_id == user_id)
+    )
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(404, "Member not found")
+
+    await db.delete(target)
+    await db.commit()
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

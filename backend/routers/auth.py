@@ -300,6 +300,42 @@ async def me(
     )
 
 
+@router.patch("/me/password")
+async def change_password(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Change current user's password."""
+    from auth import verify_password, hash_password
+    current_pw = body.get("current_password", "")
+    new_pw = body.get("new_password", "")
+    if not current_pw or not new_pw:
+        raise HTTPException(status_code=400, detail="current_password and new_password required")
+    if not verify_password(current_pw, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if len(new_pw) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    current_user.hashed_password = hash_password(new_pw)
+    await db.commit()
+    return {"message": "Password updated"}
+
+
+@router.patch("/me/profile", response_model=UserOut)
+async def update_profile(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update current user's display name."""
+    full_name = body.get("full_name", "").strip()
+    if full_name:
+        current_user.full_name = full_name
+    await db.commit()
+    await db.refresh(current_user)
+    return UserOut.model_validate(current_user)
+
+
 @router.patch("/me/language", response_model=UserOut)
 async def update_language(
     body: dict,

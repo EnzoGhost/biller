@@ -25,9 +25,9 @@ from config import encrypt_value, decrypt_value
 logger = logging.getLogger("vistanet")
 router = APIRouter(prefix="/vistanet", tags=["vistanet"])
 
-# Attachments directory — on VPS this is /opt/someteopr/data/attachments
+# Attachments directory — on VPS this is /opt/angelclaims/data/attachments
 import os as _os
-ATTACHMENTS_DIR = _os.environ.get("ATTACHMENTS_DIR", "/opt/someteopr/data/attachments")
+ATTACHMENTS_DIR = _os.environ.get("ATTACHMENTS_DIR", "/opt/angelclaims/data/attachments")
 
 # ── Constants ────────────────────────────────────────────────────────────────
 

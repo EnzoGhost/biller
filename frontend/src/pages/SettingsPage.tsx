@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Save, CheckCircle, Building2, Shield, Cpu, Globe, Zap, Users, Wifi, Stethoscope, DollarSign, Link2, Unplug, RefreshCw, Eye, EyeOff, AlertTriangle, Search } from 'lucide-react';
+import { Save, CheckCircle, Building2, Shield, Cpu, Globe, Zap, Users, Wifi, Stethoscope, DollarSign, Link2, Unplug, RefreshCw, Eye, EyeOff, AlertTriangle, Search, UserCog, Trash2, UserPlus, ChevronDown } from 'lucide-react';
 import DatePicker from '../components/ui/DatePicker';
 import api from '../lib/api';
 import { formatPhone } from '../lib/format';
@@ -519,7 +519,150 @@ export default function SettingsPage() {
     } catch { setPortals(prev => ({ ...prev, [pid]: { ...prev[pid], disconnecting: false } })); }
   };
 
+  // ── Team Management state ────────────────────────────────────────────────
+  interface TeamMember {
+    id: number;
+    user_id: number;
+    email: string;
+    full_name: string;
+    role: string;
+    invited_at: string;
+    accepted_at: string | null;
+  }
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [teamError, setTeamError] = useState<string | null>(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('biller');
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string>('');
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+
+  // ── Account Settings state ───────────────────────────────────────────────
+  const [acctName, setAcctName] = useState('');
+  const [acctCurrentPw, setAcctCurrentPw] = useState('');
+  const [acctNewPw, setAcctNewPw] = useState('');
+  const [acctConfirmPw, setAcctConfirmPw] = useState('');
+  const [acctShowCurrentPw, setAcctShowCurrentPw] = useState(false);
+  const [acctShowNewPw, setAcctShowNewPw] = useState(false);
+  const [acctSavingProfile, setAcctSavingProfile] = useState(false);
+  const [acctSavingPw, setAcctSavingPw] = useState(false);
+  const [acctProfileMsg, setAcctProfileMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [acctPwMsg, setAcctPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Load team when tab selected
+  useEffect(() => {
+    if (active === 'team') {
+      setTeamLoading(true);
+      setTeamError(null);
+      Promise.all([
+        api.get('/organizations/me/users'),
+        api.get('/auth/me'),
+      ]).then(([membersRes, meRes]) => {
+        setTeamMembers(membersRes.data);
+        const myId = meRes.data.user?.id;
+        setCurrentUserId(myId ?? null);
+        const myMembership = membersRes.data.find((m: TeamMember) => m.user_id === myId);
+        setCurrentUserRole(myMembership?.role ?? '');
+      }).catch(() => {
+        setTeamError('Failed to load team members');
+      }).finally(() => setTeamLoading(false));
+    }
+  }, [active]);
+
+  // Load account info when tab selected
+  useEffect(() => {
+    if (active === 'account') {
+      api.get('/auth/me').then(res => {
+        setAcctName(res.data.user?.full_name ?? '');
+        setCurrentUserId(res.data.user?.id ?? null);
+      }).catch(() => {});
+    }
+  }, [active]);
+
+  const handleInviteUser = async () => {
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    setInviteError(null);
+    try {
+      await api.post('/organizations/me/users', { email: inviteEmail.trim(), role: inviteRole });
+      setShowInviteModal(false);
+      setInviteEmail('');
+      setInviteRole('biller');
+      // Reload members
+      const res = await api.get('/organizations/me/users');
+      setTeamMembers(res.data);
+    } catch (err: any) {
+      setInviteError(err?.response?.data?.detail || 'Failed to invite user');
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleUpdateMemberRole = async (userId: number, role: string) => {
+    try {
+      await api.patch(`/organizations/me/users/${userId}`, { role });
+      setTeamMembers(prev => prev.map(m => m.user_id === userId ? { ...m, role } : m));
+    } catch { /* best-effort */ }
+  };
+
+  const handleRemoveMember = async (userId: number) => {
+    if (!confirm('Remove this user from the organization?')) return;
+    try {
+      await api.delete(`/organizations/me/users/${userId}`);
+      setTeamMembers(prev => prev.filter(m => m.user_id !== userId));
+    } catch { /* best-effort */ }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!acctName.trim()) return;
+    setAcctSavingProfile(true);
+    setAcctProfileMsg(null);
+    try {
+      await api.patch('/auth/me/profile', { full_name: acctName.trim() });
+      setAcctProfileMsg({ ok: true, text: 'Name updated' });
+    } catch (err: any) {
+      setAcctProfileMsg({ ok: false, text: err?.response?.data?.detail || 'Failed to update name' });
+    } finally {
+      setAcctSavingProfile(false);
+      setTimeout(() => setAcctProfileMsg(null), 3000);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!acctCurrentPw || !acctNewPw || !acctConfirmPw) {
+      setAcctPwMsg({ ok: false, text: 'All fields required' });
+      return;
+    }
+    if (acctNewPw !== acctConfirmPw) {
+      setAcctPwMsg({ ok: false, text: 'New passwords do not match' });
+      return;
+    }
+    if (acctNewPw.length < 8) {
+      setAcctPwMsg({ ok: false, text: 'Password must be at least 8 characters' });
+      return;
+    }
+    setAcctSavingPw(true);
+    setAcctPwMsg(null);
+    try {
+      await api.patch('/auth/me/password', { current_password: acctCurrentPw, new_password: acctNewPw });
+      setAcctCurrentPw('');
+      setAcctNewPw('');
+      setAcctConfirmPw('');
+      setAcctPwMsg({ ok: true, text: 'Password changed successfully' });
+    } catch (err: any) {
+      setAcctPwMsg({ ok: false, text: err?.response?.data?.detail || 'Failed to change password' });
+    } finally {
+      setAcctSavingPw(false);
+      setTimeout(() => setAcctPwMsg(null), 4000);
+    }
+  };
+
   const SECTIONS = [
+    { key: 'account',      labelKey: 'Account',               icon: UserCog },
+    { key: 'team',         labelKey: 'Team',                  icon: Users },
     { key: 'clinic',       labelKey: 'settings.clinic_info',  icon: Building2 },
     { key: 'providers',    labelKey: 'nav.providers',         icon: Stethoscope },
     { key: 'payers',       labelKey: 'nav.payers',            icon: Building2 },
@@ -1318,6 +1461,263 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {/* Account Settings */}
+          {active === 'account' && (
+            <div className="space-y-6">
+              <h2 className="font-semibold text-slate-800">Account Settings</h2>
+
+              {/* Display Name */}
+              <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+                <h3 className="font-medium text-slate-700 text-sm">Display Name</h3>
+                <div>
+                  <label className={labelClass}>Full Name</label>
+                  <input
+                    value={acctName}
+                    onChange={e => setAcctName(e.target.value)}
+                    className={inputClass}
+                    placeholder="Your name"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleSaveProfile}
+                    disabled={acctSavingProfile || !acctName.trim()}
+                    className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    {acctSavingProfile ? 'Saving...' : 'Save Name'}
+                  </button>
+                  {acctProfileMsg && (
+                    <span className={`text-sm ${acctProfileMsg.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {acctProfileMsg.ok ? '✓' : '✗'} {acctProfileMsg.text}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Change Password */}
+              <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+                <h3 className="font-medium text-slate-700 text-sm">Change Password</h3>
+                <div>
+                  <label className={labelClass}>Current Password</label>
+                  <div className="relative">
+                    <input
+                      type={acctShowCurrentPw ? 'text' : 'password'}
+                      value={acctCurrentPw}
+                      onChange={e => setAcctCurrentPw(e.target.value)}
+                      className={inputClass}
+                      placeholder="Current password"
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setAcctShowCurrentPw(v => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {acctShowCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className={labelClass}>New Password</label>
+                  <div className="relative">
+                    <input
+                      type={acctShowNewPw ? 'text' : 'password'}
+                      value={acctNewPw}
+                      onChange={e => setAcctNewPw(e.target.value)}
+                      className={inputClass}
+                      placeholder="New password (min 8 chars)"
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setAcctShowNewPw(v => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {acctShowNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className={labelClass}>Confirm New Password</label>
+                  <input
+                    type="password"
+                    value={acctConfirmPw}
+                    onChange={e => setAcctConfirmPw(e.target.value)}
+                    className={inputClass}
+                    placeholder="Confirm new password"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleChangePassword}
+                    disabled={acctSavingPw}
+                    className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    {acctSavingPw ? 'Updating...' : 'Change Password'}
+                  </button>
+                  {acctPwMsg && (
+                    <span className={`text-sm ${acctPwMsg.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {acctPwMsg.ok ? '✓' : '✗'} {acctPwMsg.text}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Team Management */}
+          {active === 'team' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-slate-800">Team Management</h2>
+                {currentUserRole === 'admin' && (
+                  <button
+                    onClick={() => { setShowInviteModal(true); setInviteError(null); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-lg"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    Invite User
+                  </button>
+                )}
+              </div>
+
+              {teamLoading && <p className="text-sm text-slate-400">Loading...</p>}
+              {teamError && <p className="text-sm text-red-500">{teamError}</p>}
+
+              {!teamLoading && teamMembers.length > 0 && (
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Member</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Role</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                        {currentUserRole === 'admin' && (
+                          <th className="px-4 py-2.5" />
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {teamMembers.map(member => (
+                        <tr key={member.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-slate-800">{member.full_name || '—'}</div>
+                            <div className="text-xs text-slate-400">{member.email}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            {currentUserRole === 'admin' && member.user_id !== currentUserId ? (
+                              <div className="relative inline-block">
+                                <select
+                                  value={member.role}
+                                  onChange={e => handleUpdateMemberRole(member.user_id, e.target.value)}
+                                  className="appearance-none pl-2 pr-6 py-1 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 cursor-pointer"
+                                >
+                                  <option value="admin">Admin</option>
+                                  <option value="biller">Biller</option>
+                                  <option value="viewer">Viewer</option>
+                                </select>
+                                <ChevronDown className="w-3 h-3 absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                              </div>
+                            ) : (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                member.role === 'admin' ? 'bg-purple-100 text-purple-700' :
+                                member.role === 'biller' ? 'bg-sky-100 text-sky-700' :
+                                'bg-slate-100 text-slate-600'
+                              }`}>
+                                {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center gap-1 text-xs ${
+                              member.accepted_at ? 'text-emerald-600' : 'text-amber-500'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                member.accepted_at ? 'bg-emerald-500' : 'bg-amber-400'
+                              }`} />
+                              {member.accepted_at ? 'Active' : 'Pending'}
+                            </span>
+                          </td>
+                          {currentUserRole === 'admin' && (
+                            <td className="px-4 py-3 text-right">
+                              {member.user_id !== currentUserId && (
+                                <button
+                                  onClick={() => handleRemoveMember(member.user_id)}
+                                  className="text-red-400 hover:text-red-600 transition-colors p-1 rounded"
+                                  title="Remove from organization"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Invite Modal */}
+              {showInviteModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-xl p-6 w-full max-w-md mx-4">
+                    <h3 className="font-semibold text-slate-800 mb-4">Invite User</h3>
+                    <p className="text-sm text-slate-500 mb-4">
+                      The user must already have an account. Enter their email to add them to your organization.
+                    </p>
+                    <div className="space-y-3">
+                      <div>
+                        <label className={labelClass}>Email</label>
+                        <input
+                          value={inviteEmail}
+                          onChange={e => setInviteEmail(e.target.value)}
+                          className={inputClass}
+                          placeholder="user@example.com"
+                          type="email"
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Role</label>
+                        <select
+                          value={inviteRole}
+                          onChange={e => setInviteRole(e.target.value)}
+                          className={inputClass}
+                        >
+                          <option value="admin">Admin — Full access, can manage users</option>
+                          <option value="biller">Biller — Can submit claims and manage billing</option>
+                          <option value="viewer">Viewer — Read-only access</option>
+                        </select>
+                      </div>
+                      {inviteError && (
+                        <p className="text-sm text-red-500">{inviteError}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-end gap-3 mt-5">
+                      <button
+                        onClick={() => { setShowInviteModal(false); setInviteError(null); }}
+                        className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleInviteUser}
+                        disabled={inviting || !inviteEmail.trim()}
+                        className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium px-5 py-2 rounded-lg disabled:opacity-50"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                        {inviting ? 'Adding...' : 'Add User'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Language */}
           {active === 'lang' && (
             <div className="space-y-4">
@@ -1346,7 +1746,7 @@ export default function SettingsPage() {
           )}
 
           {/* Save */}
-          {active !== 'lang' && active !== 'providers' && active !== 'payers' && active !== 'fee-schedule' && active !== 'pairing' && active !== 'connections' && active !== 'portals' && active !== 'audit' && (
+          {active !== 'lang' && active !== 'providers' && active !== 'payers' && active !== 'fee-schedule' && active !== 'pairing' && active !== 'connections' && active !== 'portals' && active !== 'audit' && active !== 'team' && active !== 'account' && (
             <div className="mt-6 flex items-center gap-3">
               <button
                 onClick={handleSave}

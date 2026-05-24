@@ -114,7 +114,7 @@ export const useAuthStore = create<AuthState>()(
       setProviders: (providers) => set({ providers }),
     }),
     {
-      name: 'someteopr-auth',
+      name: 'angelclaims-auth',
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,

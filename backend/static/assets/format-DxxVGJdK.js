@@ -1,0 +1,1 @@
+const s=i=>{const e=i.replace(/\D/g,"");return e.length<=3?e:e.length<=6?`(${e.slice(0,3)}) ${e.slice(3)}`:`(${e.slice(0,3)}) ${e.slice(3,6)}-${e.slice(6,10)}`},t=i=>{if(!i)return"";const e=i.replace(/\D/g,"");return e.length===10?`(${e.slice(0,3)}) ${e.slice(3,6)}-${e.slice(6,10)}`:e.length===7?`${e.slice(0,3)}-${e.slice(3)}`:i};export{t as d,s as f};

@@ -79,7 +79,7 @@ Each FastAPI router becomes a Tauri command module:
 - **EDI generation moves to frontend/JS** — @stedi/x12 NPM package, invoked from Tauri command or frontend
 - **Auth simplified** — no JWT, no sessions. Local app = local user. Optional PIN/password for launch.
 - **ImPlug paths stored in app config** — user picks folders once in settings
-- **someteopr.com** — marketing site + download page
+- **angelclaims.com** — marketing site + download page
 
 ## Files to Reference (Wink patterns)
 - Wink Tauri config: check wink-app/ for Tauri 2 setup patterns

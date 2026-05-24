@@ -45,14 +45,8 @@ export default function Layout() {
     <div className="flex h-screen overflow-hidden flex-col">
       {/* Top header */}
       <header className="h-14 flex-shrink-0 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6 z-10">
-        {/* Logo / Brand */}
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-sky-500/20 flex items-center justify-center">
-            <span className="text-sky-400 text-xs font-bold">AC</span>
-          </div>
-          <span className="text-white font-semibold text-sm">AngelClaims</span>
-          <span className="text-slate-500 text-xs ml-1">Admin</span>
-        </div>
+        {/* Logo */}
+        <img src="/angel-logo.png" alt="AngelClaims" className="h-8 w-auto" />
 
         {/* Account dropdown */}
         <div className="relative" ref={dropdownRef}>
@@ -108,9 +102,7 @@ export default function Layout() {
             ))}
           </nav>
 
-          <div className="p-4 border-t border-slate-800">
-            <p className="text-xs text-slate-600">Super Admin Console</p>
-          </div>
+
         </aside>
 
         {/* Main content */}
