@@ -8,6 +8,7 @@ import {
   ChevronLeft, ChevronRight, LogOut,
 } from 'lucide-react';
 import { useAuthStore } from '../../hooks/useAuth';
+import ProviderSwitcher from './ProviderSwitcher';
 import clsx from 'clsx';
 
 const NAV_ITEMS = [
@@ -49,6 +50,9 @@ export default function Sidebar() {
           <img src="/angel-logo.png" alt="AngelClaims" className="h-8 w-auto object-contain" />
         )}
       </div>
+
+      {/* Provider Switcher */}
+      <ProviderSwitcher collapsed={collapsed} />
 
       {/* Nav */}
       <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
