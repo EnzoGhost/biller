@@ -105,4 +105,4 @@ The database is pre-seeded with:
 
 ## Database
 
-SQLite at: `~/Library/Application Support/com.someteopr.app/someteopr.db` (macOS)
+SQLite at: `~/Library/Application Support/com.angelclaims.app/angelclaims.db` (macOS)
