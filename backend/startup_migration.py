@@ -46,6 +46,13 @@ def run_startup_migration():
         "payments": [
             ("provider_id", "ALTER TABLE payments ADD COLUMN provider_id INTEGER"),
         ],
+        "clinic_settings": [
+            ("angelwink_clinic_id", "ALTER TABLE clinic_settings ADD COLUMN angelwink_clinic_id VARCHAR(36)"),
+            ("vistanet_url", "ALTER TABLE clinic_settings ADD COLUMN vistanet_url TEXT DEFAULT 'https://visualzone.vistanet.cloud'"),
+        ],
+        "provider_settings": [
+            ("angelwink_clinic_id", "ALTER TABLE provider_settings ADD COLUMN angelwink_clinic_id VARCHAR(36)"),
+        ],
     }
 
     for table, columns in migrations.items():

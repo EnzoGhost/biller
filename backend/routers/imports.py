@@ -911,11 +911,12 @@ async def import_wink_invoices(
             inv_id = inv["id"]
             enc_ref = f"inv_{inv_id}"
 
-            # Skip duplicates
+            # Skip duplicates — scoped by provider to allow different orgs to import same data
             existing = await db.execute(
                 select(Claim).where(
                     Claim.source == "wink",
                     Claim.external_ref == enc_ref,
+                    Claim.provider_id == provider_id,
                 )
             )
             if existing.scalar_one_or_none():
