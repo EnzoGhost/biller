@@ -5,9 +5,9 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 
 from database import get_db
-from models import Patient, PatientInsurance
+from models import Patient, PatientInsurance, Provider
 from schemas import PatientOut, PatientCreate, PatientUpdate
-from auth import get_current_user
+from auth import get_current_user, get_current_provider
 from models import User
 
 router = APIRouter(prefix="/patients", tags=["patients"])
@@ -24,23 +24,26 @@ async def list_patients(
     search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
+    provider: Provider = Depends(get_current_provider),
 ):
-    q = select(Patient).options(*patient_options()).where(Patient.is_active == True)
+    q = select(Patient).options(*patient_options()).where(
+        Patient.is_active == True,
+        Patient.provider_id == provider.id,
+    )
+    count_q = select(func.count()).select_from(Patient).where(
+        Patient.is_active == True,
+        Patient.provider_id == provider.id,
+    )
     if search:
         term = f"%{search}%"
-        q = q.where(or_(
+        cond = or_(
             Patient.first_name.ilike(term),
             Patient.last_name.ilike(term),
             Patient.mrn.ilike(term),
-        ))
-    count_q = select(func.count()).select_from(Patient).where(Patient.is_active == True)
-    if search:
-        term = f"%{search}%"
-        count_q = count_q.where(or_(
-            Patient.first_name.ilike(term),
-            Patient.last_name.ilike(term),
-            Patient.mrn.ilike(term),
-        ))
+        )
+        q = q.where(cond)
+        count_q = count_q.where(cond)
+
     total = (await db.execute(count_q)).scalar_one()
     q = q.order_by(Patient.last_name).offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(q)
@@ -59,12 +62,16 @@ async def create_patient(
     body: PatientCreate,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
+    provider: Provider = Depends(get_current_provider),
 ):
-    # Auto-generate MRN
-    count = (await db.execute(select(func.count()).select_from(Patient))).scalar_one()
+    # Auto-generate MRN scoped to provider
+    count = (await db.execute(
+        select(func.count()).select_from(Patient).where(Patient.provider_id == provider.id)
+    )).scalar_one()
     mrn = f"PR{str(count + 1).zfill(6)}"
     patient = Patient(
         mrn=mrn,
+        provider_id=provider.id,
         first_name=body.first_name,
         last_name=body.last_name,
         dob=body.dob,
@@ -95,9 +102,13 @@ async def get_patient(
     patient_id: int,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
+    provider: Provider = Depends(get_current_provider),
 ):
     result = await db.execute(
-        select(Patient).options(*patient_options()).where(Patient.id == patient_id)
+        select(Patient).options(*patient_options()).where(
+            Patient.id == patient_id,
+            Patient.provider_id == provider.id,
+        )
     )
     patient = result.scalar_one_or_none()
     if not patient:
@@ -111,8 +122,11 @@ async def update_patient(
     body: PatientUpdate,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
+    provider: Provider = Depends(get_current_provider),
 ):
-    result = await db.execute(select(Patient).where(Patient.id == patient_id))
+    result = await db.execute(
+        select(Patient).where(Patient.id == patient_id, Patient.provider_id == provider.id)
+    )
     patient = result.scalar_one_or_none()
     if not patient:
         raise HTTPException(404, "Paciente no encontrado")
@@ -130,8 +144,11 @@ async def deactivate_patient(
     patient_id: int,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
+    provider: Provider = Depends(get_current_provider),
 ):
-    result = await db.execute(select(Patient).where(Patient.id == patient_id))
+    result = await db.execute(
+        select(Patient).where(Patient.id == patient_id, Patient.provider_id == provider.id)
+    )
     patient = result.scalar_one_or_none()
     if not patient:
         raise HTTPException(404, "Paciente no encontrado")

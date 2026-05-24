@@ -33,6 +33,27 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # Migrate: add multi-tenancy columns if not present
+    async with engine.begin() as conn:
+        multi_tenant_migrations = [
+            # organizations table handled by create_all
+            # Add organization_id to providers
+            ("providers", "organization_id", "INTEGER REFERENCES organizations(id)"),
+            # Add provider_id to patients
+            ("patients", "provider_id", "INTEGER REFERENCES providers(id)"),
+            # Add provider_id to fee_schedule
+            ("fee_schedule", "provider_id", "INTEGER REFERENCES providers(id)"),
+            # Add provider_id to prior_auths
+            ("prior_auths", "provider_id", "INTEGER REFERENCES providers(id)"),
+        ]
+        for table, col, col_def in multi_tenant_migrations:
+            try:
+                await conn.execute(
+                    sqlalchemy.text(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}")
+                )
+            except Exception:
+                pass  # Column already exists
+
     # Migrate: add VistaNet credential columns to clinic_settings if missing
     async with engine.begin() as conn:
         for col_name, col_type in [

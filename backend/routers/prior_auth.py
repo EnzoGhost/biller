@@ -10,8 +10,8 @@ from sqlalchemy import select
 from pydantic import BaseModel
 
 from database import get_db
-from models import PriorAuth, PriorAuthStatus, Claim, User
-from auth import get_current_user
+from models import PriorAuth, PriorAuthStatus, Claim, User, Provider
+from auth import get_current_user, get_current_provider
 
 router = APIRouter(prefix="/prior-auth", tags=["prior_auth"])
 
@@ -67,9 +67,12 @@ async def list_prior_auths(
     expiring_soon: bool = False,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
+    provider: Provider = Depends(get_current_provider),
 ):
-    """List prior auths with optional filters."""
-    q = select(PriorAuth)
+    """List prior auths with optional filters, scoped to current provider."""
+    q = select(PriorAuth).where(
+        (PriorAuth.provider_id == provider.id) | (PriorAuth.provider_id.is_(None))
+    )
     if claim_id:
         q = q.where(PriorAuth.claim_id == claim_id)
     if status:

@@ -76,6 +76,7 @@ class ProviderUpdate(ProviderCreate):
     npi: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 # ── Payers ───────────────────────────────────────────────────────────────────
@@ -360,8 +361,9 @@ class EligibilityRequest(BaseModel):
     patient_dob: date
     patient_first_name: str
     patient_last_name: str
-    service_type_code: str = "30"  # 30=Health Benefit Plan Coverage
+    service_type_code: str = "AL"  # AL=Vision (Optometry), 30=Health Benefit Plan Coverage
     service_date: Optional[date] = None
+    provider_id: Optional[int] = None  # Specific provider; uses first active if omitted
 
 class EligibilityResponse(BaseModel):
     is_eligible: bool

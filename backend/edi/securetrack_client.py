@@ -150,6 +150,7 @@ class SecureTrackClient:
         username: str | None = None,
         password: str | None = None,
         env: str | None = None,
+        endpoint_url: str | None = None,
         timeout: float = 60.0,
     ):
         # Runtime config (from Settings UI) takes priority over .env
@@ -157,7 +158,8 @@ class SecureTrackClient:
         self.username = username or _runtime_config.get("ws_username") or settings.INMEDIATA_WS_USERNAME
         self.password = password or _runtime_config.get("ws_password") or settings.INMEDIATA_WS_PASSWORD
         self.env = (env or _runtime_config.get("ws_env") or settings.INMEDIATA_WS_ENV or "uat").lower()
-        self.endpoint = ENDPOINTS.get(self.env, ENDPOINTS["uat"])
+        # Use caller-provided URL first, then env-based default
+        self.endpoint = endpoint_url or ENDPOINTS.get(self.env, ENDPOINTS["uat"])
         self.timeout = timeout
 
         if not self.username or not self.password:

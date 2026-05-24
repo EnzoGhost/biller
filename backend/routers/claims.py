@@ -10,8 +10,8 @@ from sqlalchemy.orm import selectinload
 from database import get_db
 from models import Claim, ServiceLine, ClaimStatus, Patient, PatientInsurance, Provider, Payer, Denial, AuditLog
 from schemas import ClaimOut, ClaimCreate, ClaimUpdate, PaymentOut, PaymentCreate, ServiceLineCreate
-from auth import get_current_user
-from models import User, Payment
+from auth import get_current_user, get_current_provider
+from models import User, Payment, Provider
 from routers.audit import log_action
 from pydantic import BaseModel
 
@@ -78,11 +78,12 @@ async def list_claims(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     search: Optional[str] = None,
+    current_provider: Provider = Depends(get_current_provider),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     q = select(Claim).options(*claim_with_relations())
-    filters = []
+    filters = [Claim.provider_id == current_provider.id]
     if status:
         filters.append(Claim.status == status)
     if payer_id:
@@ -107,9 +108,9 @@ async def list_claims(
         q = q.where(and_(*filters))
 
     # Count
-    count_q = select(func.count()).select_from(Claim)
-    if filters:
-        count_q = count_q.where(and_(*filters))
+    count_q = select(func.count()).select_from(Claim).where(Claim.provider_id == current_provider.id)
+    if len(filters) > 1:
+        count_q = count_q.where(and_(*filters[1:]))
     total_res = await db.execute(count_q)
     total = total_res.scalar_one()
 

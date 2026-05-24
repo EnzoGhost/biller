@@ -93,6 +93,8 @@ def generate_270(
     provider_npi: str = "",
     provider_last_name: str = "",
     provider_first_name: str = "",
+    provider_taxonomy: str = "",
+    provider_tax_id: str = "",
     # Service type codes (loop 2110C)
     service_type_codes: list[str] | None = None,
     # Timestamps
@@ -115,7 +117,10 @@ def generate_270(
     gs_ctrl   = _next_gs()
     st_ctrl   = _next_st()
 
-    sub_id_clean   = _clean(submitter_id)[:15].ljust(15)
+    # ISA06/GS02: use submitter_id (Inmediata-assigned). Tax ID goes in REF*EI segment.
+    isa_sender_id = _clean(submitter_id)
+    isa_sender_qualifier = "ZZ"
+    sub_id_clean   = isa_sender_id[:15].ljust(15)
     recv_id_clean  = _clean(receiver_id)[:15].ljust(15)
 
     segments: list[str] = []
@@ -125,12 +130,12 @@ def generate_270(
         "ISA",
         "00", " " * 10,          # auth info qualifier, auth info
         "00", " " * 10,          # security qualifier, security info
-        "ZZ", sub_id_clean,      # sender qualifier + ID
+        isa_sender_qualifier, sub_id_clean,  # sender qualifier + ID (Tax ID or submitter)
         "ZZ", recv_id_clean,     # receiver qualifier + ID
         date_str[2:],            # date YYMMDD
         time_str,                # time HHMM
-        "^",                     # repetition separator
-        "00501",                 # version
+        "U",                     # repetition separator (U for 4010)
+        "00401",                 # version (4010 — Inmediata UAT expects this)
         isa_ctrl,                # interchange control number
         "0",                     # acknowledgment requested
         "T",                     # usage: T=test, P=production
@@ -141,17 +146,17 @@ def generate_270(
     segments.append(_seg(
         "GS",
         "HS",                    # functional ID: HS = 270
-        _clean(submitter_id)[:15],
+        _clean(submitter_id)[:15],  # GS02: submitter ID
         _clean(receiver_id)[:15],
         date_str,
         time_str,
         gs_ctrl,
         "X",                     # responsible agency: X = ASC X12
-        "005010X279A1",
+        "004010X092A1",
     ))
 
     # ST — Transaction Set Header
-    segments.append(_seg("ST", "270", st_ctrl, "005010X279A1"))
+    segments.append(_seg("ST", "270", st_ctrl))
 
     # BHT — Beginning of Hierarchical Transaction
     segments.append(_seg(
@@ -183,6 +188,15 @@ def generate_270(
     # Loop 2000B — Information Receiver Level (HL 2)
     # ──────────────────────────────────────────────────────
     segments.append(_seg("HL", "2", "1", "21", "1"))  # 21=Information Receiver
+
+    # PRV — Provider Information (taxonomy code)
+    if provider_taxonomy:
+        segments.append(_seg(
+            "PRV",
+            "PE",                # provider code: PE = Performing
+            "PXC",               # reference ID qualifier: PXC = taxonomy code
+            _clean(provider_taxonomy),
+        ))
 
     # NM1 — Information Receiver (Provider)
     if provider_npi:

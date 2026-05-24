@@ -9,6 +9,7 @@ import {
   Bell, Wand2, DollarSign,
 } from 'lucide-react';
 import { useAuthStore } from '../../hooks/useAuth';
+import ProviderSwitcher from '../ProviderSwitcher';
 import clsx from 'clsx';
 
 const NAV_ITEMS = [
@@ -95,6 +96,11 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
+
+      {/* Provider Switcher */}
+      <div className="px-2 pb-2">
+        <ProviderSwitcher collapsed={collapsed} />
+      </div>
 
       {/* User */}
       <div className="p-3 border-t border-slate-100">

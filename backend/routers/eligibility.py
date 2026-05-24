@@ -32,6 +32,34 @@ router = APIRouter(prefix="/eligibility", tags=["eligibility"])
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
 
+class DirectEligibilityRequest(BaseModel):
+    """All data inline — used by AngelWink desktop app (no DB lookups)."""
+    # Provider info
+    provider_npi: str
+    provider_first_name: str = ""
+    provider_last_name: str = ""
+    provider_taxonomy: str = "152W00000X"
+    provider_tax_id: str = ""
+    # Inmediata creds
+    inmediata_username: str
+    inmediata_password: str
+    inmediata_env: str = "uat"   # "uat" or "prod"
+    # Subscriber / patient
+    subscriber_first_name: str
+    subscriber_last_name: str
+    subscriber_dob: str           # YYYY-MM-DD
+    subscriber_gender: str = ""   # M or F
+    member_id: str
+    group_number: str = ""
+    # Payer
+    payer_name: str
+    payer_id: str                 # EDI payer ID
+    # Service
+    service_type_codes: list[str] = ["AL"]
+    # Optional custom endpoint URL (overrides env default)
+    inmediata_url: Optional[str] = None
+
+
 class EligibilityCheckRequest(BaseModel):
     patient_id: int
     insurance_id: Optional[int] = None          # PatientInsurance.id — use primary if omitted
@@ -149,6 +177,8 @@ async def check_eligibility(
             provider_npi=provider.npi if provider else "",
             provider_last_name=provider.last_name if provider else "",
             provider_first_name=provider.first_name if provider else "",
+            provider_taxonomy=provider.taxonomy_code if provider else "",
+            provider_tax_id=provider.ein if provider and provider.ein else "",
             service_type_codes=req.service_type_codes,
             inquiry_date=req.as_of_date or date.today(),
         )
@@ -200,6 +230,106 @@ async def check_eligibility(
     await db.refresh(check)
 
     return _check_to_response(check, patient)
+
+
+@router.post(
+    "/check-direct",
+    summary="Direct eligibility check — all data inline, no DB lookups",
+)
+async def check_eligibility_direct(req: DirectEligibilityRequest):
+    """
+    Real-time X12 270/271 eligibility check using credentials and patient data
+    provided inline in the request body.
+
+    Used by the AngelWink desktop app which has its own local SQLite database.
+    No auth required — the Inmediata credentials are supplied in the request.
+    """
+    from datetime import date as _date
+    import re
+
+    # ── 1. Build 270 ──────────────────────────────────────────────────────────
+    # Parse DOB
+    try:
+        dob = _date.fromisoformat(req.subscriber_dob) if req.subscriber_dob else None
+    except ValueError:
+        dob = None
+
+    # submitter_id = the Inmediata username (matches what Inmediata expects)
+    submitter_id = req.inmediata_username
+
+    try:
+        x12_270 = generate_270(
+            submitter_id=submitter_id,
+            subscriber_last=req.subscriber_last_name,
+            subscriber_first=req.subscriber_first_name,
+            subscriber_dob=dob,
+            subscriber_gender=req.subscriber_gender,
+            member_id=req.member_id,
+            group_number=req.group_number,
+            payer_id=req.payer_id,
+            payer_name=req.payer_name,
+            provider_npi=req.provider_npi,
+            provider_last_name=req.provider_last_name,
+            provider_first_name=req.provider_first_name,
+            provider_taxonomy=req.provider_taxonomy,
+            provider_tax_id=req.provider_tax_id,
+            service_type_codes=req.service_type_codes,
+            inquiry_date=_date.today(),
+        )
+    except Exception as exc:
+        logger.exception("check-direct: failed to generate 270")
+        raise HTTPException(status_code=500, detail=f"Failed to generate 270 EDI: {exc}")
+
+    # ── 2. Build SecureTrack client with inline creds ─────────────────────────
+    env = req.inmediata_env.lower() if req.inmediata_env else "uat"
+    client = SecureTrackClient(
+        username=req.inmediata_username,
+        password=req.inmediata_password,
+        env=env,
+        endpoint_url=req.inmediata_url or None,
+    )
+
+    # ── 3. Send 270 ───────────────────────────────────────────────────────────
+    try:
+        rt_result = await client.send_realtime(x12_270)
+    except Exception as exc:
+        logger.exception("check-direct: SecureTrack SendRealTime failed")
+        raise HTTPException(status_code=502, detail=f"Inmediata SecureTrack error: {exc}")
+
+    # ── 4. Parse 271 ──────────────────────────────────────────────────────────
+    parsed: dict[str, Any] = {}
+    status = "error"
+
+    if rt_result.success and rt_result.response:
+        try:
+            parsed = parse_271_summary(rt_result.response)
+            status = parsed.get("status", "unknown")
+        except Exception as exc:
+            logger.warning("check-direct: 271 parse error: %s", exc)
+            parsed = {"parse_error": str(exc), "raw_response": rt_result.response}
+            status = "unknown"
+    else:
+        error_msg = rt_result.message or "No response from Inmediata"
+        parsed = {"error": error_msg}
+        status = "error"
+
+    # ── 5. Return structured result ───────────────────────────────────────────
+    return {
+        "status": status,
+        "plan_name": parsed.get("plan_name"),
+        "plan_begin_date": parsed.get("plan_begin_date"),
+        "plan_end_date": parsed.get("plan_end_date"),
+        "group_name": parsed.get("group_name"),
+        "group_number": parsed.get("group_number"),
+        "copays": parsed.get("copays", []),
+        "deductibles": parsed.get("deductibles", []),
+        "benefits": parsed.get("benefits", []),
+        "subscriber_name": parsed.get("subscriber_name"),
+        "subscriber_id": parsed.get("subscriber_id"),
+        "payer_name": parsed.get("payer_name"),
+        "error": parsed.get("error"),
+        "raw": parsed,
+    }
 
 
 @router.get(

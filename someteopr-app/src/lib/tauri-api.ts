@@ -60,6 +60,102 @@ export async function getCurrentUser(userId: number): Promise<User> {
   return rows[0];
 }
 
+// ── Multi-tenancy: Organizations & Providers ─────────────────────────────────
+
+export interface OrgRow {
+  id: number;
+  name: string;
+  slug: string;
+  role: string;
+  subscription_tier: string;
+  subscription_status: string;
+}
+
+export interface ProviderRow {
+  id: number;
+  npi: string;
+  first_name: string;
+  last_name: string;
+  specialty?: string;
+  organization_id?: number;
+}
+
+export async function getUserOrgs(userId: number): Promise<OrgRow[]> {
+  const rows = await query<OrgRow>(
+    `SELECT o.id, o.name, o.slug, ou.role, o.subscription_tier, o.subscription_status
+     FROM organizations o
+     JOIN org_users ou ON ou.organization_id = o.id
+     WHERE ou.user_id = ?
+     ORDER BY o.name`,
+    [userId]
+  );
+  // If no orgs exist, create a default one
+  if (rows.length === 0) {
+    await execute(
+      `INSERT OR IGNORE INTO organizations (name, slug, subscription_tier, subscription_status, max_providers)
+       VALUES ('Test Organization', 'test-organization', 'free', 'trial', 10)`
+    );
+    const orgRows = await query<{ id: number }>('SELECT id FROM organizations WHERE slug=?', ['test-organization']);
+    if (orgRows.length > 0) {
+      const orgId = orgRows[0].id;
+      await execute(
+        `INSERT OR IGNORE INTO org_users (organization_id, user_id, role, accepted_at) VALUES (?, ?, 'admin', datetime('now'))`,
+        [orgId, userId]
+      );
+      // Assign all existing providers to this org
+      await execute(`UPDATE providers SET organization_id=? WHERE organization_id IS NULL`, [orgId]);
+      return getUserOrgs(userId);
+    }
+  }
+  return rows;
+}
+
+export async function getUserProviders(orgId: number): Promise<ProviderRow[]> {
+  return query<ProviderRow>(
+    `SELECT id, npi, first_name, last_name, specialty, organization_id
+     FROM providers WHERE organization_id=? AND is_active=1 ORDER BY last_name`,
+    [orgId]
+  );
+}
+
+export async function getOrgDetails(orgId: number) {
+  const rows = await query<OrgRow>(
+    'SELECT id, name, slug, subscription_tier, subscription_status FROM organizations WHERE id=? LIMIT 1',
+    [orgId]
+  );
+  return rows[0] ?? null;
+}
+
+export async function listOrganizations(userId: number) {
+  return getUserOrgs(userId);
+}
+
+export async function createOrganization(name: string, userId: number): Promise<OrgRow> {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 100)
+    + '-' + Date.now();
+  await execute(
+    `INSERT INTO organizations (name, slug, subscription_tier, subscription_status) VALUES (?, ?, 'free', 'trial')`,
+    [name, slug]
+  );
+  const orgRows = await query<{ id: number }>('SELECT id FROM organizations WHERE slug=? LIMIT 1', [slug]);
+  const orgId = orgRows[0].id;
+  await execute(
+    `INSERT INTO org_users (organization_id, user_id, role, accepted_at) VALUES (?, ?, 'admin', datetime('now'))`,
+    [orgId, userId]
+  );
+  const org = await getOrgDetails(orgId);
+  return { ...org!, role: 'admin' };
+}
+
+export async function inviteMember(orgId: number, email: string, role: string = 'biller') {
+  const users = await query<{ id: number }>('SELECT id FROM users WHERE email=? LIMIT 1', [email]);
+  if (!users.length) throw new Error('User not found');
+  await execute(
+    `INSERT OR IGNORE INTO org_users (organization_id, user_id, role, accepted_at) VALUES (?, ?, ?, datetime('now'))`,
+    [orgId, users[0].id, role]
+  );
+}
+
 // ── Dashboard ────────────────────────────────────────────────────────────────
 
 export async function getDashboardStats(): Promise<DashboardStats> {
@@ -174,21 +270,24 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
 // ── Patients ──────────────────────────────────────────────────────────────────
 
-export async function getPatients(opts?: { search?: string; page?: number; per_page?: number }) {
-  const { search = '', page = 1, per_page = 50 } = opts ?? {};
+export async function getPatients(opts?: { search?: string; page?: number; per_page?: number; provider_id?: number }) {
+  const { search = '', page = 1, per_page = 50, provider_id } = opts ?? {};
   const offset = (page - 1) * per_page;
   const likeSearch = `%${search}%`;
 
+  const providerFilter = provider_id ? ' AND provider_id=?' : '';
+  const providerParam = provider_id ? [provider_id] : [];
+
   const [countRow] = await query<{ cnt: number }>(
-    `SELECT COUNT(*) as cnt FROM patients WHERE is_active=1 AND (first_name LIKE ? OR last_name LIKE ? OR mrn LIKE ? OR phone LIKE ?)`,
-    [likeSearch, likeSearch, likeSearch, likeSearch]
+    `SELECT COUNT(*) as cnt FROM patients WHERE is_active=1${providerFilter} AND (first_name LIKE ? OR last_name LIKE ? OR mrn LIKE ? OR phone LIKE ?)`,
+    [...providerParam, likeSearch, likeSearch, likeSearch, likeSearch]
   );
   const total = countRow?.cnt ?? 0;
 
   const rows = await query<Record<string, unknown>>(
-    `SELECT * FROM patients WHERE is_active=1 AND (first_name LIKE ? OR last_name LIKE ? OR mrn LIKE ? OR phone LIKE ?)
+    `SELECT * FROM patients WHERE is_active=1${providerFilter} AND (first_name LIKE ? OR last_name LIKE ? OR mrn LIKE ? OR phone LIKE ?)
      ORDER BY last_name, first_name LIMIT ? OFFSET ?`,
-    [likeSearch, likeSearch, likeSearch, likeSearch, per_page, offset]
+    [...providerParam, likeSearch, likeSearch, likeSearch, likeSearch, per_page, offset]
   );
 
   const patients = await Promise.all(rows.map(async (row) => {
@@ -218,13 +317,15 @@ export async function getPatient(id: number): Promise<Patient> {
   return p;
 }
 
-export async function createPatient(data: Partial<Patient>): Promise<Patient> {
-  const [countRow] = await query<{ cnt: number }>('SELECT COUNT(*) as cnt FROM patients');
+export async function createPatient(data: Partial<Patient> & { provider_id?: number }): Promise<Patient> {
+  const [countRow] = await query<{ cnt: number }>(
+    'SELECT COUNT(*) as cnt FROM patients WHERE provider_id=?', [data.provider_id ?? null]
+  );
   const mrn = `PR${String((countRow?.cnt ?? 0) + 1).padStart(6, '0')}`;
   const r = await execute(
-    `INSERT INTO patients (mrn, first_name, last_name, dob, gender, phone, email, address_line1, address_line2, city, state, zip_code, is_active)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)`,
-    [mrn, data.first_name, data.last_name, data.dob, data.gender ?? 'U', data.phone ?? null, data.email ?? null,
+    `INSERT INTO patients (mrn, provider_id, first_name, last_name, dob, gender, phone, email, address_line1, address_line2, city, state, zip_code, is_active)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1)`,
+    [mrn, data.provider_id ?? null, data.first_name, data.last_name, data.dob, data.gender ?? 'U', data.phone ?? null, data.email ?? null,
      data.address_line1 ?? null, null, data.city ?? null, data.state ?? 'PR', data.zip_code ?? null]
   );
   return getPatient(r.lastInsertId);
@@ -345,15 +446,17 @@ interface ClaimListOpts {
   payer_id?: number;
   date_from?: string;
   date_to?: string;
+  provider_id?: number;
 }
 
 export async function getClaims(opts?: ClaimListOpts) {
-  const { page = 1, per_page = 20, status, search, patient_id, payer_id, date_from, date_to } = opts ?? {};
+  const { page = 1, per_page = 20, status, search, patient_id, payer_id, date_from, date_to, provider_id } = opts ?? {};
   const offset = (page - 1) * per_page;
 
   const conditions: string[] = [];
   const params: unknown[] = [];
 
+  if (provider_id) { conditions.push('c.provider_id=?'); params.push(provider_id); }
   if (status) { conditions.push('c.status=?'); params.push(status); }
   if (patient_id) { conditions.push('c.patient_id=?'); params.push(patient_id); }
   if (payer_id) { conditions.push('c.payer_id=?'); params.push(payer_id); }

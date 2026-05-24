@@ -9,6 +9,50 @@ const ProvidersPage = lazy(() => import('./ProvidersPage'));
 const PayersPage = lazy(() => import('./PayersPage'));
 const FeeSchedulePage = lazy(() => import('./FeeSchedulePage'));
 
+// ── Module-level audit state (persists across tab switches) ─────────────────
+interface AuditEntry {
+  invoice_number: string | null;
+  date: string | null;
+  patient_id: string | null;
+  patient_name: string;
+  plan_amount: number;
+  total: number;
+  attended_by: string | null;
+  payer: string | null;
+}
+interface AuditResult {
+  date_from: string;
+  date_to: string;
+  flagged_count: number;
+  total_lost: number;
+  flagged: AuditEntry[];
+}
+interface AuditProgress {
+  phase: 'login' | 'scanning' | 'done' | 'error';
+  message?: string;
+  day?: string;
+  day_number?: number;
+  total_days?: number;
+  patients_found?: number;
+  patients_scanned?: number;
+  flagged_so_far?: number;
+  lost_so_far?: number;
+}
+interface ModuleAuditState {
+  loading: boolean;
+  progress: AuditProgress | null;
+  result: AuditResult | null;
+  error: string | null;
+}
+let _auditState: ModuleAuditState = { loading: false, progress: null, result: null, error: null };
+let _abortController: AbortController | null = null;
+type AuditStateListener = (state: ModuleAuditState) => void;
+const _auditListeners = new Set<AuditStateListener>();
+function _setAuditState(patch: Partial<ModuleAuditState>) {
+  _auditState = { ..._auditState, ...patch };
+  _auditListeners.forEach(fn => fn(_auditState));
+}
+
 export default function SettingsPage() {
   const { t, i18n } = useTranslation();
   const [active, setActive] = useState('clinic');
@@ -87,8 +131,6 @@ export default function SettingsPage() {
   const firstOfMonth = today.substring(0, 8) + '01';
   const [auditDateFrom, setAuditDateFrom] = useState(firstOfMonth);
   const [auditDateTo, setAuditDateTo]   = useState(today);
-  const [auditLoading, setAuditLoading] = useState(false);
-  const [auditError, setAuditError]     = useState<string | null>(null);
   const [auditMode, setAuditMode]       = useState<'synced' | 'direct'>('synced');
   // Direct VistaNet credentials
   const [directUrl, setDirectUrl]           = useState('https://visualzone.vistanet.cloud');
@@ -96,24 +138,25 @@ export default function SettingsPage() {
   const [directPassword, setDirectPassword] = useState('');
   const [directLocation, setDirectLocation] = useState('MANATI');
   const [directShowPassword, setDirectShowPassword] = useState(false);
-  interface AuditEntry {
-    invoice_number: string | null;
-    date: string | null;
-    patient_id: string | null;
-    patient_name: string;
-    plan_amount: number;
-    total: number;
-    attended_by: string | null;
-    payer: string | null;
-  }
-  interface AuditResult {
-    date_from: string;
-    date_to: string;
-    flagged_count: number;
-    total_lost: number;
-    flagged: AuditEntry[];
-  }
-  const [auditResult, setAuditResult]   = useState<AuditResult | null>(null);
+  // Mirror module-level audit state into component state
+  const [auditLoading, setAuditLoading] = useState(_auditState.loading);
+  const [auditError, setAuditError]     = useState<string | null>(_auditState.error);
+  const [auditResult, setAuditResult]   = useState<AuditResult | null>(_auditState.result);
+  const [auditProgress, setAuditProgress] = useState<AuditProgress | null>(_auditState.progress);
+
+  // Subscribe to module-level audit state changes on mount
+  useEffect(() => {
+    const listener: AuditStateListener = (state) => {
+      setAuditLoading(state.loading);
+      setAuditError(state.error);
+      setAuditResult(state.result);
+      setAuditProgress(state.progress);
+    };
+    _auditListeners.add(listener);
+    // Sync current state in case it changed while unmounted
+    listener(_auditState);
+    return () => { _auditListeners.delete(listener); };
+  }, []);
 
   const VISTANET_LOCATIONS = [
     'MANATI', 'BARCELONETA', 'ARECIBO', 'CIALES', 'MOROVIS',
@@ -124,32 +167,90 @@ export default function SettingsPage() {
   const runAudit = async () => {
     if (!auditDateFrom || !auditDateTo) return;
     if (auditMode === 'direct' && (!directUser || !directPassword)) return;
-    setAuditLoading(true);
-    setAuditError(null);
-    setAuditResult(null);
+    // Abort any running audit
+    if (_abortController) {
+      _abortController.abort();
+      _abortController = null;
+    }
+    _setAuditState({ loading: true, error: null, result: null, progress: null });
+
     try {
       if (auditMode === 'direct') {
-        const res = await api.post('/missing-claims/audit/direct', {
-          vistanet_url: directUrl,
-          vistanet_user: directUser,
-          vistanet_password: directPassword,
-          vistanet_location: directLocation,
-          date_from: auditDateFrom,
-          date_to: auditDateTo,
+        // Use SSE stream for live progress — runs independent of component lifecycle
+        const token = localStorage.getItem('biller_token');
+        _abortController = new AbortController();
+        const ctrl = _abortController;
+        const response = await fetch('/api/missing-claims/audit/direct/stream', {
+          method: 'POST',
+          signal: ctrl.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            vistanet_url: directUrl,
+            vistanet_user: directUser,
+            vistanet_password: directPassword,
+            vistanet_location: directLocation,
+            date_from: auditDateFrom,
+            date_to: auditDateTo,
+          }),
         });
-        setAuditResult(res.data);
+
+        if (!response.ok) {
+          let detail = `HTTP ${response.status}`;
+          try {
+            const errData = await response.json();
+            detail = errData.detail || detail;
+          } catch { /* ignore */ }
+          _setAuditState({ loading: false, error: detail });
+          return;
+        }
+
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        // This loop continues even if the component unmounts
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              try {
+                const event = JSON.parse(line.slice(6)) as AuditProgress & { result?: AuditResult };
+                if (event.phase === 'done') {
+                  _setAuditState({ loading: false, progress: null, result: event.result ?? null });
+                } else if (event.phase === 'error') {
+                  _setAuditState({ loading: false, progress: null, error: event.message || 'Audit failed' });
+                } else {
+                  _setAuditState({ progress: event });
+                }
+              } catch { /* skip malformed line */ }
+            }
+          }
+        } catch (streamErr: unknown) {
+          if ((streamErr as { name?: string })?.name !== 'AbortError') {
+            _setAuditState({ loading: false, error: 'Stream interrupted', progress: null });
+          }
+        } finally {
+          if (_abortController === ctrl) _abortController = null;
+        }
       } else {
         const res = await api.post('/missing-claims/audit/lost-revenue', {
           date_from: auditDateFrom,
           date_to: auditDateTo,
         });
-        setAuditResult(res.data);
+        _setAuditState({ loading: false, result: res.data });
       }
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } };
-      setAuditError(err?.response?.data?.detail || 'Error running audit');
-    } finally {
-      setAuditLoading(false);
+      if ((e as { name?: string })?.name === 'AbortError') return;
+      const err = e as { response?: { data?: { detail?: string } }; message?: string };
+      _setAuditState({ loading: false, error: err?.response?.data?.detail || err?.message || 'Error running audit', progress: null });
     }
   };
 
@@ -1014,24 +1115,24 @@ export default function SettingsPage() {
               {/* Mode toggle */}
               <div className="flex gap-2">
                 <button
-                  onClick={() => { setAuditMode('synced'); setAuditResult(null); setAuditError(null); }}
+                  onClick={() => { setAuditMode('synced'); _setAuditState({ result: null, error: null, loading: false, progress: null }); }}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
                     auditMode === 'synced'
                       ? 'border-sky-500 bg-sky-50 text-sky-700'
                       : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                   }`}
                 >
-                  📊 Synced Data
+                  <img src="/forClaimsImport.png" alt="AngelWink" className="h-5 w-auto" />
                 </button>
                 <button
-                  onClick={() => { setAuditMode('direct'); setAuditResult(null); setAuditError(null); }}
+                  onClick={() => { setAuditMode('direct'); _setAuditState({ result: null, error: null, loading: false, progress: null }); }}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
                     auditMode === 'direct'
                       ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                       : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                   }`}
                 >
-                  🔌 Direct from VistaNet
+                  VistaNet
                 </button>
               </div>
 
@@ -1088,7 +1189,7 @@ export default function SettingsPage() {
                           onClick={() => setDirectShowPassword(!directShowPassword)}
                           className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                         >
-                          {directShowPassword ? '🙈' : '👁️'}
+                          {directShowPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
@@ -1117,10 +1218,50 @@ export default function SettingsPage() {
               >
                 <Search className="w-4 h-4" />
                 {auditLoading
-                  ? (auditMode === 'direct' ? 'Scanning VistaNet...' : 'Running...')
+                  ? (auditMode === 'direct' ? 'Scanning...' : 'Running...')
                   : (auditMode === 'direct' ? 'Scan VistaNet' : 'Run Audit')
                 }
               </button>
+
+              {/* Live progress panel — direct VistaNet mode only */}
+              {auditLoading && auditMode === 'direct' && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+                  {/* Phase label */}
+                  <div className="flex items-center gap-2 text-emerald-700 text-sm font-medium">
+                    <span className="animate-spin inline-block w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full" />
+                    {auditProgress?.phase === 'login'
+                      ? (auditProgress.message || 'Connecting to VistaNet...')
+                      : auditProgress?.day_number != null
+                        ? `Scanning day ${auditProgress.day_number} of ${auditProgress.total_days}${auditProgress.day ? ` — ${new Date(auditProgress.day + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}`
+                        : 'Connecting...'}
+                  </div>
+
+                  {/* Progress bar */}
+                  {auditProgress?.day_number != null && auditProgress.total_days != null && (
+                    <div className="w-full bg-emerald-200 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-emerald-500 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.round((auditProgress.day_number / auditProgress.total_days) * 100)}%` }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Running stats */}
+                  {auditProgress?.patients_scanned != null && (
+                    <div className="flex flex-wrap gap-4 text-xs text-emerald-700">
+                      <span>👤 {auditProgress.patients_scanned} patients scanned</span>
+                      {(auditProgress.flagged_so_far ?? 0) > 0 && (
+                        <span>🚩 {auditProgress.flagged_so_far} flagged</span>
+                      )}
+                      {(auditProgress.lost_so_far ?? 0) > 0 && (
+                        <span className="font-semibold text-red-600">
+                          💰 ${(auditProgress.lost_so_far ?? 0).toFixed(2)} lost revenue found
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {auditError && (
                 <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-3">
@@ -1134,7 +1275,7 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-600">
                       {auditResult.flagged_count === 0
-                        ? 'No missing claims found ✅'
+                        ? 'No missing claims found'
                         : `${auditResult.flagged_count} invoice${auditResult.flagged_count !== 1 ? 's' : ''} flagged`}
                     </span>
                     {auditResult.total_lost > 0 && (

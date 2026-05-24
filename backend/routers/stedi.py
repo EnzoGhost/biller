@@ -187,13 +187,54 @@ async def check_eligibility(
     import uuid
     control_number = str(uuid.uuid4().int)[:9].zfill(9)
 
+    # Pull provider info from DB — use specific provider_id if given, else first active
+    from models import Provider as ProviderModel
+    if body.provider_id:
+        prov_result = await db.execute(
+            select(ProviderModel).where(ProviderModel.id == body.provider_id)
+        )
+    else:
+        prov_result = await db.execute(
+            select(ProviderModel).where(ProviderModel.is_active == True).order_by(ProviderModel.id).limit(1)
+        )
+    provider = prov_result.scalar_one_or_none()
+
+    # Clinic config fallback
+    from sqlalchemy import text as sa_text
+    clinic_row = None
+    try:
+        clinic_row = (await db.execute(sa_text("SELECT * FROM clinic_settings WHERE id = 1"))).mappings().first()
+    except Exception:
+        pass
+
+    provider_npi = (provider.npi if provider else None) or (clinic_row["npi"] if clinic_row and clinic_row.get("npi") else None) or ""
+    provider_name = ""
+    if provider:
+        provider_name = f"{provider.first_name} {provider.last_name}".strip()
+    org_name = (clinic_row["clinic_name"] if clinic_row and clinic_row.get("clinic_name") else None) or provider_name or "Clinic"
+    taxonomy_code = (provider.taxonomy_code if provider else None) or "152W00000X"  # Default: Optometry
+    tax_id = (provider.ein if provider and hasattr(provider, 'ein') else None) or (clinic_row["tax_id"] if clinic_row and clinic_row.get("tax_id") else None) or ""
+
+    # Build provider block
+    provider_block: dict = {
+        "npi": provider_npi,
+    }
+    # Use individual provider name if available, otherwise org name
+    if provider:
+        provider_block["firstName"] = provider.first_name
+        provider_block["lastName"] = provider.last_name
+        provider_block["providerCode"] = "PE"  # Performing provider (individual)
+    else:
+        provider_block["organizationName"] = org_name
+    if taxonomy_code:
+        provider_block["taxonomyCode"] = taxonomy_code
+    if tax_id:
+        provider_block["taxId"] = tax_id
+
     payload = {
         "controlNumber": control_number,
         "tradingPartnerServiceId": trading_partner_id,
-        "provider": {
-            "organizationName": "Biller Clinic",
-            "npi": "1234567890",
-        },
+        "provider": provider_block,
         "subscriber": {
             "memberId": body.member_id,
             "firstName": body.patient_first_name,
@@ -357,8 +398,12 @@ async def submit_claim_to_stedi(
         "controlNumber": str(claim_id).zfill(9),
         "tradingPartnerServiceId": claim.payer.stedi_payer_id or claim.payer.payer_id,
         "submitter": {
-            "organizationName": "Medical Biller PR",
-            "contactInformation": {"name": "Billing Dept", "phoneNumber": "7875550100"},
+            "organizationName": f"{claim.provider.first_name} {claim.provider.last_name}".strip(),
+            "contactInformation": {
+                "name": f"{claim.provider.first_name} {claim.provider.last_name}".strip(),
+                "phoneNumber": claim.provider.phone or "7878846967",
+            },
+            "taxId": claim.provider.ein or "",
         },
         "receiver": {"organizationName": claim.payer.name},
         "subscriber": {

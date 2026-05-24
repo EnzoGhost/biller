@@ -12,7 +12,8 @@ from sqlalchemy.orm import joinedload
 
 from database import get_db
 from models import FeeScheduleEntry, Payer, User, Claim, ServiceLine, ClaimStatus
-from auth import get_current_user
+from auth import get_current_user, get_current_provider
+from models import Provider
 
 router = APIRouter(prefix="/fee-schedule", tags=["fee-schedule"])
 
@@ -61,10 +62,13 @@ async def list_fee_schedule(
     category: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
+    provider: Provider = Depends(get_current_provider),
 ):
-    """List all fee schedule entries, optionally filtered by payer_id and/or category."""
+    """List fee schedule entries for the current provider."""
     stmt = select(FeeScheduleEntry).options(joinedload(FeeScheduleEntry.payer))
-
+    stmt = stmt.where(
+        (FeeScheduleEntry.provider_id == provider.id) | (FeeScheduleEntry.provider_id.is_(None))
+    )
     if payer_id is not None:
         stmt = stmt.where(FeeScheduleEntry.payer_id == payer_id)
     if category:
@@ -116,16 +120,19 @@ async def upsert_fee_schedule(
     entry: FeeScheduleCreate,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
+    provider: Provider = Depends(get_current_provider),
 ):
-    """Add or update a fee schedule entry (upsert by payer_id + cpt_code)."""
+    """Add or update a fee schedule entry (upsert by provider_id + payer_id + cpt_code)."""
     # Find existing
     if entry.payer_id is not None:
         stmt = select(FeeScheduleEntry).where(
+            FeeScheduleEntry.provider_id == provider.id,
             FeeScheduleEntry.payer_id == entry.payer_id,
             FeeScheduleEntry.cpt_code == entry.cpt_code,
         )
     else:
         stmt = select(FeeScheduleEntry).where(
+            FeeScheduleEntry.provider_id == provider.id,
             FeeScheduleEntry.payer_id.is_(None),
             FeeScheduleEntry.cpt_code == entry.cpt_code,
         )
@@ -144,7 +151,7 @@ async def upsert_fee_schedule(
         await db.refresh(existing)
         obj = existing
     else:
-        obj = FeeScheduleEntry(**entry.model_dump())
+        obj = FeeScheduleEntry(**entry.model_dump(), provider_id=provider.id)
         db.add(obj)
         await db.commit()
         await db.refresh(obj)
