@@ -1,0 +1,36 @@
+# nginx config for admin.angelclaims.app
+# Copy to /etc/nginx/sites-available/admin.angelclaims.app and symlink to sites-enabled
+
+server {
+    listen 80;
+    server_name admin.angelclaims.app;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name admin.angelclaims.app;
+
+    ssl_certificate     /etc/letsencrypt/live/admin.angelclaims.app/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/admin.angelclaims.app/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    # Serve the built admin console (SPA)
+    root /opt/someteopr/admin-console/dist;
+    index index.html;
+
+    # SPA routing — all paths serve index.html
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Static assets — cache aggressively (Vite content-hashes them)
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    gzip on;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+}

@@ -1,5 +1,8 @@
 """
-SQLAlchemy ORM models for Medical Biller.
+SQLAlchemy ORM models for Medical Biller — Multi-Tenant Architecture.
+
+Hierarchy: Organization → Users (via OrgUser) → Providers → Data
+Every data record is scoped to a provider_id.
 """
 from __future__ import annotations
 import enum
@@ -40,6 +43,12 @@ class UserRole(str, enum.Enum):
     VIEWER = "viewer"
 
 
+class OrgRole(str, enum.Enum):
+    ADMIN = "admin"
+    BILLER = "biller"
+    VIEWER = "viewer"
+
+
 class PayerType(str, enum.Enum):
     COMMERCIAL = "commercial"
     MEDICARE = "medicare"
@@ -57,6 +66,68 @@ class SubmissionMethod(str, enum.Enum):
     MANUAL = "manual"
 
 
+class SubscriptionTier(str, enum.Enum):
+    FREE = "free"
+    PRO = "pro"
+    ENTERPRISE = "enterprise"
+
+
+class SubscriptionStatus(str, enum.Enum):
+    ACTIVE = "active"
+    TRIAL = "trial"
+    EXPIRED = "expired"
+
+
+class CredentialType(str, enum.Enum):
+    INMEDIATA = "inmediata"
+    AVAILITY = "availity"
+    IVISION = "ivision"
+    ENVOLVE = "envolve"
+    TRIPLES = "triples"
+    INNOVAMD = "innovamd"
+    VISTANET = "vistanet"
+
+
+# ── Organizations ─────────────────────────────────────────────────────────────
+
+class Organization(Base):
+    __tablename__ = "organizations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    subscription_tier: Mapped[SubscriptionTier] = mapped_column(
+        SAEnum(SubscriptionTier), default=SubscriptionTier.FREE
+    )
+    subscription_status: Mapped[SubscriptionStatus] = mapped_column(
+        SAEnum(SubscriptionStatus), default=SubscriptionStatus.TRIAL
+    )
+    subscription_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    max_providers: Mapped[int] = mapped_column(Integer, default=5)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    org_users: Mapped[list["OrgUser"]] = relationship("OrgUser", back_populates="organization", cascade="all, delete-orphan")
+    providers: Mapped[list["Provider"]] = relationship("Provider", back_populates="organization")
+
+
+# ── OrgUsers (many-to-many: users ↔ organizations) ────────────────────────────
+
+class OrgUser(Base):
+    __tablename__ = "org_users"
+    __table_args__ = (UniqueConstraint("organization_id", "user_id", name="uq_org_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    organization_id: Mapped[int] = mapped_column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    role: Mapped[OrgRole] = mapped_column(SAEnum(OrgRole), default=OrgRole.BILLER)
+    invited_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    organization: Mapped["Organization"] = relationship("Organization", back_populates="org_users")
+    user: Mapped["User"] = relationship("User", back_populates="org_memberships")
+
+
 # ── Users ────────────────────────────────────────────────────────────────────
 
 class User(Base):
@@ -68,9 +139,11 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(SAEnum(UserRole), default=UserRole.BILLER)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    language: Mapped[str] = mapped_column(String(5), default="en")  # 'en' or 'es'
+    language: Mapped[str] = mapped_column(String(5), default="en")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    org_memberships: Mapped[list["OrgUser"]] = relationship("OrgUser", back_populates="user")
 
 
 # ── Providers ────────────────────────────────────────────────────────────────
@@ -79,6 +152,7 @@ class Provider(Base):
     __tablename__ = "providers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    organization_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     npi: Mapped[str] = mapped_column(String(10), unique=True, index=True, nullable=False)
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -96,7 +170,63 @@ class Provider(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    organization: Mapped[Optional["Organization"]] = relationship("Organization", back_populates="providers")
     claims: Mapped[list["Claim"]] = relationship("Claim", back_populates="provider")
+    patients: Mapped[list["Patient"]] = relationship("Patient", back_populates="provider")
+    settings: Mapped[Optional["ProviderSettings"]] = relationship(
+        "ProviderSettings", back_populates="provider", uselist=False, cascade="all, delete-orphan"
+    )
+    credentials: Mapped[list["ProviderCredential"]] = relationship(
+        "ProviderCredential", back_populates="provider", cascade="all, delete-orphan"
+    )
+
+
+# ── Provider Credentials ──────────────────────────────────────────────────────
+
+class ProviderCredential(Base):
+    """Per-provider credentials for clearinghouses and portals.
+    Replaces the flat credential columns on ClinicSettings.
+    """
+    __tablename__ = "provider_credentials"
+    __table_args__ = (UniqueConstraint("provider_id", "credential_type", name="uq_provider_cred_type"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    provider_id: Mapped[int] = mapped_column(Integer, ForeignKey("providers.id"), nullable=False, index=True)
+    credential_type: Mapped[CredentialType] = mapped_column(SAEnum(CredentialType), nullable=False)
+    url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    username: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    password_encrypted: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    extra_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # e.g. api_key, client_id/secret
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    provider: Mapped["Provider"] = relationship("Provider", back_populates="credentials")
+
+
+# ── Provider Settings ─────────────────────────────────────────────────────────
+
+class ProviderSettings(Base):
+    """Per-provider settings. One row per provider. Replaces ClinicSettings."""
+    __tablename__ = "provider_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    provider_id: Mapped[int] = mapped_column(Integer, ForeignKey("providers.id"), unique=True, nullable=False)
+    clinic_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    address_line1: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    state: Mapped[str] = mapped_column(String(2), default="PR")
+    zip_code: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    tax_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    npi_org: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    payer_enrollments: Mapped[Optional[dict]] = mapped_column(JSON, default=list)
+    setup_complete: Mapped[bool] = mapped_column(Boolean, default=False)
+    angelwink_clinic_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    provider: Mapped["Provider"] = relationship("Provider", back_populates="settings")
 
 
 # ── Payers ───────────────────────────────────────────────────────────────────
@@ -133,9 +263,10 @@ class Patient(Base):
     __tablename__ = "patients"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    provider_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("providers.id"), nullable=True, index=True)
     # External IDs
     wink_patient_id: Mapped[str] = mapped_column(String(50), nullable=True, index=True)
-    mrn: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=True)
+    mrn: Mapped[str] = mapped_column(String(50), index=True, nullable=True)  # unique per-provider, not globally
     # Demographics
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -155,6 +286,7 @@ class Patient(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    provider: Mapped[Optional["Provider"]] = relationship("Provider", back_populates="patients")
     insurances: Mapped[list["PatientInsurance"]] = relationship("PatientInsurance", back_populates="patient", cascade="all, delete-orphan")
     claims: Mapped[list["Claim"]] = relationship("Claim", back_populates="patient", cascade="all, delete-orphan")
 
@@ -199,8 +331,8 @@ class Claim(Base):
     service_date_to: Mapped[date] = mapped_column(Date, nullable=True)
     date_of_submission: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     # CMS-1500 fields
-    place_of_service: Mapped[str] = mapped_column(String(2), default="11")  # 11=office
-    diagnosis_codes: Mapped[dict] = mapped_column(JSON, default=list)  # ["Z00.00", ...]
+    place_of_service: Mapped[str] = mapped_column(String(2), default="11")
+    diagnosis_codes: Mapped[dict] = mapped_column(JSON, default=list)
     prior_auth_number: Mapped[str] = mapped_column(String(50), nullable=True)
     referral_number: Mapped[str] = mapped_column(String(50), nullable=True)
     # Financial
@@ -218,10 +350,10 @@ class Claim(Base):
     scrub_issues: Mapped[dict] = mapped_column(JSON, nullable=True)
     denial_risk_score: Mapped[float] = mapped_column(Float, nullable=True)
     # Source
-    source: Mapped[str] = mapped_column(String(50), default="manual")  # manual, wink, csv
+    source: Mapped[str] = mapped_column(String(50), default="manual")
     external_ref: Mapped[str] = mapped_column(String(100), nullable=True)
-    # Sale data (VistaNet line items, future use)
-    sale_items: Mapped[dict] = mapped_column(JSON, nullable=True)  # [{"description": ..., "qty": ..., "price": ...}]
+    # Sale data
+    sale_items: Mapped[dict] = mapped_column(JSON, nullable=True)
     # Notes
     notes: Mapped[str] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -246,7 +378,7 @@ class ServiceLine(Base):
     claim_id: Mapped[int] = mapped_column(Integer, ForeignKey("claims.id"), nullable=False)
     line_number: Mapped[int] = mapped_column(Integer, default=1)
     cpt_code: Mapped[str] = mapped_column(String(10), nullable=False)
-    modifiers: Mapped[dict] = mapped_column(JSON, default=list)  # ["-25", "-LT"]
+    modifiers: Mapped[dict] = mapped_column(JSON, default=list)
     description: Mapped[str] = mapped_column(String(255), nullable=True)
     service_date: Mapped[date] = mapped_column(Date, nullable=True)
     place_of_service: Mapped[str] = mapped_column(String(2), default="11")
@@ -254,7 +386,7 @@ class ServiceLine(Base):
     billed_amount: Mapped[float] = mapped_column(Float, nullable=False)
     allowed_amount: Mapped[float] = mapped_column(Float, nullable=True)
     paid_amount: Mapped[float] = mapped_column(Float, default=0.0)
-    diagnosis_pointers: Mapped[dict] = mapped_column(JSON, default=list)  # [1, 2]
+    diagnosis_pointers: Mapped[dict] = mapped_column(JSON, default=list)
 
     claim: Mapped["Claim"] = relationship("Claim", back_populates="service_lines")
 
@@ -271,7 +403,7 @@ class Payment(Base):
     payment_amount: Mapped[float] = mapped_column(Float, nullable=False)
     adjustment_amount: Mapped[float] = mapped_column(Float, default=0.0)
     patient_responsibility: Mapped[float] = mapped_column(Float, default=0.0)
-    payment_method: Mapped[str] = mapped_column(String(20), default="eft")  # check, eft, virtual_card
+    payment_method: Mapped[str] = mapped_column(String(20), default="eft")
     eob_data: Mapped[dict] = mapped_column(JSON, nullable=True)
     notes: Mapped[str] = mapped_column(Text, nullable=True)
     posted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -290,8 +422,8 @@ class Denial(Base):
     denial_code: Mapped[str] = mapped_column(String(20), nullable=False)
     denial_reason: Mapped[str] = mapped_column(String(255), nullable=False)
     denial_date: Mapped[date] = mapped_column(Date, nullable=False)
-    carc_code: Mapped[str] = mapped_column(String(10), nullable=True)   # Claim Adjustment Reason Code
-    rarc_code: Mapped[str] = mapped_column(String(10), nullable=True)   # Remittance Advice Remark Code
+    carc_code: Mapped[str] = mapped_column(String(10), nullable=True)
+    rarc_code: Mapped[str] = mapped_column(String(10), nullable=True)
     ai_analysis: Mapped[dict] = mapped_column(JSON, nullable=True)
     is_resolved: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -323,10 +455,6 @@ class AuditLog(Base):
 # ── Eligibility Checks ────────────────────────────────────────────────────────
 
 class EligibilityCheck(Base):
-    """
-    Stores results of real-time eligibility inquiries (270/271 via Inmediata SecureTrack).
-    Legacy Availity/Stedi fields kept for backwards compat; new SecureTrack fields added.
-    """
     __tablename__ = "eligibility_checks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
@@ -346,10 +474,9 @@ class EligibilityCheck(Base):
     payer_name: Mapped[str] = mapped_column(String(255), nullable=True)
     raw_response: Mapped[dict] = mapped_column(JSON, nullable=True)
     checked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
-    # SecureTrack / 270-271 fields
-    status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # active, inactive, unknown, error
-    response_raw: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # raw X12 271
-    response_parsed: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # parsed coverage dict
+    status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    response_raw: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    response_parsed: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     checked_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
     checker: Mapped[Optional["User"]] = relationship("User", foreign_keys=[checked_by])
@@ -368,11 +495,12 @@ class PriorAuth(Base):
     __tablename__ = "prior_auths"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    provider_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("providers.id"), nullable=True, index=True)
     claim_id: Mapped[int] = mapped_column(Integer, ForeignKey("claims.id"), nullable=True)
     payer_id: Mapped[int] = mapped_column(Integer, ForeignKey("payers.id"), nullable=True)
     payer_name: Mapped[str] = mapped_column(String(255), nullable=True)
     auth_number: Mapped[str] = mapped_column(String(100), nullable=True)
-    cpt_codes: Mapped[dict] = mapped_column(JSON, default=list)  # ["92310", "92083"]
+    cpt_codes: Mapped[dict] = mapped_column(JSON, default=list)
     status: Mapped[PriorAuthStatus] = mapped_column(SAEnum(PriorAuthStatus), default=PriorAuthStatus.PENDING)
     requested_date: Mapped[date] = mapped_column(Date, nullable=True)
     approved_date: Mapped[date] = mapped_column(Date, nullable=True)
@@ -390,15 +518,15 @@ class ClaimTemplate(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(String(500), nullable=True)
-    cpt_codes: Mapped[dict] = mapped_column(JSON, default=list)  # [{"code": "92014", "desc": "...", "units": 1, "amount": 0}]
-    diagnosis_codes: Mapped[dict] = mapped_column(JSON, default=list)  # ["Z00.01", ...]
+    cpt_codes: Mapped[dict] = mapped_column(JSON, default=list)
+    diagnosis_codes: Mapped[dict] = mapped_column(JSON, default=list)
     place_of_service: Mapped[str] = mapped_column(String(2), default="11")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-# ── Clinic Settings ───────────────────────────────────────────────────────────
+# ── Clinic Settings (LEGACY — kept for backward compat, data migrated to provider_settings) ───
 
 class ClinicSettings(Base):
     __tablename__ = "clinic_settings"
@@ -411,39 +539,30 @@ class ClinicSettings(Base):
     state: Mapped[str] = mapped_column(String(2), default="PR")
     zip_code: Mapped[str] = mapped_column(String(10), nullable=True)
     phone: Mapped[str] = mapped_column(String(20), nullable=True)
-    tax_id: Mapped[str] = mapped_column(String(20), nullable=True)  # EIN
-    npi_org: Mapped[str] = mapped_column(String(10), nullable=True)  # Organizational NPI
-    # Payer enrollments (JSON: [{payer_id, name, enrolled_date}])
+    tax_id: Mapped[str] = mapped_column(String(20), nullable=True)
+    npi_org: Mapped[str] = mapped_column(String(10), nullable=True)
     payer_enrollments: Mapped[dict] = mapped_column(JSON, default=list)
-    # Clearinghouse credentials (stored as JSON)
     inmediata_sftp_host: Mapped[str] = mapped_column(String(255), nullable=True)
     inmediata_sftp_user: Mapped[str] = mapped_column(String(100), nullable=True)
     stedi_api_key: Mapped[str] = mapped_column(String(255), nullable=True)
     availity_client_id: Mapped[str] = mapped_column(String(255), nullable=True)
     availity_client_secret: Mapped[str] = mapped_column(String(255), nullable=True)
-    # VistaNet credentials
     vistanet_username: Mapped[str] = mapped_column(String(100), nullable=True)
-    vistanet_password: Mapped[str] = mapped_column(String(255), nullable=True)  # Fernet-encrypted
+    vistanet_password: Mapped[str] = mapped_column(String(255), nullable=True)
     vistanet_location: Mapped[str] = mapped_column(String(100), nullable=True)
-    # iVision portal credentials
     ivision_url: Mapped[str] = mapped_column(String(500), nullable=True)
     ivision_username: Mapped[str] = mapped_column(String(100), nullable=True)
-    ivision_password: Mapped[str] = mapped_column(String(255), nullable=True)  # Fernet-encrypted
-    # Envolve portal credentials
+    ivision_password: Mapped[str] = mapped_column(String(255), nullable=True)
     envolve_url: Mapped[str] = mapped_column(String(500), nullable=True)
     envolve_username: Mapped[str] = mapped_column(String(100), nullable=True)
-    envolve_password: Mapped[str] = mapped_column(String(255), nullable=True)  # Fernet-encrypted
-    # Triple-S portal credentials
+    envolve_password: Mapped[str] = mapped_column(String(255), nullable=True)
     triples_url: Mapped[str] = mapped_column(String(500), nullable=True)
     triples_username: Mapped[str] = mapped_column(String(100), nullable=True)
-    triples_password: Mapped[str] = mapped_column(String(255), nullable=True)  # Fernet-encrypted
-    # InnovaMD portal credentials
+    triples_password: Mapped[str] = mapped_column(String(255), nullable=True)
     innovamd_url: Mapped[str] = mapped_column(String(500), nullable=True)
     innovamd_username: Mapped[str] = mapped_column(String(100), nullable=True)
-    innovamd_password: Mapped[str] = mapped_column(String(255), nullable=True)  # Fernet-encrypted
-    # Setup wizard completion
+    innovamd_password: Mapped[str] = mapped_column(String(255), nullable=True)
     setup_complete: Mapped[bool] = mapped_column(Boolean, default=False)
-    # Paired AngelWink clinic (set during clinic pairing via join code)
     angelwink_clinic_id: Mapped[str] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -453,15 +572,16 @@ class ClinicSettings(Base):
 
 class FeeScheduleEntry(Base):
     __tablename__ = "fee_schedule"
-    __table_args__ = (UniqueConstraint('payer_id', 'cpt_code', name='uq_fee_payer_cpt'),)
+    __table_args__ = (UniqueConstraint('provider_id', 'payer_id', 'cpt_code', name='uq_fee_provider_payer_cpt'),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    payer_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("payers.id"), nullable=True)  # NULL = default/Medicare baseline
+    provider_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("providers.id"), nullable=True, index=True)
+    payer_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("payers.id"), nullable=True)
     cpt_code: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     allowed_amount: Mapped[float] = mapped_column(Float, default=0.0)
-    category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # exam, diagnostic, contacts, materials
-    source: Mapped[str] = mapped_column(String(50), default="manual")  # medicare, manual, learned
+    category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    source: Mapped[str] = mapped_column(String(50), default="manual")
     effective_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -477,7 +597,7 @@ class ClaimAttachment(Base):
     claim_id: Mapped[int] = mapped_column(Integer, ForeignKey("claims.id"), nullable=False)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
-    attachment_type: Mapped[str] = mapped_column(String(50), nullable=True)  # "insurance_card", "license", "signature"
+    attachment_type: Mapped[str] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     claim: Mapped["Claim"] = relationship("Claim", back_populates="attachments")
@@ -511,12 +631,12 @@ class ApprovalRequest(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     claim_id: Mapped[int] = mapped_column(Integer, ForeignKey("claims.id", ondelete="CASCADE"), nullable=False)
     patient_id: Mapped[int] = mapped_column(Integer, nullable=True)
-    request_type: Mapped[str] = mapped_column(String(50), nullable=False)  # dx_change, code_suggestion, etc.
+    request_type: Mapped[str] = mapped_column(String(50), nullable=False)
     requested_by: Mapped[str] = mapped_column(String(100), nullable=True)
     details: Mapped[str] = mapped_column(Text, nullable=True)
-    suggested_codes: Mapped[dict] = mapped_column(JSON, nullable=True)  # JSON array of suggested codes
-    current_code: Mapped[str] = mapped_column(String(20), nullable=True)  # code being changed
-    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, approved, rejected
+    suggested_codes: Mapped[dict] = mapped_column(JSON, nullable=True)
+    current_code: Mapped[str] = mapped_column(String(20), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
     reviewed_by: Mapped[str] = mapped_column(String(100), nullable=True)
     reviewed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

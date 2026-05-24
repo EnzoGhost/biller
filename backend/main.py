@@ -15,11 +15,13 @@ from config import settings
 from database import init_db
 
 from routers import auth, claims, patients, payers, providers, denials, stedi, ai, imports, dashboard, inmediata, eligibility
+from routers import admin as admin_router
 from routers import validation, payments, audit, approvals
 from routers import availity, templates, prior_auth, followup, clinic, vistanet, fee_schedule, angelwink_docs
 from routers import scanner, ai_scanner
 from routers import portals
 from routers import missing_claims
+from routers import organizations
 
 
 @asynccontextmanager
@@ -72,6 +74,8 @@ app.include_router(ai_scanner.router, prefix="/api")
 app.include_router(portals.router, prefix="/api")
 app.include_router(missing_claims.router, prefix="/api")
 app.include_router(eligibility.router, prefix="/api")
+app.include_router(admin_router.router, prefix="/api")
+app.include_router(organizations.router, prefix="/api")
 
 
 @app.get("/health")
