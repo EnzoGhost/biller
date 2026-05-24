@@ -189,12 +189,18 @@ async def list_organizations(
     for org in orgs:
         user_count = (
             await db.execute(
-                select(func.count()).select_from(User).where(
-                    User.organization_id == org.id, User.is_super_admin == False
+                select(func.count()).select_from(OrgUser).where(
+                    OrgUser.organization_id == org.id
                 )
             )
         ).scalar() or 0
-        provider_count = 0  # providers aren't org-scoped yet
+        provider_count = (
+            await db.execute(
+                select(func.count()).select_from(Provider).where(
+                    Provider.organization_id == org.id
+                )
+            )
+        ).scalar() or 0
         out.append({
             "id": org.id,
             "name": org.name,
@@ -220,7 +226,9 @@ async def create_organization(
     org = Organization(
         name=body.name,
         slug=slug,
-        subscription_tier=body.subscription_tier,
+        subscription_tier=body.subscription_tier or 'free',
+        subscription_status='trial',
+        max_providers=5,
         is_active=True,
     )
     db.add(org)
@@ -248,7 +256,9 @@ async def get_organization(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     users_result = await db.execute(
-        select(User).where(User.organization_id == org_id, User.is_super_admin == False)
+        select(User).join(OrgUser, OrgUser.user_id == User.id).where(
+            OrgUser.organization_id == org_id, User.is_super_admin == False
+        )
     )
     users = users_result.scalars().all()
 
@@ -449,7 +459,7 @@ async def update_user(
         "full_name": user.full_name,
         "role": user.role,
         "is_active": user.is_active,
-        "organization_id": user.organization_id,
+        "organization_id": body.organization_id,
     }
 
 
