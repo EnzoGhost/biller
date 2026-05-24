@@ -997,7 +997,22 @@ async def import_wink_invoices(
 
             # Never skip uninsured patients — they may have insurance cards in documents
             # that will be extracted during the scrub workflow.
-            # Create the claim without a payer; scrub will resolve it later.
+            # If no payer resolved, use a placeholder "Unresolved" payer.
+            if resolved_payer_id is None:
+                unresolved = await db.execute(
+                    select(Payer).where(Payer.name == "UNRESOLVED - CHECK DOCUMENTS").limit(1)
+                )
+                unresolved_payer = unresolved.scalar_one_or_none()
+                if not unresolved_payer:
+                    unresolved_payer = Payer(
+                        name="UNRESOLVED - CHECK DOCUMENTS",
+                        payer_id="UNRESOLVED",
+                        payer_type="medical",
+                    )
+                    db.add(unresolved_payer)
+                    await db.flush()
+                resolved_payer_id = unresolved_payer.id
+                match_source = "unresolved"
 
             # Ensure patient has insurance record for the RESOLVED payer
             # Only create if there is a REAL member_id — never use fake IDs
