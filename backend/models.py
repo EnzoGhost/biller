@@ -323,6 +323,10 @@ class AuditLog(Base):
 # ── Eligibility Checks ────────────────────────────────────────────────────────
 
 class EligibilityCheck(Base):
+    """
+    Stores results of real-time eligibility inquiries (270/271 via Inmediata SecureTrack).
+    Legacy Availity/Stedi fields kept for backwards compat; new SecureTrack fields added.
+    """
     __tablename__ = "eligibility_checks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
@@ -342,6 +346,13 @@ class EligibilityCheck(Base):
     payer_name: Mapped[str] = mapped_column(String(255), nullable=True)
     raw_response: Mapped[dict] = mapped_column(JSON, nullable=True)
     checked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    # SecureTrack / 270-271 fields
+    status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # active, inactive, unknown, error
+    response_raw: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # raw X12 271
+    response_parsed: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # parsed coverage dict
+    checked_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+
+    checker: Mapped[Optional["User"]] = relationship("User", foreign_keys=[checked_by])
 
 
 # ── Prior Auth ───────────────────────────────────────────────────────────────
@@ -412,10 +423,28 @@ class ClinicSettings(Base):
     availity_client_secret: Mapped[str] = mapped_column(String(255), nullable=True)
     # VistaNet credentials
     vistanet_username: Mapped[str] = mapped_column(String(100), nullable=True)
-    vistanet_password: Mapped[str] = mapped_column(String(255), nullable=True)
+    vistanet_password: Mapped[str] = mapped_column(String(255), nullable=True)  # Fernet-encrypted
     vistanet_location: Mapped[str] = mapped_column(String(100), nullable=True)
+    # iVision portal credentials
+    ivision_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    ivision_username: Mapped[str] = mapped_column(String(100), nullable=True)
+    ivision_password: Mapped[str] = mapped_column(String(255), nullable=True)  # Fernet-encrypted
+    # Envolve portal credentials
+    envolve_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    envolve_username: Mapped[str] = mapped_column(String(100), nullable=True)
+    envolve_password: Mapped[str] = mapped_column(String(255), nullable=True)  # Fernet-encrypted
+    # Triple-S portal credentials
+    triples_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    triples_username: Mapped[str] = mapped_column(String(100), nullable=True)
+    triples_password: Mapped[str] = mapped_column(String(255), nullable=True)  # Fernet-encrypted
+    # InnovaMD portal credentials
+    innovamd_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    innovamd_username: Mapped[str] = mapped_column(String(100), nullable=True)
+    innovamd_password: Mapped[str] = mapped_column(String(255), nullable=True)  # Fernet-encrypted
     # Setup wizard completion
     setup_complete: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Paired AngelWink clinic (set during clinic pairing via join code)
+    angelwink_clinic_id: Mapped[str] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

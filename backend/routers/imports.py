@@ -11,7 +11,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from config import settings
 from database import get_db
@@ -468,19 +468,20 @@ async def import_from_wink(
                 await db.flush()
 
                 # Insurance: prefer payer from patient_insurance join, fall back to inline fields
+                # Only create insurance if there is a REAL member_id — never use fake WINK- IDs
                 if default_payer_id:
                     wink_ins = wink_insurance_map.get(wp["id"])
-                    member_id = (wink_ins["member_id"] if wink_ins and wink_ins["member_id"] else None) \
-                                or wp["insurance_id"] \
-                                or f"WINK-{wp['id']}"
-                    ins = PatientInsurance(
-                        patient_id=patient.id,
-                        payer_id=default_payer_id,
-                        member_id=member_id,
-                        group_number=wp["insurance_group"],
-                        is_primary=True,
-                    )
-                    db.add(ins)
+                    real_member_id = (wink_ins["member_id"] if wink_ins and wink_ins["member_id"] else None) \
+                                     or wp["insurance_id"] or None
+                    if real_member_id:
+                        ins = PatientInsurance(
+                            patient_id=patient.id,
+                            payer_id=default_payer_id,
+                            member_id=real_member_id,
+                            group_number=wp["insurance_group"],
+                            is_primary=True,
+                        )
+                        db.add(ins)
 
                 imported += 1
             except Exception as e:
@@ -621,7 +622,7 @@ async def import_wink_encounters(
                 await db.flush()
 
                 for i, cpt_item in enumerate(cpt_list, start=1):
-                    code = cpt_item.get("code") or "92014"
+                    code = cpt_item.get("code") or ""  # empty = needs manual CPT assignment
                     units = int(cpt_item.get("units") or 1)
                     amount = float(cpt_item.get("amount") or 0.0)
                     sl = ServiceLine(
@@ -692,7 +693,7 @@ async def _resolve_payer_from_wink(
     clinic_id: str,
     default_payer_id: int,
     db: AsyncSession,
-) -> tuple[int, Optional[str]]:
+) -> tuple[Optional[int], Optional[str], Optional[str]]:
     """
     Resolve the correct SometeoPR payer_id for a Wink patient.
 
@@ -701,7 +702,7 @@ async def _resolve_payer_from_wink(
     2. Try insurance_provider from synced_patients
     3. Match against SometeoPR payers table (exact → partial → fallback)
 
-    Returns (payer_id, match_source) where match_source describes how it matched.
+    Returns (payer_id, match_source, group_number) where match_source describes how it matched.
     """
     from models import Payer as PayerModel
 
@@ -710,19 +711,43 @@ async def _resolve_payer_from_wink(
     # 1. Query Wink sync server's patient_insurance table for this patient
     try:
         wink_ins_rows = await _query_wink_pg("""
-            SELECT pi.plan_name, pi.insurance_company, pi.member_id
-            FROM synced_patient_insurance pi
-            WHERE pi.patient_id = %s AND pi.clinic_id = %s
-              AND pi.is_primary = true
+            WITH pi AS (
+                SELECT DISTINCT ON (row_id) data
+                FROM sync_changes
+                WHERE clinic_id = %s AND table_name = 'patient_insurance'
+                  AND operation != 'DELETE' AND data IS NOT NULL
+                  AND (data->>'patient_id')::int = %s
+                  AND (data->>'is_primary')::text IN ('1', 'true')
+                ORDER BY row_id, timestamp DESC
+            ),
+            plans AS (
+                SELECT DISTINCT ON (row_id) data
+                FROM sync_changes
+                WHERE clinic_id = %s AND table_name = 'insurance_plans'
+                  AND operation != 'DELETE' AND data IS NOT NULL
+                ORDER BY row_id, timestamp DESC
+            )
+            SELECT
+                pl.data->>'name' AS plan_name,
+                pl.data->>'name' AS insurance_company,
+                pi.data->>'member_id' AS member_id,
+                pi.data->>'group_number' AS group_number
+            FROM pi
+            LEFT JOIN plans pl ON (pl.data->>'id')::int = (pi.data->>'insurance_plan_id')::int
             LIMIT 1
-        """, (wink_patient_id, clinic_id))
+        """, (clinic_id, int(wink_patient_id), clinic_id))
         if wink_ins_rows:
             row = wink_ins_rows[0]
             if row.get("insurance_company"):
                 candidate_names.append(row["insurance_company"])
             if row.get("plan_name"):
                 candidate_names.append(row["plan_name"])
+            # Capture group_number from the insurance record
+            _wink_group_number = row.get("group_number") or None
+        else:
+            _wink_group_number = None
     except Exception:
+        _wink_group_number = None
         pass  # Table may not exist yet; fall through
 
     # 2. Use insurance_provider from synced_patients (already in the invoice query)
@@ -744,7 +769,7 @@ async def _resolve_payer_from_wink(
         )
         payer = res.scalar_one_or_none()
         if payer:
-            return payer.id, f"exact:{clean_name}"
+            return payer.id, f"exact:{clean_name}", _wink_group_number
 
         # Partial match (ILIKE %name%)
         res = await db.execute(
@@ -755,7 +780,7 @@ async def _resolve_payer_from_wink(
         )
         payer = res.scalar_one_or_none()
         if payer:
-            return payer.id, f"partial:{clean_name}→{payer.name}"
+            return payer.id, f"partial:{clean_name}→{payer.name}", _wink_group_number
 
         # Reverse partial: payer name contained in insurance_provider string
         all_payers_res = await db.execute(
@@ -764,7 +789,7 @@ async def _resolve_payer_from_wink(
         all_payers = all_payers_res.scalars().all()
         for p in all_payers:
             if p.name.lower() in clean_name.lower():
-                return p.id, f"reverse:{clean_name}→{p.name}"
+                return p.id, f"reverse:{clean_name}→{p.name}", _wink_group_number
 
     # 4. Auto-create payer if we know the insurance name
     if candidate_names:
@@ -780,10 +805,10 @@ async def _resolve_payer_from_wink(
             )
             db.add(new_payer)
             await db.flush()
-            return new_payer.id, f"auto_created:{new_name}"
+            return new_payer.id, f"auto_created:{new_name}", _wink_group_number
 
-    # 5. Fallback to default only if we have NO insurance name at all
-    return default_payer_id, "default"
+    # 5. No insurance data at all — patient is uninsured
+    return None, "uninsured", None
 
 
 @router.post("/wink-invoices", response_model=ImportResult)
@@ -792,46 +817,95 @@ async def import_wink_invoices(
     date_to: str,
     provider_id: int = 1,
     default_payer_id: int = 1,
-    clinic_id: str = "1a905d29-0a9a-42b3-8bc3-83c0ceb9acba",
+    clinic_id: str = None,  # from paired clinic; falls back to ANGELWINK_CLINIC_ID env var
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     """
-    Import invoices from the Wink sync server (PostgreSQL) for a date range.
-    Queries synced_invoices + synced_invoice_items + synced_patients.
+    Import invoices from the AngelWink sync server (PostgreSQL sync_changes) for a date range.
     Creates claims with service lines, auto-scrubs, auto-advances if clean.
-    Resolves each patient's actual payer from Wink insurance data instead of
-    using a blanket payer_id for all claims.
+    Resolves each patient's actual payer from AngelWink insurance data.
     """
     import json as _json
+    import os as _os
     import random, string
     from datetime import datetime
+    from routers.fee_schedule import get_fee_amount as _get_fee
+
+    # Use the paired clinic ID from the frontend; fall back to DB, then env var
+    if not clinic_id:
+        try:
+            _settings = await db.execute(text("SELECT angelwink_clinic_id FROM clinic_settings WHERE id = 1"))
+            _row = _settings.fetchone()
+            clinic_id = _row[0] if _row and _row[0] else None
+        except Exception:
+            pass
+    if not clinic_id:
+        clinic_id = _os.environ.get("ANGELWINK_CLINIC_ID", "")
+    # Self-heal: if frontend sends a clinic_id, persist it for future use
+    if clinic_id:
+        try:
+            await db.execute(text("UPDATE clinic_settings SET angelwink_clinic_id = :cid WHERE id = 1"), {"cid": clinic_id})
+            await db.commit()
+        except Exception:
+            pass
 
     imported = 0
     skipped = 0
     errors_list: list[str] = []
     claim_ids: list[int] = []
+    uninsured_skipped = 0
+    uninsured_patients_list: list[dict] = []
 
     # Cache payer resolution per patient to avoid repeated DB queries
-    _payer_cache: dict[str, tuple[int, Optional[str]]] = {}
+    _payer_cache: dict[str, tuple[Optional[int], Optional[str], Optional[str]]] = {}
 
     try:
         # Query invoices joined with patients from Wink sync PostgreSQL
         invoices = await _query_wink_pg("""
-            SELECT i.id, i.patient_id, i.date AS invoice_date,
-                   i.status, i.diagnosis_codes, i.total,
-                   i.place_of_service, i.prior_auth_number,
-                   p.first_name, p.last_name, p.middle_name, p.last_name_2,
-                   p.date_of_birth, p.gender, p.phone, p.address,
-                   p.city, p.state, p.zip,
-                   p.insurance_provider, p.insurance_id, p.record_number
-            FROM synced_invoices i
-            JOIN synced_patients p ON p.id = i.patient_id AND p.clinic_id = i.clinic_id
-            WHERE i.date >= %s AND i.date <= %s
-              AND i.clinic_id = %s
-            ORDER BY i.date DESC
+            WITH inv AS (
+                SELECT DISTINCT ON (row_id) row_id, data
+                FROM sync_changes
+                WHERE clinic_id = %s AND table_name = 'invoices'
+                  AND operation != 'DELETE' AND data IS NOT NULL
+                ORDER BY row_id, timestamp DESC
+            ),
+            pat AS (
+                SELECT DISTINCT ON (row_id) row_id, data
+                FROM sync_changes
+                WHERE clinic_id = %s AND table_name = 'patients'
+                  AND operation != 'DELETE' AND data IS NOT NULL
+                ORDER BY row_id, timestamp DESC
+            )
+            SELECT
+                (i.data->>'id')::int AS id,
+                (i.data->>'patient_id')::int AS patient_id,
+                i.data->>'date' AS invoice_date,
+                i.data->>'status' AS status,
+                i.data->>'diagnosis_codes' AS diagnosis_codes,
+                (i.data->>'total')::numeric AS total,
+                i.data->>'place_of_service' AS place_of_service,
+                i.data->>'prior_auth_number' AS prior_auth_number,
+                p.data->>'first_name' AS first_name,
+                p.data->>'last_name' AS last_name,
+                p.data->>'middle_name' AS middle_name,
+                p.data->>'last_name_2' AS last_name_2,
+                p.data->>'date_of_birth' AS date_of_birth,
+                p.data->>'gender' AS gender,
+                p.data->>'phone' AS phone,
+                p.data->>'address' AS address,
+                p.data->>'city' AS city,
+                p.data->>'state' AS state,
+                p.data->>'zip' AS zip,
+                p.data->>'insurance_provider' AS insurance_provider,
+                p.data->>'insurance_id' AS insurance_id,
+                p.data->>'record_number' AS record_number
+            FROM inv i
+            JOIN pat p ON (p.data->>'id')::int = (i.data->>'patient_id')::int
+            WHERE i.data->>'date' >= %s AND i.data->>'date' <= %s
+            ORDER BY i.data->>'date' DESC
             LIMIT 500
-        """, (date_from, date_to, clinic_id))
+        """, (clinic_id, clinic_id, date_from, date_to))
 
         for inv in invoices:
             inv_id = inv["id"]
@@ -848,12 +922,32 @@ async def import_wink_invoices(
                 skipped += 1
                 continue
 
-            # Find or create patient in SometeoPR
+            # Find or create patient in AngelClaims
             wink_patient_id = str(inv["patient_id"])
-            patient_result = await db.execute(
-                select(Patient).where(Patient.wink_patient_id == wink_patient_id)
-            )
-            patient = patient_result.scalar_one_or_none()
+            record_number = inv.get("record_number") or ""
+            # Try multiple lookup strategies: wink_patient_id (with/without leading zeros) + MRN
+            patient = None
+            # Sequential lookups: exact wink_id, zero-padded, then by MRN
+            for col, val in [
+                (Patient.wink_patient_id, wink_patient_id),
+                (Patient.wink_patient_id, wink_patient_id.zfill(7)),
+                (Patient.mrn, record_number),
+                (Patient.mrn, wink_patient_id.zfill(7)),
+            ]:
+                if not val:
+                    continue
+                result = await db.execute(select(Patient).where(col == val).limit(1))
+                patient = result.scalars().first()
+                if patient:
+                    if patient.wink_patient_id != wink_patient_id:
+                        patient.wink_patient_id = wink_patient_id
+                    # Always update last name with combined last_name + last_name_2
+                    ln1 = inv.get("last_name") or ""
+                    ln2 = inv.get("last_name_2") or ""
+                    combined = (ln1 + (" " + ln2 if ln2 else "")).strip()
+                    if combined and patient.last_name != combined:
+                        patient.last_name = combined
+                    break
 
             if not patient:
                 # Auto-create patient from synced_patients data
@@ -866,11 +960,16 @@ async def import_wink_invoices(
                 gender_str = (inv["gender"] or "").lower()
                 gender = Gender.M if gender_str == "male" else (Gender.F if gender_str == "female" else Gender.U)
 
+                # Combine both last names (e.g. "SANCHEZ" + "CRUZ" -> "SANCHEZ CRUZ")
+                last_name_1 = inv["last_name"] or ""
+                last_name_2 = inv.get("last_name_2") or ""
+                combined_last_name = (last_name_1 + (" " + last_name_2 if last_name_2 else "")).strip()
+
                 patient = Patient(
                     wink_patient_id=wink_patient_id,
                     mrn=inv["record_number"],
                     first_name=inv["first_name"] or "",
-                    last_name=inv["last_name"] or "",
+                    last_name=combined_last_name,
                     dob=dob,
                     gender=gender,
                     phone=inv["phone"],
@@ -882,54 +981,67 @@ async def import_wink_invoices(
                 db.add(patient)
                 await db.flush()
 
-            # Resolve the ACTUAL payer for this patient from Wink data
+            # Resolve the ACTUAL payer for this patient from AngelWink data
             if wink_patient_id in _payer_cache:
-                resolved_payer_id, match_source = _payer_cache[wink_patient_id]
+                resolved_payer_id, match_source, insurance_group_number = _payer_cache[wink_patient_id]
             else:
-                resolved_payer_id, match_source = await _resolve_payer_from_wink(
+                resolved_payer_id, match_source, insurance_group_number = await _resolve_payer_from_wink(
                     insurance_provider=inv.get("insurance_provider"),
                     wink_patient_id=wink_patient_id,
                     clinic_id=clinic_id,
                     default_payer_id=default_payer_id,
                     db=db,
                 )
-                _payer_cache[wink_patient_id] = (resolved_payer_id, match_source)
+                _payer_cache[wink_patient_id] = (resolved_payer_id, match_source, insurance_group_number)
 
-            if match_source == "default":
-                errors_list.append(
-                    f"Invoice {inv_id}: no payer match for '{inv.get('insurance_provider', '')}' "
-                    f"(patient {inv.get('first_name', '')} {inv.get('last_name', '')}), "
-                    f"using default payer_id={default_payer_id}"
-                )
+            # If no insurance found, patient is uninsured — skip claim creation
+            if match_source == "uninsured" or resolved_payer_id is None:
+                last_name_1 = inv.get("last_name") or ""
+                last_name_2 = inv.get("last_name_2") or ""
+                full_last = (last_name_1 + (" " + last_name_2 if last_name_2 else "")).strip()
+                full_name = f"{inv.get('first_name', '')} {full_last}".strip()
+                uninsured_patients_list.append({
+                    "name": full_name,
+                    "record_number": inv.get("record_number") or "",
+                    "invoice_id": inv_id,
+                })
+                uninsured_skipped += 1
+                continue
 
             # Ensure patient has insurance record for the RESOLVED payer
+            # Only create if there is a REAL member_id — never use fake IDs
+            real_member_id = inv.get("insurance_id") or None
             existing_ins = await db.execute(
                 select(PatientInsurance).where(
                     PatientInsurance.patient_id == patient.id,
                     PatientInsurance.payer_id == resolved_payer_id,
-                )
+                ).limit(1)
             )
-            if not existing_ins.scalar_one_or_none():
-                ins_member_id = inv.get("insurance_id") or f"WINK-{inv['patient_id']}"
-                ins = PatientInsurance(
-                    patient_id=patient.id,
-                    payer_id=resolved_payer_id,
-                    member_id=ins_member_id,
-                    is_primary=True,
-                )
-                db.add(ins)
+            if not existing_ins.scalars().first():
+                if real_member_id:
+                    ins = PatientInsurance(
+                        patient_id=patient.id,
+                        payer_id=resolved_payer_id,
+                        member_id=real_member_id,
+                        group_number=insurance_group_number,
+                        is_primary=True,
+                    )
+                    db.add(ins)
             else:
-                # Update existing insurance record's member_id if we have better data
-                if inv.get("insurance_id"):
+                # Update existing insurance record's member_id/group_number if we have better data
+                if real_member_id:
                     existing_ins_obj = await db.execute(
                         select(PatientInsurance).where(
                             PatientInsurance.patient_id == patient.id,
                             PatientInsurance.payer_id == resolved_payer_id,
-                        )
+                        ).limit(1)
                     )
-                    ins_record = existing_ins_obj.scalar_one_or_none()
+                    ins_record = existing_ins_obj.scalars().first()
                     if ins_record and ins_record.member_id and ins_record.member_id.startswith("WINK-"):
-                        ins_record.member_id = inv["insurance_id"]
+                        ins_record.member_id = real_member_id
+                    # Update group_number if we now have it and existing doesn't
+                    if ins_record and insurance_group_number and not ins_record.group_number:
+                        ins_record.group_number = insurance_group_number
 
             try:
                 # Parse invoice date
@@ -955,14 +1067,35 @@ async def import_wink_invoices(
 
                 # Get service line items from synced_invoice_items
                 items = await _query_wink_pg("""
-                    SELECT cpt_code, description, quantity, unit_price,
-                           modifiers, diagnosis_pointer
-                    FROM synced_invoice_items
-                    WHERE invoice_id = %s AND clinic_id = %s
-                """, (inv_id, clinic_id))
+                    SELECT DISTINCT ON (row_id)
+                        data->>'cpt_code' AS cpt_code,
+                        data->>'description' AS description,
+                        (data->>'quantity')::int AS quantity,
+                        (data->>'unit_price')::numeric AS unit_price,
+                        data->>'modifiers' AS modifiers,
+                        data->>'diagnosis_pointer' AS diagnosis_pointer,
+                        COALESCE(data->>'category', 'service') AS category
+                    FROM sync_changes
+                    WHERE clinic_id = %s AND table_name = 'invoice_items'
+                      AND operation != 'DELETE' AND data IS NOT NULL
+                      AND (data->>'invoice_id')::int = %s
+                    ORDER BY row_id, timestamp DESC
+                """, (clinic_id, inv_id))
 
-                cpt_list: list[dict] = []
+                # Separate billing items (procedures+materials) from sale items
+                cpt_list: list[dict] = []  # for billing service lines
+                sale_items_data: list[dict] = []  # for Patient Sale display
                 for item in items:
+                    cat = item.get("category", "service")
+                    if cat == "sale_item":
+                        # Sale items go to Patient Sale section only
+                        sale_items_data.append({
+                            "name": item["description"],
+                            "amount": float(item["unit_price"] or 0) * int(item["quantity"] or 1),
+                        })
+                        continue
+
+                    # Procedures and materials → billing service lines
                     mods = []
                     if item["modifiers"]:
                         try:
@@ -975,17 +1108,45 @@ async def import_wink_invoices(
                             ptrs = _json.loads(item["diagnosis_pointer"]) if isinstance(item["diagnosis_pointer"], str) else item["diagnosis_pointer"]
                         except (_json.JSONDecodeError, TypeError):
                             pass
-                    cpt_list.append({
-                        "code": item["cpt_code"],
-                        "description": item["description"],
-                        "units": int(item["quantity"] or 1),
-                        "amount": float(item["unit_price"] or 0),
-                        "modifiers": mods if isinstance(mods, list) else [],
-                        "diagnosis_pointers": ptrs if isinstance(ptrs, list) else [],
-                    })
+                    code = item["cpt_code"] or ""
+                    if code:  # only add items that have actual CPT codes
+                        cpt_list.append({
+                            "code": code,
+                            "description": item["description"],
+                            "units": int(item["quantity"] or 1),
+                            "amount": float(item["unit_price"] or 0),
+                            "modifiers": mods if isinstance(mods, list) else [],
+                            "diagnosis_pointers": ptrs if (isinstance(ptrs, list) and ptrs) else (list(range(1, len(dx_codes) + 1)) if dx_codes else []),
+                        })
 
                 if not cpt_list:
-                    cpt_list = [{"code": "92014", "units": 1, "amount": 0.0}]
+                    cpt_list = [{"code": "", "units": 1, "amount": 0.0, "description": "No procedures found"}]  # flagged for review
+
+                # Apply fee schedule: look up proper billed amount for each CPT code.
+                # Wink stores $0 unit_price for insurance-covered items, so we must
+                # pull the correct rate from our fee schedule instead.
+                for cpt_item in cpt_list:
+                    code = cpt_item.get("code")
+                    if code:
+                        fs_amount, _fs_src = await _get_fee(db, code, resolved_payer_id)
+                        original_price = float(cpt_item.get("amount") or 0)
+                        if fs_amount > 0:
+                            cpt_item["amount"] = fs_amount
+                        elif original_price > 0:
+                            cpt_item["amount"] = original_price
+                        # else leave as 0 — scrub will flag it
+
+                # sale_items_data was already built above from 'sale_item' category items
+                # If empty (old data without categories), build from all items as fallback
+                if not sale_items_data:
+                    sale_items_data = [
+                        {
+                            "name": (item.get("description") or item.get("cpt_code") or "Item"),
+                            "amount": float(item.get("unit_price") or 0) * int(item.get("quantity") or 1),
+                        }
+                        for item in items
+                        if (item.get("description") or item.get("cpt_code"))
+                    ] or None
 
                 total_billed = sum(float(c.get("amount", 0) or 0) * int(c.get("units", 1) or 1) for c in cpt_list)
 
@@ -1006,12 +1167,13 @@ async def import_wink_invoices(
                     external_ref=enc_ref,
                     place_of_service=inv["place_of_service"] or "11",
                     prior_auth_number=inv["prior_auth_number"],
+                    sale_items=sale_items_data,
                 )
                 db.add(claim)
                 await db.flush()
 
                 for i, cpt_item in enumerate(cpt_list, start=1):
-                    code = cpt_item.get("code") or "92014"
+                    code = cpt_item.get("code") or ""  # empty = needs manual CPT assignment
                     units = int(cpt_item.get("units") or 1)
                     amount = float(cpt_item.get("amount") or 0.0)
                     mods = cpt_item.get("modifiers", [])
@@ -1081,9 +1243,16 @@ async def import_wink_invoices(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, f"Error importando facturas de Wink: {e}")
+        raise HTTPException(500, f"Error importando facturas de AngelWink: {e}")
 
-    return ImportResult(imported=imported, skipped=skipped, errors=errors_list, claims_created=claim_ids)
+    return ImportResult(
+        imported=imported,
+        skipped=skipped,
+        errors=errors_list,
+        claims_created=claim_ids,
+        uninsured_skipped=uninsured_skipped,
+        uninsured_patients=uninsured_patients_list,
+    )
 
 
 # ── Superbill CSV Import ──────────────────────────────────────────────────────
@@ -1238,6 +1407,215 @@ async def import_superbill_csv(
 
     await db.commit()
     return ImportResult(imported=imported, skipped=skipped, errors=errors, claims_created=claim_ids)
+
+
+# ── AngelWink Invoice Push (direct invoice payload from AngelWink desktop) ────
+
+class InvoicePatientPayload(BaseModel):
+    id: Optional[int] = None
+    name: str = ""
+
+
+class InvoiceCptCodePayload(BaseModel):
+    code: str
+    description: Optional[str] = None
+    modifiers: List[str] = []
+
+
+class InvoiceImportPayload(BaseModel):
+    """Invoice payload sent directly from AngelWink's InvoiceDetailModal."""
+    invoice_number: str
+    patient: InvoicePatientPayload
+    date: str  # ISO date
+    total: float
+    balance: float = 0.0
+    status: str = "pending"
+    diagnosis_codes: List[str] = []
+    cpt_codes: List[InvoiceCptCodePayload] = []
+    insurance: Optional[str] = None
+    place_of_service: str = "11"
+    prior_auth: Optional[str] = None
+    referring_provider: Optional[str] = None
+
+
+@router.post("/invoice")
+async def import_invoice(
+    payload: InvoiceImportPayload,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """
+    Receive a single invoice directly from AngelWink's 'Send to Biller' button.
+    Creates a DRAFT claim visible in the AngelClaims dashboard.
+    Returns { ok: true, claim_id: int, claim_number: str }.
+    """
+    import random
+    import string as _string
+    from datetime import datetime
+
+    errors = []
+
+    # Validate required fields
+    if not payload.invoice_number:
+        raise HTTPException(400, "invoice_number is required")
+    if not payload.patient.name:
+        raise HTTPException(400, "patient.name is required")
+
+    # Parse date
+    try:
+        svc_date = date.fromisoformat(payload.date[:10])
+    except (ValueError, TypeError):
+        svc_date = date.today()
+        errors.append("Invalid date - defaulted to today")
+
+    # Duplicate check by invoice_number (stored in external_ref)
+    enc_ref = f"wink_inv_{payload.invoice_number}"
+    existing = await db.execute(
+        select(Claim).where(
+            Claim.source == "wink",
+            Claim.external_ref == enc_ref,
+        )
+    )
+    dup = existing.scalar_one_or_none()
+    if dup:
+        return {"ok": True, "claim_id": dup.id, "claim_number": dup.claim_number, "status": "already_imported"}
+
+    # Find or create patient
+    patient = None
+    if payload.patient.id:
+        res = await db.execute(
+            select(Patient).where(Patient.wink_patient_id == str(payload.patient.id))
+        )
+        patient = res.scalar_one_or_none()
+
+    if not patient and payload.patient.name:
+        name_parts = payload.patient.name.strip().split()
+        if len(name_parts) >= 2:
+            first = name_parts[0]
+            last = " ".join(name_parts[1:])
+            res = await db.execute(
+                select(Patient).where(
+                    Patient.first_name.ilike(first),
+                    Patient.last_name.ilike(f"%{last}%"),
+                ).limit(1)
+            )
+            patient = res.scalar_one_or_none()
+
+    if not patient:
+        name_parts = payload.patient.name.strip().split()
+        first = name_parts[0] if name_parts else payload.patient.name
+        last = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+        patient = Patient(
+            wink_patient_id=str(payload.patient.id) if payload.patient.id else None,
+            first_name=first,
+            last_name=last,
+            dob=date(1970, 1, 1),
+            gender=Gender.U,
+            state="PR",
+        )
+        db.add(patient)
+        await db.flush()
+
+    # Resolve payer
+    payer_id = None
+    if payload.insurance:
+        from models import Payer as PayerModel
+        res = await db.execute(
+            select(PayerModel).where(
+                PayerModel.name.ilike(f"%{payload.insurance}%"),
+                PayerModel.is_active == True,
+            ).limit(1)
+        )
+        payer = res.scalar_one_or_none()
+        if payer:
+            payer_id = payer.id
+
+    # Resolve provider (default first active)
+    from models import Provider as ProviderModel
+    prov_res = await db.execute(
+        select(ProviderModel).where(ProviderModel.is_active == True).limit(1)
+    )
+    prov = prov_res.scalar_one_or_none()
+    provider_id = prov.id if prov else 1
+
+    ts = datetime.utcnow().strftime("%Y%m%d")
+    suffix = "".join(random.choices(_string.ascii_uppercase + _string.digits, k=6))
+
+    claim = Claim(
+        claim_number=f"CLM-{ts}-{suffix}",
+        patient_id=patient.id,
+        provider_id=provider_id,
+        payer_id=payer_id or 1,
+        service_date_from=svc_date,
+        service_date_to=svc_date,
+        diagnosis_codes=payload.diagnosis_codes,
+        total_billed=payload.total,
+        prior_auth_number=payload.prior_auth,
+        place_of_service=payload.place_of_service,
+        status=ClaimStatus.DRAFT,
+        source="wink",
+        external_ref=enc_ref,
+        notes=f"Imported from AngelWink invoice {payload.invoice_number}",
+    )
+    db.add(claim)
+    await db.flush()
+
+    for i, cpt in enumerate(payload.cpt_codes, start=1):
+        sl = ServiceLine(
+            claim_id=claim.id,
+            line_number=i,
+            cpt_code=cpt.code,
+            description=cpt.description,
+            modifiers=cpt.modifiers,
+            service_date=svc_date,
+            units=1,
+            billed_amount=0.0,
+            diagnosis_pointers=list(range(1, len(payload.diagnosis_codes) + 1)) if payload.diagnosis_codes else [],
+        )
+        db.add(sl)
+
+    await db.commit()
+
+    # Best-effort auto-scrub
+    try:
+        from routers.ai import _scrub_patient, _scrub_provider, _scrub_payer, _scrub_claim_level, _scrub_service_lines
+        from sqlalchemy.orm import selectinload as _sil
+        from sqlalchemy import update as sql_update
+        _fresh_result = await db.execute(
+            select(Claim)
+            .options(
+                _sil(Claim.patient).selectinload(Patient.insurances),
+                _sil(Claim.provider),
+                _sil(Claim.payer),
+                _sil(Claim.service_lines),
+            )
+            .where(Claim.id == claim.id)
+        )
+        fresh_claim = _fresh_result.scalar_one_or_none()
+        if fresh_claim:
+            scrub_issues = []
+            _scrub_patient(fresh_claim, scrub_issues)
+            _scrub_provider(fresh_claim, scrub_issues)
+            _scrub_payer(fresh_claim, scrub_issues)
+            _scrub_claim_level(fresh_claim, scrub_issues)
+            _scrub_service_lines(fresh_claim, scrub_issues)
+            err_count = sum(1 for x in scrub_issues if x.get("type") == "error")
+            warn_count = sum(1 for x in scrub_issues if x.get("type") == "warning")
+            scrub_score = max(0, 100 - err_count * 25 - warn_count * 5)
+            await db.execute(sql_update(Claim).where(Claim.id == claim.id).values(
+                scrub_score=scrub_score, scrub_issues=scrub_issues
+            ))
+            await db.commit()
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "claim_id": claim.id,
+        "claim_number": claim.claim_number,
+        "status": "imported",
+        "errors": errors,
+    }
 
 
 # ── Download CSV Template ─────────────────────────────────────────────────────

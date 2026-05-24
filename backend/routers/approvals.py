@@ -94,7 +94,8 @@ async def create_approval(
     # Forward to Wink sync server so the doctor gets notified
     import httpx
     try:
-        WINK_CLINIC_ID = "1a905d29-0a9a-42b3-8bc3-83c0ceb9acba"
+        import os as _os
+        ANGELWINK_CLINIC_ID = _os.environ.get("ANGELWINK_CLINIC_ID", "fbfe9d71-295e-45cb-af29-5ed214460f37")
         # Get patient name + wink_patient_id for Wink-side display
         patient_name = None
         wink_patient_id = None
@@ -110,7 +111,7 @@ async def create_approval(
             resp = await client.post(
                 "http://159.65.235.231:3100/api/sync/approval-bridge",
                 json={
-                    "clinic_id": WINK_CLINIC_ID,
+                    "clinic_id": ANGELWINK_CLINIC_ID,
                         "patient_id": wink_patient_id or str(approval.patient_id) if approval.patient_id else None,
                         "patient_name": patient_name,
                         "claim_id": approval.claim_id,

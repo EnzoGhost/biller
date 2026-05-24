@@ -4,6 +4,7 @@ from the Wink sync server's PostgreSQL and B2 storage.
 """
 import json
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Optional
@@ -27,23 +28,23 @@ SYNC_DB_PASS = "wink_sync_2026!"
 SYNC_DB_TIMEOUT = 5
 
 SYNC_SERVER_URL = "http://159.65.235.231:3100"
-WINK_CLINIC_ID = "1a905d29-0a9a-42b3-8bc3-83c0ceb9acba"
+# Clinic ID is now read dynamically from DB via get_paired_clinic_id()
 
 # Thread pool for sync DB queries (psycopg2 is blocking)
 _executor = ThreadPoolExecutor(max_workers=3)
 
 # Categories to skip (signatures aren't useful for billing)
-SKIP_CATEGORIES = {"signature"}
-
-# Map Wink categories to display-friendly attachment types
-CATEGORY_MAP = {
+# ONLY these categories are relevant for billing claims
+# Insurance card and license/ID — nothing else
+ALLOWED_CATEGORIES = {
     "insurance_card": "insurance_card",
+    "insurance_card_primary": "insurance_card",
+    "insurance_card_secondary": "insurance_card",
     "insurance_plan_1": "insurance_card",
     "insurance": "insurance_card",
     "license": "license",
+    "license_id": "license",
     "id_license": "license",
-    "photo": "photo",
-    "other": "other",
 }
 
 
@@ -74,15 +75,15 @@ def _query_patient_docs(wink_patient_id: str) -> list[dict]:
               AND data IS NOT NULL
               AND (data->>'patient_id' = %s OR data->>'patient_id' = %s)
             ORDER BY row_id, timestamp DESC
-        """, (WINK_CLINIC_ID, str(wink_patient_id), str(int(str(wink_patient_id).lstrip('0') or '0'))))
+        """, (get_paired_clinic_id(), str(wink_patient_id), str(int(str(wink_patient_id).lstrip('0') or '0'))))
 
         docs = []
         for (raw_data,) in cur.fetchall():
             data = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
             cat = data.get("category", "other")
-            if cat in SKIP_CATEGORIES:
-                continue
-            att_type = CATEGORY_MAP.get(cat, "other")
+            att_type = ALLOWED_CATEGORIES.get(cat)
+            if not att_type:
+                continue  # Only insurance card + license for billing
             docs.append({
                 "id": data.get("id"),
                 "filename": data.get("filename"),
@@ -112,7 +113,7 @@ def _query_doc_by_id(doc_id: str) -> Optional[dict]:
               AND data::jsonb->>'id' = %s
             ORDER BY row_id, timestamp DESC
             LIMIT 1
-        """, (WINK_CLINIC_ID, str(doc_id)))
+        """, (get_paired_clinic_id(), str(doc_id)))
         row = cur.fetchone()
         cur.close()
         if not row:
@@ -191,36 +192,47 @@ async def proxy_wink_document(
     if not patient_id or not filename:
         raise HTTPException(status_code=404, detail="Document missing patient_id or filename")
 
-    # Get a device token for sync server auth
-    device_token = await loop.run_in_executor(_executor, _get_device_token)
-    if not device_token:
-        raise HTTPException(status_code=503, detail="No valid device token for sync server")
+    # Build B2 key from clinic slug + patient_id + filename
+    # (file_path may be empty for imported docs — the scraper stores "" to prevent
+    # the desktop app from rendering B2 keys as local file paths)
+    file_path = doc_data.get("file_path", "")
+    if not file_path or not file_path.startswith("clinic-"):
+        # Construct from components
+        _clinic_id = get_paired_clinic_id()
+        _slug = _get_clinic_slug(_clinic_id)
+        file_path = f"clinic-{_slug}/patients/{patient_id}/{filename}"
+        if not _slug:
+            raise HTTPException(status_code=404, detail="Cannot determine clinic slug for B2 path")
 
-    # Request presigned B2 URL from the sync server, then fetch the actual bytes
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.get(
-            f"{SYNC_SERVER_URL}/api/sync/documents/cloud/{patient_id}/{filename}",
-            headers={"X-Device-Token": device_token},
+    # Build presigned B2 URL directly
+    import boto3
+    import os as _b2_os
+    b2_client = boto3.client(
+        "s3",
+        endpoint_url=f"https://s3.{_b2_os.environ.get('B2_REGION', 'us-east-005')}.backblazeb2.com",
+        aws_access_key_id=_b2_os.environ.get("B2_KEY_ID", ""),
+        aws_secret_access_key=_b2_os.environ.get("B2_APP_KEY", ""),
+        region_name=_b2_os.environ.get("B2_REGION", "us-east-005"),
+    )
+    bucket = _b2_os.environ.get("B2_BUCKET", "wink-clinic-cloud")
+
+    try:
+        presigned_url = b2_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": file_path},
+            ExpiresIn=3600,
         )
-        if resp.status_code != 200:
-            raise HTTPException(
-                status_code=resp.status_code,
-                detail="Failed to get document from sync server",
-            )
+    except Exception as e:
+        logger.error("[wink-docs] B2 presign error: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to generate document URL")
 
-        result = resp.json()
-        url = result.get("url")
-        if not url:
-            raise HTTPException(status_code=404, detail="Document URL not found in sync server response")
-
-        # Fetch the actual file bytes from B2 and serve them directly
+    # Fetch the file from B2 and serve
+    async with httpx.AsyncClient(timeout=30) as client:
         try:
-            file_resp = await client.get(url, follow_redirects=True)
+            file_resp = await client.get(presigned_url, follow_redirects=True)
             if file_resp.status_code != 200:
-                # B2 fetch failed — return a placeholder
                 return _placeholder_image(f"File not available (HTTP {file_resp.status_code})")
 
-            # Determine content type from B2 response or filename
             content_type = file_resp.headers.get("content-type", _guess_content_type(filename))
             return Response(
                 content=file_resp.content,
@@ -251,3 +263,41 @@ def _placeholder_image(text: str) -> Response:
             font-family="sans-serif" font-size="16" fill="#666">{text}</text>
     </svg>"""
     return Response(content=svg.encode(), media_type="image/svg+xml")
+
+
+# ── Multi-tenant: get paired clinic ID from DB ──────────────────────────
+def get_paired_clinic_id() -> str:
+    """Read the AngelWink clinic_id from clinic_settings (persisted during pairing).
+    Falls back to ANGELWINK_CLINIC_ID env var, then empty string."""
+    import sqlite3
+    import os
+    # Try reading from the same DB the app uses
+    from config import settings
+    db_url = settings.DATABASE_URL
+    if "///" in db_url:
+        db_path = db_url.split("///", 1)[1]
+    else:
+        db_path = "./angelclaims.db"
+    try:
+        db = sqlite3.connect(db_path)
+        row = db.execute("SELECT angelwink_clinic_id FROM clinic_settings WHERE id = 1").fetchone()
+        db.close()
+        if row and row[0]:
+            return row[0]
+    except Exception:
+        pass
+    return os.environ.get("ANGELWINK_CLINIC_ID", "")
+
+
+def _get_clinic_slug(clinic_id: str) -> str:
+    """Get clinic slug from the sync server PostgreSQL."""
+    try:
+        conn = _get_sync_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT slug FROM clinics WHERE id = %s::uuid", (clinic_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        return row[0] if row else ""
+    except Exception:
+        return ""

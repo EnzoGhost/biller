@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, FileText,
-  Settings,
+  Settings, ShieldCheck,
   ChevronLeft, ChevronRight, LogOut,
 } from 'lucide-react';
 import { useAuthStore } from '../../hooks/useAuth';
@@ -13,6 +13,7 @@ import clsx from 'clsx';
 const NAV_ITEMS = [
   { to: '/',            icon: LayoutDashboard, labelKey: 'nav.dashboard',        exact: true },
   { to: '/claims',      icon: FileText,        labelKey: 'nav.claims' },
+  { to: '/eligibility', icon: ShieldCheck,     labelKey: 'nav.eligibility' },
   { to: '/settings',    icon: Settings,        labelKey: 'nav.settings' },
 ];
 

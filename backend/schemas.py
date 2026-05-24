@@ -416,6 +416,8 @@ class ImportResult(BaseModel):
     skipped: int
     errors: List[str]
     claims_created: List[int]
+    uninsured_skipped: int = 0
+    uninsured_patients: List[dict] = []
 
 
 # ── Pagination ────────────────────────────────────────────────────────────────

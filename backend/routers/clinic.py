@@ -16,11 +16,12 @@ from database import get_db
 from models import ClinicSettings, User
 from auth import get_current_user
 
-# ── In-memory join-code store (code -> {clinic_name, expires_at, wink_clinic_id}) ──
+# ── In-memory join-code store (code -> {clinic_name, expires_at, angelwink_clinic_id}) ──
 _join_codes: Dict[str, dict] = {}
 
-# Default Wink clinic ID (from the sync server)
-WINK_DEFAULT_CLINIC_ID = "1a905d29-0a9a-42b3-8bc3-83c0ceb9acba"
+import os as _os
+# Default AngelWink clinic ID (from the sync server) — override with ANGELWINK_CLINIC_ID env var
+# Clinic ID now stored in clinic_settings.angelwink_clinic_id (set during pairing)
 
 
 def _clean_expired_codes():
@@ -311,7 +312,7 @@ async def generate_join_code(
     expires_at = datetime.utcnow() + timedelta(minutes=5)
     _join_codes[code] = {
         "clinic_name": s.clinic_name or "Unnamed Clinic",
-        "wink_clinic_id": WINK_DEFAULT_CLINIC_ID,
+        "angelwink_clinic_id": "",
         "expires_at": expires_at,
         "created_by": user.id,
     }
@@ -324,10 +325,11 @@ async def generate_join_code(
 
 
 @router.post("/join-codes/verify")
-async def verify_join_code(body: dict):
+async def verify_join_code(body: dict, db: AsyncSession = Depends(get_db)):
     """
-    Verify a join code by checking the Wink sync server.
-    The code was generated in Wink and stored on the sync server's PostgreSQL.
+    Verify a join code by checking the AngelWink sync server.
+    The code was generated in AngelWink and stored on the sync server's PostgreSQL.
+    On success, stores the clinic_id in clinic_settings for multi-tenant support.
     No auth required — the code IS the auth.
     """
     import requests as _requests
@@ -345,10 +347,19 @@ async def verify_join_code(body: dict):
         if resp.ok:
             data = resp.json()
             if data.get("clinic_id"):
+                # Persist the paired clinic ID in clinic_settings
+                try:
+                    from sqlalchemy import text
+                    await db.execute(text(
+                        "UPDATE clinic_settings SET angelwink_clinic_id = :cid WHERE id = 1"
+                    ), {"cid": data["clinic_id"]})
+                    await db.commit()
+                except Exception:
+                    pass
                 return {
                     "valid": True,
-                    "clinic_name": data.get("name", "Wink Clinic"),
-                    "wink_clinic_id": data["clinic_id"],
+                    "clinic_name": data.get("name", "AngelAngelWink Clinic"),
+                    "angelwink_clinic_id": data["clinic_id"],
                 }
             else:
                 return {"valid": False, "message": data.get("error", "Invalid or expired code")}
@@ -367,11 +378,11 @@ async def verify_join_code(body: dict):
         del _join_codes[code]
         return {"valid": False, "message": "Code expired"}
     clinic_name = entry["clinic_name"]
-    wink_clinic_id = entry.get("wink_clinic_id", WINK_DEFAULT_CLINIC_ID)
+    angelwink_clinic_id = entry.get("angelwink_clinic_id", "")
     del _join_codes[code]
 
     return {
         "valid": True,
         "clinic_name": clinic_name,
-        "wink_clinic_id": wink_clinic_id,
+        "angelwink_clinic_id": angelwink_clinic_id,
     }

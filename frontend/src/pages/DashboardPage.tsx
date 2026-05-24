@@ -5,8 +5,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   Send, ChevronRight, ChevronDown, ChevronUp,
   FileText, CheckCircle, Clock, AlertTriangle, CircleDollarSign,
-  Download, X, Loader2, Archive, Trash2, Upload, Settings,
+  Download, X, Loader2, Archive, Trash2, Upload, Settings, ShieldCheck,
 } from 'lucide-react';
+import ScannerModal from '../components/scanner/ScannerModal';
 import api from '../lib/api';
 import { formatDateShort } from '../lib/dates';
 import type { ClaimStatus } from '../types';
@@ -49,8 +50,10 @@ interface WorkQueueData {
 
 interface PullResult {
   patients_found: number;
-  claims_created: number;
+  claims_created: number | number[];
   errors: string[];
+  uninsured_skipped?: number;
+  uninsured_patients?: Array<{ name: string; record_number: string; invoice_id: number }>;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -209,8 +212,8 @@ function WinkPullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
   const [result, setResult] = useState<PullResult | null>(null);
 
   // Pairing state
-  const [winkClinicId, setWinkClinicId] = useState<string | null>(() => localStorage.getItem('wink_clinic_id'));
-  const [winkClinicName, setWinkClinicName] = useState<string | null>(() => localStorage.getItem('wink_clinic_name'));
+  const [winkClinicId, setWinkClinicId] = useState<string | null>(() => localStorage.getItem('angelwink_clinic_id'));
+  const [winkClinicName, setWinkClinicName] = useState<string | null>(() => localStorage.getItem('angelwink_clinic_name'));
   const [joinCode, setJoinCode] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -224,11 +227,11 @@ function WinkPullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
     try {
       const { data } = await api.post('/clinic/join-codes/verify', { code: joinCode.trim() });
       if (data.valid) {
-        const clinicId = data.wink_clinic_id;
+        const clinicId = data.angelwink_clinic_id;
         setWinkClinicId(clinicId);
         setWinkClinicName(data.clinic_name);
-        localStorage.setItem('wink_clinic_id', clinicId);
-        localStorage.setItem('wink_clinic_name', data.clinic_name);
+        localStorage.setItem('angelwink_clinic_id', clinicId);
+        localStorage.setItem('angelwink_clinic_name', data.clinic_name);
         setJoinCode('');
       } else {
         setJoinError(data.message || 'Invalid code');
@@ -264,7 +267,7 @@ function WinkPullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <h2 className="text-base font-semibold text-slate-900">
-            🏥 {t('dashboard.import_wink_title', 'Import from AngelWink')}
+            {t('dashboard.import_wink_title', 'Import from AngelWink')}
           </h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
@@ -311,8 +314,8 @@ function WinkPullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
                   onClick={() => {
                     setWinkClinicId(null);
                     setWinkClinicName(null);
-                    localStorage.removeItem('wink_clinic_id');
-                    localStorage.removeItem('wink_clinic_name');
+                    localStorage.removeItem('angelwink_clinic_id');
+                    localStorage.removeItem('angelwink_clinic_name');
                   }}
                   className="ml-auto text-xs text-slate-500 hover:text-red-600"
                 >
@@ -338,24 +341,7 @@ function WinkPullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
               )}
             </>
           ) : (
-            <div className="text-center py-4">
-              <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                <CheckCircle className="w-6 h-6 text-emerald-500" />
-              </div>
-              <p className="text-sm font-medium text-slate-900 mb-1">
-                {t('dashboard.import_wink_success', {
-                  defaultValue: 'Imported {{claims}} claims',
-                  claims: Array.isArray(result.claims_created) ? result.claims_created.length : result.claims_created,
-                })}
-              </p>
-              {result.errors && result.errors.length > 0 && (
-                <div className="mt-3 text-left bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-h-32 overflow-y-auto">
-                  {result.errors.map((err, i) => (
-                    <p key={i} className="text-xs text-amber-700">{err}</p>
-                  ))}
-                </div>
-              )}
-            </div>
+            <WinkImportResult result={result} />
           )}
         </div>
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
@@ -391,6 +377,69 @@ function WinkPullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
   );
 }
 
+// ── Wink Import Result ───────────────────────────────────────────────────────
+
+function WinkImportResult({ result }: { result: PullResult }) {
+  const [showUninsured, setShowUninsured] = useState(false);
+  const claimCount = Array.isArray(result.claims_created) ? result.claims_created.length : (result.claims_created || 0);
+  const uninsuredCount = result.uninsured_skipped || 0;
+  const uninsuredPatients = result.uninsured_patients || [];
+
+  return (
+    <div className="py-4 space-y-3">
+      {/* Success row */}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 bg-emerald-50 rounded-full flex items-center justify-center shrink-0">
+          <CheckCircle className="w-5 h-5 text-emerald-500" />
+        </div>
+        <p className="text-sm font-medium text-slate-900">
+          Imported {claimCount} claim{claimCount !== 1 ? 's' : ''}
+        </p>
+      </div>
+
+      {/* Uninsured patients section */}
+      {uninsuredCount > 0 && (
+        <div className="bg-sky-50 border border-sky-200 rounded-lg overflow-hidden">
+          <button
+            onClick={() => setShowUninsured(!showUninsured)}
+            className="w-full flex items-center justify-between px-3 py-2 text-left"
+          >
+            <span className="text-sm text-sky-700 font-medium">
+              {uninsuredCount} patient{uninsuredCount !== 1 ? 's' : ''} skipped (no insurance)
+            </span>
+            {showUninsured ? (
+              <ChevronUp className="w-4 h-4 text-sky-500" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-sky-500" />
+            )}
+          </button>
+          {showUninsured && uninsuredPatients.length > 0 && (
+            <div className="border-t border-sky-200 px-3 py-2 max-h-36 overflow-y-auto space-y-1">
+              {uninsuredPatients.map((p, i) => (
+                <div key={i} className="flex items-center justify-between text-xs text-sky-700">
+                  <span className="font-medium">{p.name}</span>
+                  {p.record_number && (
+                    <span className="text-sky-500 ml-2">#{p.record_number}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Errors (non-uninsured) */}
+      {result.errors && result.errors.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-h-32 overflow-y-auto">
+          {result.errors.map((err, i) => (
+            <p key={i} className="text-xs text-amber-700">{err}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Import Dropdown ──────────────────────────────────────────────────────────
 
 function ImportDropdown({
@@ -402,6 +451,7 @@ function ImportDropdown({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
 
   return (
@@ -420,17 +470,30 @@ function ImportDropdown({
           <div className="absolute right-0 top-full mt-1 z-40 bg-white rounded-xl shadow-xl border border-slate-200 py-1 w-56">
             <button
               onClick={() => { setOpen(false); onVistaNet(); }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 text-left"
+              className="w-full flex items-center justify-center px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              <span className="text-base">📋</span>
-              <span>VistaNet</span>
+              VistaNet
             </button>
             <button
               onClick={() => { setOpen(false); onWink(); }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 text-left"
+              className="w-full flex items-center justify-center px-3 py-2.5 hover:bg-slate-50"
             >
-              <span className="text-base">🏥</span>
-              <img src="/angel-logo.png" alt="AngelWink" className="h-4 object-contain" />
+              <img src="/forClaimsImport.png" alt="AngelWink" className="max-w-[85%] max-h-10 object-contain" />
+            </button>
+            <button
+              onClick={async () => {
+                setOpen(false);
+                try {
+                  const { data } = await api.post('/claims/seed-test-claims');
+                  alert(`Created ${data.total_created} test claims, skipped ${data.total_skipped}`);
+                  queryClient.invalidateQueries({ queryKey: ['work-queue'] });
+                } catch {
+                  alert('Error creating test claims');
+                }
+              }}
+              className="w-full flex items-center justify-center px-4 py-2.5 text-sm font-medium text-amber-600 hover:bg-amber-50"
+            >
+              🧪 Test Claims
             </button>
             <div className="border-t border-slate-100 my-1" />
             <button
@@ -649,6 +712,9 @@ export default function DashboardPage() {
   const qc = useQueryClient();
   const [showPullModal, setShowPullModal] = useState(false);
   const [showWinkModal, setShowWinkModal] = useState(false);
+  const [showEligibilityScanner, setShowEligibilityScanner] = useState(false);
+  const [eligibilityScanResult, setEligibilityScanResult] = useState<Record<string, string> | null>(null);
+
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{open:boolean, title:string, message:string, onConfirm:()=>void}>({open:false,title:'',message:'',onConfirm:()=>{}});
@@ -734,7 +800,7 @@ export default function DashboardPage() {
       for (let i = 0; i < ready.length; i++) {
         const c = ready[i];
         try {
-          await api.post(`/stedi/submit/${c.id}`);
+          await api.post(`/inmediata/submit-ws/${c.id}`);
         } catch {
           failed.push(c.claim_number || String(c.id));
         }
@@ -770,11 +836,18 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-slate-900">{t('dashboard.work_queue')}</h1>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowEligibilityScanner(true)}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition-colors"
+            title="Scan insurance card to extract member info"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-sky-500" />
+            Eligibility Scanner
+          </button>
           <ImportDropdown
             onVistaNet={() => setShowPullModal(true)}
             onWink={() => setShowWinkModal(true)}
           />
-
         </div>
       </div>
 
@@ -930,6 +1003,48 @@ export default function DashboardPage() {
           onClose={() => setShowPullModal(false)}
           onSuccess={() => qc.invalidateQueries({ queryKey: ['work-queue'] })}
         />
+      )}
+
+      {/* Eligibility Scanner Modal */}
+      <ScannerModal
+        open={showEligibilityScanner}
+        onClose={() => { setShowEligibilityScanner(false); setEligibilityScanResult(null); }}
+        purpose="eligibility"
+        onProcessingComplete={(result) => {
+          const info = result?.info;
+          if (info) setEligibilityScanResult(info);
+          setShowEligibilityScanner(false);
+        }}
+      />
+
+      {/* Eligibility Scan Result */}
+      {eligibilityScanResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-sky-500" />
+                <h2 className="text-base font-semibold text-slate-900">Insurance Card</h2>
+              </div>
+              <button onClick={() => setEligibilityScanResult(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              {Object.entries(eligibilityScanResult).filter(([, v]) => v).map(([k, v]) => (
+                <div key={k} className="flex justify-between items-start gap-4">
+                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wide shrink-0">
+                    {k.replace(/_/g, ' ')}
+                  </span>
+                  <span className="text-sm text-slate-800 text-right">{String(v)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 text-xs text-slate-400 text-center">
+              Scan only — eligibility check available when payer portals are connected
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Wink Pull Modal */}

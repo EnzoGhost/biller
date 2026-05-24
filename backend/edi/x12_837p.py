@@ -328,13 +328,9 @@ class X12837PGenerator:
             "Y",                                   # CLM09 release info
         ))
 
-        # DTP — Service date(s)
-        svc_from = _fmt_date(claim.service_date_from)
-        svc_to   = _fmt_date(claim.service_date_to)
-        if svc_to and svc_to != svc_from:
-            segments.append(self._seg("DTP", "472", "RD8", f"{svc_from}-{svc_to}"))
-        else:
-            segments.append(self._seg("DTP", "472", "D8", svc_from))
+        # DTP*472 — Service dates appear at LINE level (Loop 2400), NOT claim level.
+        # Claim-level DTP is only for DTP*431 (Onset), DTP*454 (Initial Treatment), etc.
+        # Removed DTP*472 from here to fix Inmediata "Extra data" validation error.
 
         # REF — Prior authorization
         if claim.prior_auth_number:
@@ -374,8 +370,9 @@ class X12837PGenerator:
 
             # Diagnosis pointers: integers → letters (1→A, 2→B...)
             diag_ptrs = sl.diagnosis_pointers or [1]
+            # SV107 diagnosis code pointers must be numeric (1, 2, 3, 4) not letters
             ptr_str = ":".join(
-                chr(64 + int(p)) for p in diag_ptrs[:4] if isinstance(p, (int, float))
+                str(int(p)) for p in diag_ptrs[:4] if isinstance(p, (int, float))
             )
 
             sl_charge = _fmt_amount(sl.billed_amount)

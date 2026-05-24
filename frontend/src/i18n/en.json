@@ -326,13 +326,9 @@
     "show_inactive": "Show inactive"
   },
   "stedi": {
-    "submit_stedi": "Submit to Stedi",
-    "submitting": "Submitting...",
     "submit_success": "Claim submitted to Stedi",
-    "check_status": "Check Status",
     "status_refreshed": "Status updated",
     "transaction_info": "Stedi Transaction",
-    "transaction_id": "Transaction ID",
     "payer_claim_number": "Payer Claim #",
     "submitted_on": "Submitted",
     "raw_status": "Status Response"

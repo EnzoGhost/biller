@@ -89,6 +89,13 @@ export default function SettingsPage() {
   const [auditDateTo, setAuditDateTo]   = useState(today);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError]     = useState<string | null>(null);
+  const [auditMode, setAuditMode]       = useState<'synced' | 'direct'>('synced');
+  // Direct VistaNet credentials
+  const [directUrl, setDirectUrl]           = useState('https://visualzone.vistanet.cloud');
+  const [directUser, setDirectUser]         = useState('');
+  const [directPassword, setDirectPassword] = useState('');
+  const [directLocation, setDirectLocation] = useState('MANATI');
+  const [directShowPassword, setDirectShowPassword] = useState(false);
   interface AuditEntry {
     invoice_number: string | null;
     date: string | null;
@@ -108,17 +115,36 @@ export default function SettingsPage() {
   }
   const [auditResult, setAuditResult]   = useState<AuditResult | null>(null);
 
+  const VISTANET_LOCATIONS = [
+    'MANATI', 'BARCELONETA', 'ARECIBO', 'CIALES', 'MOROVIS',
+    'VEGA BAJA', 'VEGA ALTA', 'SAN JUAN', 'BAYAMON', 'CAROLINA',
+    'PONCE', 'MAYAGUEZ', 'CAGUAS', 'HUMACAO', 'FAJARDO',
+  ];
+
   const runAudit = async () => {
     if (!auditDateFrom || !auditDateTo) return;
+    if (auditMode === 'direct' && (!directUser || !directPassword)) return;
     setAuditLoading(true);
     setAuditError(null);
     setAuditResult(null);
     try {
-      const res = await api.post('/missing-claims/audit/lost-revenue', {
-        date_from: auditDateFrom,
-        date_to: auditDateTo,
-      });
-      setAuditResult(res.data);
+      if (auditMode === 'direct') {
+        const res = await api.post('/missing-claims/audit/direct', {
+          vistanet_url: directUrl,
+          vistanet_user: directUser,
+          vistanet_password: directPassword,
+          vistanet_location: directLocation,
+          date_from: auditDateFrom,
+          date_to: auditDateTo,
+        });
+        setAuditResult(res.data);
+      } else {
+        const res = await api.post('/missing-claims/audit/lost-revenue', {
+          date_from: auditDateFrom,
+          date_to: auditDateTo,
+        });
+        setAuditResult(res.data);
+      }
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
       setAuditError(err?.response?.data?.detail || 'Error running audit');
@@ -985,6 +1011,91 @@ export default function SettingsPage() {
                 </p>
               </div>
 
+              {/* Mode toggle */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setAuditMode('synced'); setAuditResult(null); setAuditError(null); }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    auditMode === 'synced'
+                      ? 'border-sky-500 bg-sky-50 text-sky-700'
+                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  📊 Synced Data
+                </button>
+                <button
+                  onClick={() => { setAuditMode('direct'); setAuditResult(null); setAuditError(null); }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    auditMode === 'direct'
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  🔌 Direct from VistaNet
+                </button>
+              </div>
+
+              {auditMode === 'direct' && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
+                  <p className="text-xs text-emerald-700 font-medium">
+                    Enter VistaNet credentials to scan live data directly. No sync setup required.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">VistaNet URL</label>
+                      <input
+                        type="text"
+                        value={directUrl}
+                        onChange={e => setDirectUrl(e.target.value)}
+                        placeholder="https://visualzone.vistanet.cloud"
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Location</label>
+                      <select
+                        value={directLocation}
+                        onChange={e => setDirectLocation(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white"
+                      >
+                        {VISTANET_LOCATIONS.map(loc => (
+                          <option key={loc} value={loc}>{loc}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Username</label>
+                      <input
+                        type="text"
+                        value={directUser}
+                        onChange={e => setDirectUser(e.target.value)}
+                        placeholder="username"
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Password</label>
+                      <div className="relative">
+                        <input
+                          type={directShowPassword ? 'text' : 'password'}
+                          value={directPassword}
+                          onChange={e => setDirectPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setDirectShowPassword(!directShowPassword)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          {directShowPassword ? '🙈' : '👁️'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Date range */}
               <div className="flex gap-3">
                 <div className="flex-1">
@@ -997,11 +1108,18 @@ export default function SettingsPage() {
 
               <button
                 onClick={runAudit}
-                disabled={auditLoading || !auditDateFrom || !auditDateTo}
-                className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 disabled:bg-sky-300 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+                disabled={auditLoading || !auditDateFrom || !auditDateTo || (auditMode === 'direct' && (!directUser || !directPassword))}
+                className={`flex items-center gap-2 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors ${
+                  auditMode === 'direct'
+                    ? 'bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-300'
+                    : 'bg-sky-500 hover:bg-sky-600 disabled:bg-sky-300'
+                }`}
               >
                 <Search className="w-4 h-4" />
-                {auditLoading ? 'Running...' : 'Run Audit'}
+                {auditLoading
+                  ? (auditMode === 'direct' ? 'Scanning VistaNet...' : 'Running...')
+                  : (auditMode === 'direct' ? 'Scan VistaNet' : 'Run Audit')
+                }
               </button>
 
               {auditError && (
@@ -1042,7 +1160,7 @@ export default function SettingsPage() {
                         <tbody className="divide-y divide-slate-100">
                           {auditResult.flagged.map((entry, i) => (
                             <tr key={i} className="hover:bg-slate-50 transition-colors">
-                              <td className="px-3 py-2.5 text-slate-700 whitespace-nowrap">{entry.date || '—'}</td>
+                              <td className="px-3 py-2.5 text-slate-700 whitespace-nowrap">{entry.date ? new Date(entry.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
                               <td className="px-3 py-2.5 font-medium text-slate-900">{entry.patient_name}</td>
                               <td className="px-3 py-2.5 text-slate-600">{entry.invoice_number || '—'}</td>
                               <td className="px-3 py-2.5 text-slate-600">{entry.payer || '—'}</td>

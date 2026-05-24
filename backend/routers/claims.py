@@ -1,6 +1,6 @@
 import random
 import string
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -580,3 +580,204 @@ async def bulk_delete_claims(
 
     await db.commit()
     return {"deleted": len(deleted_ids), "claim_ids": deleted_ids}
+
+
+# ── Seed Test Claims ──────────────────────────────────────────────────────────
+
+@router.post("/seed-test-claims", summary="Create 5 test claims with fake data (idempotent)")
+async def seed_test_claims(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Create 5 test claims with realistic but fake patient data.
+    Idempotent — skips claims that already exist (by claim_number).
+    Useful for testing the 837P / Inmediata pipeline.
+    """
+    TEST_CLAIMS = [
+        {
+            "claim_number": "CLM-TEST-001",
+            "first_name": "JUAN",
+            "last_name": "GARCIA RODRIGUEZ",
+            "dob": date(1975, 3, 15),
+            "gender": "M",
+            "payer_id": 1,           # Triple-S Salud
+            "member_id": "TSS-TEST-001",
+            "group_number": "GRP-001",
+            "service_date": date(2026, 5, 20),
+            "diagnosis_codes": ["H52.13", "Z00.00"],
+            "service_lines": [
+                {"cpt_code": "92015", "description": "Refraction", "units": 1, "billed_amount": 75.00, "diag_ptrs": [1, 2]},
+                {"cpt_code": "92002", "description": "Ophthalmological exam, new patient", "units": 1, "billed_amount": 125.00, "diag_ptrs": [1, 2]},
+            ],
+        },
+        {
+            "claim_number": "CLM-TEST-002",
+            "first_name": "MARIA",
+            "last_name": "LOPEZ SANTIAGO",
+            "dob": date(1988, 7, 22),
+            "gender": "F",
+            "payer_id": 2,           # MCS Healthcare
+            "member_id": "MCS-TEST-002",
+            "group_number": "79-TEST01",
+            "service_date": date(2026, 5, 19),
+            "diagnosis_codes": ["H52.4"],
+            "service_lines": [
+                {"cpt_code": "92014", "description": "Ophthalmological exam, established", "units": 1, "billed_amount": 100.00, "diag_ptrs": [1]},
+                {"cpt_code": "V2020", "description": "Frames", "units": 1, "billed_amount": 85.00, "diag_ptrs": [1]},
+                {"cpt_code": "V2300", "description": "Sphere, single vision", "units": 1, "billed_amount": 55.00, "diag_ptrs": [1]},
+            ],
+        },
+        {
+            "claim_number": "CLM-TEST-003",
+            "first_name": "CARLOS",
+            "last_name": "RIVERA NIEVES",
+            "dob": date(1960, 11, 3),
+            "gender": "M",
+            "payer_id": 13,          # First Medical Vital
+            "member_id": "FMV-TEST-003",
+            "group_number": None,
+            "service_date": date(2026, 5, 18),
+            "diagnosis_codes": ["H40.11", "H52.1"],
+            "service_lines": [
+                {"cpt_code": "92015", "description": "Refraction", "units": 1, "billed_amount": 75.00, "diag_ptrs": [1, 2]},
+                {"cpt_code": "92250", "description": "Fundus photography", "units": 1, "billed_amount": 95.00, "diag_ptrs": [1]},
+                {"cpt_code": "92083", "description": "Visual field exam", "units": 1, "billed_amount": 85.00, "diag_ptrs": [1]},
+            ],
+        },
+        {
+            "claim_number": "CLM-TEST-004",
+            "first_name": "ANA",
+            "last_name": "MARTINEZ COLON",
+            "dob": date(1995, 1, 30),
+            "gender": "F",
+            "payer_id": 11,          # Triple-S Advantage
+            "member_id": "TSA-TEST-004",
+            "group_number": None,
+            "service_date": date(2026, 5, 17),
+            "diagnosis_codes": ["H10.10", "H04.12"],
+            "service_lines": [
+                {"cpt_code": "92012", "description": "Ophthalmological exam, intermediate", "units": 1, "billed_amount": 85.00, "diag_ptrs": [1, 2]},
+                {"cpt_code": "92002", "description": "Ophthalmological exam, new patient", "units": 1, "billed_amount": 125.00, "diag_ptrs": [1, 2]},
+            ],
+        },
+        {
+            "claim_number": "CLM-TEST-005",
+            "first_name": "PEDRO",
+            "last_name": "SANTIAGO MORALES",
+            "dob": date(1950, 6, 18),
+            "gender": "M",
+            "payer_id": 6,           # Medicare/Novitas
+            "member_id": "MCR-TEST-005",
+            "group_number": None,
+            "service_date": date(2026, 5, 16),
+            "diagnosis_codes": ["H25.811", "H52.4"],
+            "service_lines": [
+                {"cpt_code": "92014", "description": "Ophthalmological exam, established", "units": 1, "billed_amount": 100.00, "diag_ptrs": [1, 2]},
+                {"cpt_code": "76519", "description": "Ophthalmic biometry", "units": 1, "billed_amount": 110.00, "diag_ptrs": [1]},
+                {"cpt_code": "92015", "description": "Refraction", "units": 1, "billed_amount": 75.00, "diag_ptrs": [1, 2]},
+            ],
+        },
+    ]
+
+    created = []
+    skipped = []
+
+    for tc in TEST_CLAIMS:
+        # Idempotency check
+        existing = await db.execute(
+            select(Claim).where(Claim.claim_number == tc["claim_number"])
+        )
+        if existing.scalar_one_or_none():
+            skipped.append(tc["claim_number"])
+            continue
+
+        # Verify payer exists
+        payer_res = await db.execute(select(Payer).where(Payer.id == tc["payer_id"]))
+        payer = payer_res.scalar_one_or_none()
+        if not payer:
+            skipped.append(f"{tc['claim_number']} (payer {tc['payer_id']} not found)")
+            continue
+
+        # Create or find patient by name + DOB
+        pt_res = await db.execute(
+            select(Patient).where(
+                Patient.first_name == tc["first_name"],
+                Patient.last_name == tc["last_name"],
+                Patient.dob == tc["dob"],
+            ).limit(1)
+        )
+        patient = pt_res.scalar_one_or_none()
+        if not patient:
+            patient = Patient(
+                first_name=tc["first_name"],
+                last_name=tc["last_name"],
+                dob=tc["dob"],
+                gender=tc["gender"],
+                address_line1="123 Test Ave",
+                city="San Juan",
+                state="PR",
+                zip_code="00901",
+            )
+            db.add(patient)
+            await db.flush()
+
+        # Create insurance if not already present for this payer
+        ins_res = await db.execute(
+            select(PatientInsurance).where(
+                PatientInsurance.patient_id == patient.id,
+                PatientInsurance.payer_id == tc["payer_id"],
+            ).limit(1)
+        )
+        if not ins_res.scalar_one_or_none():
+            ins = PatientInsurance(
+                patient_id=patient.id,
+                payer_id=tc["payer_id"],
+                member_id=tc["member_id"],
+                group_number=tc["group_number"],
+                is_primary=True,
+            )
+            db.add(ins)
+            await db.flush()
+
+        # Calculate total billed
+        total_billed = sum(sl["billed_amount"] for sl in tc["service_lines"])
+
+        # Create the claim
+        claim = Claim(
+            claim_number=tc["claim_number"],
+            patient_id=patient.id,
+            provider_id=1,           # Dr. Brenda Cubero
+            payer_id=tc["payer_id"],
+            status=ClaimStatus.READY,
+            service_date_from=tc["service_date"],
+            service_date_to=tc["service_date"],
+            diagnosis_codes=tc["diagnosis_codes"],
+            total_billed=total_billed,
+            source="manual",
+        )
+        db.add(claim)
+        await db.flush()
+
+        # Create service lines
+        for sl_data in tc["service_lines"]:
+            sl = ServiceLine(
+                claim_id=claim.id,
+                cpt_code=sl_data["cpt_code"],
+                description=sl_data["description"],
+                units=sl_data["units"],
+                billed_amount=sl_data["billed_amount"],
+                service_date=tc["service_date"],
+                diagnosis_pointers=sl_data["diag_ptrs"],
+            )
+            db.add(sl)
+
+        created.append(tc["claim_number"])
+
+    await db.commit()
+    return {
+        "created": created,
+        "skipped": skipped,
+        "total_created": len(created),
+        "total_skipped": len(skipped),
+    }

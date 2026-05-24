@@ -326,13 +326,9 @@
     "show_inactive": "Mostrar inactivos"
   },
   "stedi": {
-    "submit_stedi": "Someter a Stedi",
-    "submitting": "Sometiendo...",
     "submit_success": "Reclamación sometida a Stedi",
-    "check_status": "Verificar Estado",
     "status_refreshed": "Estado actualizado",
     "transaction_info": "Transacción Stedi",
-    "transaction_id": "ID de Transacción",
     "payer_claim_number": "# Reclamación Pagador",
     "submitted_on": "Sometida",
     "raw_status": "Respuesta de Estado"

@@ -123,10 +123,10 @@ export default function ImportPage() {
 
   // Wink connection state
   const [winkConnected, setWinkConnected] = useState<string | null>(() => {
-    return localStorage.getItem('wink_clinic_name');
+    return localStorage.getItem('angelwink_clinic_name');
   });
   const [winkClinicId, setWinkClinicId] = useState<string | null>(() => {
-    return localStorage.getItem('wink_clinic_id');
+    return localStorage.getItem('angelwink_clinic_id');
   });
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [joinVerifying, setJoinVerifying] = useState(false);
@@ -242,10 +242,10 @@ export default function ImportPage() {
       const { data } = await api.post('/clinic/join-codes/verify', { code: joinCodeInput.trim() });
       if (data.valid) {
         setWinkConnected(data.clinic_name);
-        localStorage.setItem('wink_clinic_name', data.clinic_name);
-        if (data.wink_clinic_id) {
-          setWinkClinicId(data.wink_clinic_id);
-          localStorage.setItem('wink_clinic_id', data.wink_clinic_id);
+        localStorage.setItem('angelwink_clinic_name', data.clinic_name);
+        if (data.angelwink_clinic_id) {
+          setWinkClinicId(data.angelwink_clinic_id);
+          localStorage.setItem('angelwink_clinic_id', data.angelwink_clinic_id);
         }
         setJoinCodeInput('');
       } else {
@@ -261,8 +261,8 @@ export default function ImportPage() {
   const handleDisconnectWink = () => {
     setWinkConnected(null);
     setWinkClinicId(null);
-    localStorage.removeItem('wink_clinic_name');
-    localStorage.removeItem('wink_clinic_id');
+    localStorage.removeItem('angelwink_clinic_name');
+    localStorage.removeItem('angelwink_clinic_id');
   };
 
   const handleWinkPatients = async () => {

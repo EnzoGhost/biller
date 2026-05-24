@@ -20,6 +20,7 @@ from models import (
     PatientInsurance, Payer, Provider, ServiceLine, User,
 )
 from auth import get_current_user
+from config import encrypt_value, decrypt_value
 
 logger = logging.getLogger("vistanet")
 router = APIRouter(prefix="/vistanet", tags=["vistanet"])
@@ -84,7 +85,7 @@ async def _get_vistanet_creds(db: AsyncSession) -> tuple[str, str, str]:
     if settings and settings.vistanet_username and settings.vistanet_password:
         return (
             settings.vistanet_username,
-            settings.vistanet_password,
+            decrypt_value(settings.vistanet_password),
             settings.vistanet_location or VISTANET_LOCATION,
         )
     return (VISTANET_USER, VISTANET_PASSWORD, VISTANET_LOCATION)
@@ -1268,7 +1269,7 @@ async def save_vistanet_config(
     if body.get("username"):
         settings.vistanet_username = body["username"]
     if body.get("password"):
-        settings.vistanet_password = body["password"]
+        settings.vistanet_password = encrypt_value(body["password"])
     if body.get("location"):
         settings.vistanet_location = body["location"]
 

@@ -149,6 +149,10 @@ async def upsert_fee_schedule(
         await db.commit()
         await db.refresh(obj)
 
+    # Cascade: update draft claims with $0 billed for this CPT code
+    if entry.allowed_amount > 0:
+        await _cascade_fee_update(db, entry.cpt_code, entry.allowed_amount)
+
     # Load payer relationship
     payer_name = None
     if obj.payer_id:
