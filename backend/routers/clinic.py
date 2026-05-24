@@ -242,20 +242,62 @@ async def save_clinic_config(
 @router.get("/config")
 async def get_clinic_config(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get current clinic info + default provider name for the settings page."""
-    from models import Provider
+    """Get current clinic info + default provider name for the settings page.
+    Scoped by user's organization — returns empty for new orgs."""
+    from models import Provider, OrgUser, ProviderSettings
 
-    s = await _get_or_create_settings(db)
-    result = await db.execute(
-        select(Provider).where(Provider.is_active == True).limit(1)
+    # Find user's org
+    org_result = await db.execute(
+        select(OrgUser).where(OrgUser.user_id == current_user.id).limit(1)
     )
-    provider = result.scalar_one_or_none()
-    provider_name = ""
-    if provider:
-        provider_name = f"{provider.first_name or ''} {provider.last_name or ''}".strip()
+    org_user = org_result.scalar_one_or_none()
 
+    if org_user:
+        # Get provider for this org
+        result = await db.execute(
+            select(Provider).where(
+                Provider.organization_id == org_user.organization_id,
+                Provider.is_active == True
+            ).limit(1)
+        )
+        provider = result.scalar_one_or_none()
+    else:
+        provider = None
+
+    # Try provider_settings first, then fall back to global clinic_settings
+    if provider:
+        ps_result = await db.execute(
+            select(ProviderSettings).where(ProviderSettings.provider_id == provider.id).limit(1)
+        )
+        ps = ps_result.scalar_one_or_none()
+        if ps and ps.clinic_name:
+            await db.commit()
+            return {
+                "clinic_name": ps.clinic_name or "",
+                "npi": ps.npi_org or "",
+                "tax_id": ps.tax_id or "",
+                "address": ps.address_line1 or "",
+                "phone": ps.phone or "",
+                "provider_name": f"{provider.first_name or ''} {provider.last_name or ''}".strip(),
+            }
+
+    # For orgs without providers yet, return empty
+    if not provider:
+        await db.commit()
+        return {
+            "clinic_name": "",
+            "npi": "",
+            "tax_id": "",
+            "address": "",
+            "phone": "",
+            "provider_name": "",
+        }
+
+    # Legacy fallback: global clinic_settings (for original org)
+    s = await _get_or_create_settings(db)
+    provider_name = f"{provider.first_name or ''} {provider.last_name or ''}".strip()
     await db.commit()
     return {
         "clinic_name": s.clinic_name or "",

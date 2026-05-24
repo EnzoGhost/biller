@@ -26,6 +26,9 @@ from routers import organizations
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Run column migrations before SQLAlchemy init (adds missing columns to existing tables)
+    from startup_migration import run_startup_migration
+    run_startup_migration()
     await init_db()
     yield
 

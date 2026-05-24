@@ -399,10 +399,15 @@ async def create_user(
     await db.refresh(user)
     # If organization_id provided, add membership
     if body.organization_id:
+        # Map User role to OrgUser role
+        org_role = OrgRole.ADMIN if role_enum == UserRole.ADMIN else (
+            OrgRole.VIEWER if role_enum == UserRole.VIEWER else OrgRole.BILLER
+        )
         org_membership = OrgUser(
             organization_id=body.organization_id,
             user_id=user.id,
-            role=OrgRole.BILLER,
+            role=org_role,
+            accepted_at=datetime.utcnow(),  # Admin-created users are immediately active
         )
         db.add(org_membership)
         await db.commit()
