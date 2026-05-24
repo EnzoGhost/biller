@@ -711,27 +711,27 @@ export default function SettingsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className={labelClass}>{t('settings.clinic_name')}</label>
-                  <input value={clinicName} onChange={e => setClinicName(e.target.value)} className={inputClass} placeholder="Clínica Ejemplo" />
+                  <input value={clinicName} onChange={e => setClinicName(e.target.value)} className={inputClass} placeholder="" />
                 </div>
                 <div>
                   <label className={labelClass}>Provider / Doctor Name</label>
-                  <input value={providerName} onChange={e => setProviderName(e.target.value)} className={inputClass} placeholder="Dra. María Cortés" />
+                  <input value={providerName} onChange={e => setProviderName(e.target.value)} className={inputClass} placeholder="" />
                 </div>
                 <div>
                   <label className={labelClass}>NPI (Billing)</label>
-                  <input value={clinicNpi} onChange={e => setClinicNpi(e.target.value)} className={inputClass} placeholder="1234567890" />
+                  <input value={clinicNpi} onChange={e => setClinicNpi(e.target.value)} className={inputClass} placeholder="" />
                 </div>
                 <div>
                   <label className={labelClass}>Tax ID / EIN</label>
-                  <input value={clinicTax} onChange={e => setClinicTax(e.target.value)} className={inputClass} placeholder="12-3456789" />
+                  <input value={clinicTax} onChange={e => setClinicTax(e.target.value)} className={inputClass} placeholder="" />
                 </div>
                 <div>
                   <label className={labelClass}>{t('common.phone')}</label>
-                  <input value={clinicPhone} onChange={e => setClinicPhone(formatPhone(e.target.value))} className={inputClass} placeholder="(787) 555-0000" maxLength={14} />
+                  <input value={clinicPhone} onChange={e => setClinicPhone(formatPhone(e.target.value))} className={inputClass} placeholder="" maxLength={14} />
                 </div>
                 <div className="sm:col-span-2">
                   <label className={labelClass}>{t('settings.address')}</label>
-                  <input value={clinicAddr} onChange={e => setClinicAddr(e.target.value)} className={inputClass} placeholder="Ave. Principal 123, San Juan, PR 00901" />
+                  <input value={clinicAddr} onChange={e => setClinicAddr(e.target.value)} className={inputClass} placeholder="" />
                 </div>
               </div>
             </div>
@@ -1089,7 +1089,7 @@ export default function SettingsPage() {
                 ) : (
                   <div className="space-y-3">
                     {!vnConnected && (
-                      <p className="text-sm text-slate-500">Connect to VistaNet Cloud to import bitácora data.</p>
+                      <p className="text-sm text-slate-500">Connect to VistaNet Cloud to import patient data.</p>
                     )}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
@@ -1134,6 +1134,15 @@ export default function SettingsPage() {
                           )}
                         </select>
                       </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>VistaNet URL</label>
+                      <input
+                        value={directUrl}
+                        onChange={e => setDirectUrl(e.target.value)}
+                        className={inputClass}
+                        placeholder="https://yourpractice.vistanet.cloud"
+                      />
                     </div>
                     <div className="flex items-center gap-2">
                       <button

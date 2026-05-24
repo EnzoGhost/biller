@@ -139,11 +139,9 @@ async def get_current_provider(
             if provider:
                 return provider
 
-        # Last resort: any active provider (legacy single-tenant behavior)
-        result = await db.execute(
-            select(Provider).where(Provider.is_active == True).limit(1)
-        )
-        provider = result.scalar_one_or_none()
+        # No fallback to random providers — orgs must have their own providers
+        # This prevents data leaking between organizations
+        provider = None
         if provider:
             return provider
 

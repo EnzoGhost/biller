@@ -811,7 +811,7 @@ async def _resolve_payer_from_wink(
     return None, "uninsured", None
 
 
-@router.post("/wink-invoices", response_model=ImportResult)
+@router.post("/angelwink-invoices", response_model=ImportResult)
 async def import_wink_invoices(
     date_from: str,
     date_to: str,
@@ -994,19 +994,9 @@ async def import_wink_invoices(
                 )
                 _payer_cache[wink_patient_id] = (resolved_payer_id, match_source, insurance_group_number)
 
-            # If no insurance found, patient is uninsured — skip claim creation
-            if match_source == "uninsured" or resolved_payer_id is None:
-                last_name_1 = inv.get("last_name") or ""
-                last_name_2 = inv.get("last_name_2") or ""
-                full_last = (last_name_1 + (" " + last_name_2 if last_name_2 else "")).strip()
-                full_name = f"{inv.get('first_name', '')} {full_last}".strip()
-                uninsured_patients_list.append({
-                    "name": full_name,
-                    "record_number": inv.get("record_number") or "",
-                    "invoice_id": inv_id,
-                })
-                uninsured_skipped += 1
-                continue
+            # Never skip uninsured patients — they may have insurance cards in documents
+            # that will be extracted during the scrub workflow.
+            # Create the claim without a payer; scrub will resolve it later.
 
             # Ensure patient has insurance record for the RESOLVED payer
             # Only create if there is a REAL member_id — never use fake IDs
