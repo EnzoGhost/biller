@@ -201,40 +201,74 @@ PR_PAYER_ALIASES: dict[str, str | None] = {
 }
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Inmediata Payer IDs — from their "Payer list = Eligibility Required Fields.xlsx"
+# These are the actual IDs used in X12 EDI transactions through Inmediata/SecureTrack.
+# ──────────────────────────────────────────────────────────────────────────────
+INMEDIATA_PAYER_IDS: dict[str, str] = {
+    "TSS": "973",                # Triple-S (commercial)
+    "TSSA": "973MA",             # Triple-S Advantage (Medicare)
+    "TSSV": "973",               # Triple-S Vital (Reforma) — same base ID, verify suffix
+    "MCS": "660396197P",          # MCS Healthcare
+    "MCSMC": "660396197P",        # MCS Classicare — likely same, verify
+    "MCSVITAL": "660396197P",     # MCS Vital — likely same, verify
+    "MMM": "660588600",           # MMM Healthcare (Medicare Advantage)
+    "MMMVITAL": "660653763",      # MMM/PMC MultiHealth (Medicaid)
+    "PMC": "660592131",           # PMC Medicare Choice
+    "FMHP": "660537624",          # First Medical (Commercial)
+    "FMVITAL": "GHP660537624",    # First Medical GHP/Vital (Reforma)
+    "MENONITA": "660636242",      # Plan de Salud Menonita (Commercial)
+    "MENONITAV": "660636242PSG",  # Plan de Salud Menonita GHP (Reforma)
+    "HUMPR": "61101",             # Humana Medicare
+    "MAPFRE": "4600012",          # MAPFRE
+    "MEDICARE": "00973",          # CMS Medicare Part A/B
+    "CIGNA": "62308PR",           # Cigna (PR-specific)
+    "AETNA": "60054",             # Aetna (national)
+    # Payers in Inmediata's list that we don't have entities for yet:
+    # "ASOCMAESTROS": "660194027",  # Asociacion de Maestros
+    # "FHCPR": "660584821",        # FHC of PR
+    # "UTM": "660202379",          # Plan de Bienestar UTM
+    # "BELLAVISTA": "660524575",   # Plan de Salud Bella Vista
+    # "AUXILIOSOCIOS": "660178704",# Auxilio Plan de Socios
+    # "AUXILIOSALUD": "660647362", # Auxilio Salud Plus
+    # "DELTADENTAL": "660436769",  # Delta Dental PR
+}
+
+
 # Seed payers — canonical list for new AngelClaims deployments.
-# Each entry: (payer_id, name, payer_type, notes)
+# Each entry: (payer_id, name, payer_type, inmediata_payer_id, notes)
 SEED_PAYERS = [
     # Triple-S group
-    ("TSS", "Triple-S Salud", "COMMERCIAL", "BCBS PR. Largest commercial insurer in PR."),
-    ("TSSA", "Triple-S Advantage", "MEDICARE", "Triple-S Medicare Advantage plan."),
-    ("TSSV", "Triple-S Vital", "MEDICAID", "Triple-S Reforma/Medicaid product."),
+    ("TSS", "Triple-S Salud", "COMMERCIAL", "973", "BCBS PR. Largest commercial insurer in PR."),
+    ("TSSA", "Triple-S Advantage", "MEDICARE", "973MA", "Triple-S Medicare Advantage plan."),
+    ("TSSV", "Triple-S Vital", "MEDICAID", "973", "Triple-S Reforma/Medicaid product."),
     # MMM group
-    ("MMM", "MMM Healthcare", "MEDICARE", "Elevance/Anthem. #1 Medicare Advantage in PR. CMS H4004."),
-    ("MMMVITAL", "MMM Vital", "MEDICAID", "MMM Reforma/Medicaid product."),
-    ("PMC", "PMC Medicare Choice", "MEDICARE", "Historical brand aligned with MMM."),
+    ("MMM", "MMM Healthcare", "MEDICARE", "660588600", "Elevance/Anthem. #1 Medicare Advantage in PR. CMS H4004."),
+    ("MMMVITAL", "MMM Vital", "MEDICAID", "660653763", "MMM Reforma/Medicaid product."),
+    ("PMC", "PMC Medicare Choice", "MEDICARE", "660592131", "Historical brand aligned with MMM."),
     # MCS group
-    ("MCS", "MCS Healthcare", "COMMERCIAL", "Medical Card System. Independent PR company."),
-    ("MCSMC", "MCS Classicare", "MEDICARE", "MCS Medicare Advantage plan."),
-    ("MCSVITAL", "MCS Vital", "MEDICAID", "MCS Reforma/Medicaid product."),
+    ("MCS", "MCS Healthcare", "COMMERCIAL", "660396197P", "Medical Card System. Independent PR company."),
+    ("MCSMC", "MCS Classicare", "MEDICARE", "660396197P", "MCS Medicare Advantage plan."),
+    ("MCSVITAL", "MCS Vital", "MEDICAID", "660396197P", "MCS Reforma/Medicaid product."),
     # First Medical group
-    ("FMHP", "First Medical Health Plan", "COMMERCIAL", "Primarily commercial PR insurer."),
-    ("FMVITAL", "First Medical Vital", "MEDICAID", "First Medical Reforma/Medicaid product."),
+    ("FMHP", "First Medical Health Plan", "COMMERCIAL", "660537624", "Primarily commercial PR insurer."),
+    ("FMVITAL", "First Medical Vital", "MEDICAID", "GHP660537624", "First Medical Reforma/Medicaid. Was mail-only, now via Inmediata."),
     # Menonita group
-    ("MENONITA", "Plan de Salud Menonita", "COMMERCIAL", "Hospital Menonita system. Central/south PR."),
-    ("MENONITAV", "Plan de Salud Menonita VITAL", "MEDICAID", "Menonita Reforma/Medicaid."),
+    ("MENONITA", "Plan de Salud Menonita", "COMMERCIAL", "660636242", "Hospital Menonita system. Central/south PR."),
+    ("MENONITAV", "Plan de Salud Menonita VITAL", "MEDICAID", "660636242PSG", "Menonita Reforma/Medicaid."),
     # Humana
-    ("HUMPR", "Humana Puerto Rico", "MEDICARE", "Humana Medicare Advantage only in PR."),
+    ("HUMPR", "Humana Puerto Rico", "MEDICARE", "61101", "Humana Medicare Advantage only in PR."),
     # Medicare
-    ("MEDICARE", "Medicare (Original)", "MEDICARE", "Traditional Medicare FFS. MAC: First Coast (FCSO)."),
+    ("MEDICARE", "Medicare (Original)", "MEDICARE", "00973", "Traditional Medicare FFS. MAC: First Coast (FCSO)."),
     # Vision
-    ("ENVOLVE", "Envolve Vision of Puerto Rico", "VISION", "Centene subsidiary. Vision benefits for Medicaid/MA."),
-    ("VSP", "VSP Vision", "VISION", "Vision Service Plan. National."),
-    ("EYEMED", "EyeMed", "VISION", "National vision plan."),
-    ("DAVISVISION", "Davis Vision", "VISION", "National vision plan."),
+    ("ENVOLVE", "Envolve Vision of Puerto Rico", "VISION", None, "Centene subsidiary. Vision benefits for Medicaid/MA."),
+    ("VSP", "VSP Vision", "VISION", None, "Vision Service Plan. National."),
+    ("EYEMED", "EyeMed", "VISION", None, "National vision plan."),
+    ("DAVISVISION", "Davis Vision", "VISION", None, "National vision plan."),
     # Other
-    ("MHPR", "Molina Healthcare of Puerto Rico", "MEDICAID", "National Medicaid MCO with PR presence."),
-    ("MAPFRE", "MAPFRE Puerto Rico", "COMMERCIAL", "Spain-based. Primarily P&C, some health."),
-    ("AETNA", "Aetna", "COMMERCIAL", "CVS Health. Limited PR commercial presence. Payer ID: 60054."),
-    ("CIGNA", "Cigna Healthcare", "COMMERCIAL", "Limited PR presence. Payer ID: 62308."),
-    ("ASES", "Plan de Salud del Gobierno (ASES/GHP)", "MEDICAID", "Government plan admin. Route to specific Vital MCO."),
+    ("MHPR", "Molina Healthcare of Puerto Rico", "MEDICAID", None, "National Medicaid MCO with PR presence."),
+    ("MAPFRE", "MAPFRE Puerto Rico", "COMMERCIAL", "4600012", "Spain-based. Primarily P&C, some health."),
+    ("AETNA", "Aetna", "COMMERCIAL", "60054", "CVS Health. Limited PR commercial presence."),
+    ("CIGNA", "Cigna Healthcare", "COMMERCIAL", "62308PR", "Limited PR presence."),
+    ("ASES", "Plan de Salud del Gobierno (ASES/GHP)", "MEDICAID", None, "Government plan admin. Route to specific Vital MCO."),
 ]
