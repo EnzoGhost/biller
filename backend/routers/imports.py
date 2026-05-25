@@ -755,12 +755,28 @@ async def _resolve_payer_from_angelwink(
         candidate_names.append(insurance_provider)
 
     # 3. Try to match each candidate against AngelClaims payers table
+    from payer_mapping import PR_PAYER_ALIASES
+
     for name in candidate_names:
         if not name or not name.strip():
             continue
         clean_name = name.strip()
+        normalized = clean_name.upper()
 
-        # Exact match (case-insensitive)
+        # 3a. Check PR payer alias table first (most reliable)
+        alias_payer_id = PR_PAYER_ALIASES.get(normalized)
+        if alias_payer_id:
+            res = await db.execute(
+                select(PayerModel).where(
+                    PayerModel.payer_id == alias_payer_id,
+                    PayerModel.is_active == True,
+                ).limit(1)
+            )
+            payer = res.scalar_one_or_none()
+            if payer:
+                return payer.id, f"alias:{clean_name}→{payer.name}", _angelwink_group_number
+
+        # 3b. Exact match (case-insensitive)
         res = await db.execute(
             select(PayerModel).where(
                 PayerModel.name.ilike(clean_name),
@@ -771,7 +787,7 @@ async def _resolve_payer_from_angelwink(
         if payer:
             return payer.id, f"exact:{clean_name}", _angelwink_group_number
 
-        # Partial match (ILIKE %name%)
+        # 3c. Partial match (ILIKE %name%)
         res = await db.execute(
             select(PayerModel).where(
                 PayerModel.name.ilike(f"%{clean_name}%"),
@@ -782,7 +798,7 @@ async def _resolve_payer_from_angelwink(
         if payer:
             return payer.id, f"partial:{clean_name}→{payer.name}", _angelwink_group_number
 
-        # Reverse partial: payer name contained in insurance_provider string
+        # 3d. Reverse partial: payer name contained in insurance_provider string
         all_payers_res = await db.execute(
             select(PayerModel).where(PayerModel.is_active == True)
         )

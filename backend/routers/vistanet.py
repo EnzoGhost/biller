@@ -723,51 +723,9 @@ async def find_or_create_patient(
 
 # VistaNet plan name → payer_id mapping
 # VistaNet uses these names in their bitácora dropdowns
-VISTANET_PLAN_ALIASES: dict[str, str] = {
-    # Triple-S family
-    "TRIPLE S PRIVADO": "TSS",
-    "TRIPLE S": "TSS",
-    "TRIPLE-S": "TSS",
-    "TRIPLE S ADVANTAGE": "TSSA",
-    "TRIPLE-S ADVANTAGE": "TSSA",
-    "TRIPLE S VITAL": "TSSV",
-    "TRIPLE-S VITAL": "TSSV",
-    # MCS
-    "MCS": "MCS",
-    "MCS CLASSICARE": "MCSMC",
-    "MCS HEALTHCARE": "MCS",
-    # MMM
-    "MMM": "MMM",
-    "MMM VITAL": "MMMVITAL",
-    "MMM MULTI HEALTH": "MMMVITAL",
-    # First Medical
-    "FIRST MEDICAL": "FMHP",
-    "FIRST MEDICAL VITAL": "FMVITAL",
-    # Medicare
-    "MEDICARE": "MEDICARE",
-    # Humana
-    "HUMANA": "HUMPR",
-    "HUMANA GOLD PLUS": "HUMPR",
-    # Envolve
-    "ENVOLVE": "ENVOLVE",
-    # Inmediata (clearinghouse, but sometimes appears as plan name)
-    "INMEDIATA": "INMEDIATA",
-    # Plan de Salud Menonita
-    "PLAN DE SALUD MENONITA": "MENONITA",
-    "PLAN DE SALUD MENONITA VITAL": "MENONITAV",
-    "MENONITA": "MENONITA",
-    # MAPFRE
-    "MAPFRE": "MAPFRE",
-    # Molina
-    "MOLINA": "MHPR",
-    # PMC
-    "PMC": "PMC",
-    "PMC MEDICARE CHOICE": "PMC",
-    # GHP/ASES
-    "REFORMA": "ASES",
-    "PROSAM": "TSS",  # PROSAM is Triple-S commercial
-    "PRIVADO": None,  # Generic "private" — can't map without more info
-}
+# Use shared PR payer mapping (single source of truth)
+from payer_mapping import PR_PAYER_ALIASES
+VISTANET_PLAN_ALIASES = {k: v for k, v in PR_PAYER_ALIASES.items() if v is not None}
 
 
 async def find_payer_by_plan_name(db: AsyncSession, plan_name: str) -> Optional[Payer]:
