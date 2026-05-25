@@ -47,7 +47,7 @@ class WinkServiceLinePayload(BaseModel):
 
 
 class WinkEncounterPayload(BaseModel):
-    """Full encounter from Wink when Ruth clicks 'Send to Biller'."""
+    """Full encounter from AngelWink when Ruth clicks 'Send to Biller'."""
     # Patient
     patient_first_name: str
     patient_last_name: str
@@ -86,7 +86,7 @@ async def receive_wink_encounter(
     _: User = Depends(get_current_user),
 ):
     """
-    Receive a full encounter from Wink's 'Send to Biller' integration.
+    Receive a full encounter from AngelWink's 'Send to Biller' integration.
     - Auto-creates patient if not exists (matches by first+last+DOB)
     - Auto-creates claim in 'draft' status with all service lines
     - Auto-detects routing (Envolve vs Stedi vs Inmediata)
@@ -377,7 +377,7 @@ async def import_from_wink(
     _: User = Depends(get_current_user),
 ):
     """
-    Pull patients from Wink's iris.db SQLite database.
+    Pull patients from AngelWink's iris.db SQLite database.
     Maps Wink patient schema to Biller patients, skips duplicates by wink_patient_id.
     Also imports patient insurance data when available.
     """
@@ -507,7 +507,7 @@ async def import_wink_encounters(
     _: User = Depends(get_current_user),
 ):
     """
-    Import completed/signed exam encounters from Wink (iris.db) as DRAFT claims.
+    Import completed/signed exam encounters from AngelWink (iris.db) as DRAFT claims.
     Skips encounters already imported (tracked via Claim.external_ref = 'enc_{id}').
     Maps diagnosis_a-d to ICD-10 codes and procedures_cpt to CPT service lines.
     """
@@ -695,12 +695,12 @@ async def _resolve_payer_from_wink(
     db: AsyncSession,
 ) -> tuple[Optional[int], Optional[str], Optional[str]]:
     """
-    Resolve the correct SometeoPR payer_id for a Wink patient.
+    Resolve the correct AngelClaims payer_id for a Wink patient.
 
     Strategy:
-    1. Try patient_insurance from Wink sync server for plan name
+    1. Try patient_insurance from AngelWink sync server for plan name
     2. Try insurance_provider from synced_patients
-    3. Match against SometeoPR payers table (exact → partial → fallback)
+    3. Match against AngelClaims payers table (exact → partial → fallback)
 
     Returns (payer_id, match_source, group_number) where match_source describes how it matched.
     """
@@ -754,7 +754,7 @@ async def _resolve_payer_from_wink(
     if insurance_provider:
         candidate_names.append(insurance_provider)
 
-    # 3. Try to match each candidate against SometeoPR payers table
+    # 3. Try to match each candidate against AngelClaims payers table
     for name in candidate_names:
         if not name or not name.strip():
             continue
@@ -832,7 +832,18 @@ async def import_wink_invoices(
     from datetime import datetime
     from routers.fee_schedule import get_fee_amount as _get_fee
 
-    # Use the paired clinic ID from the frontend; fall back to DB, then env var
+    # Use the paired clinic ID from the frontend; fall back to provider_settings, then clinic_settings, then env var
+    if not clinic_id:
+        try:
+            from models import ProviderSettings
+            ps_result = await db.execute(
+                select(ProviderSettings).where(ProviderSettings.provider_id == provider_id).limit(1)
+            )
+            ps = ps_result.scalar_one_or_none()
+            if ps and ps.angelwink_clinic_id:
+                clinic_id = ps.angelwink_clinic_id
+        except Exception:
+            pass
     if not clinic_id:
         try:
             _settings = await db.execute(text("SELECT angelwink_clinic_id FROM clinic_settings WHERE id = 1"))
@@ -842,9 +853,18 @@ async def import_wink_invoices(
             pass
     if not clinic_id:
         clinic_id = _os.environ.get("ANGELWINK_CLINIC_ID", "")
-    # Self-heal: if frontend sends a clinic_id, persist it for future use
+    # Self-heal: if frontend sends a clinic_id, persist it for future use (both provider_settings and clinic_settings)
     if clinic_id:
         try:
+            from models import ProviderSettings
+            ps_result = await db.execute(
+                select(ProviderSettings).where(ProviderSettings.provider_id == provider_id).limit(1)
+            )
+            ps = ps_result.scalar_one_or_none()
+            if ps:
+                await db.execute(text(
+                    "UPDATE provider_settings SET angelwink_clinic_id = :cid WHERE provider_id = :pid"
+                ), {"cid": clinic_id, "pid": provider_id})
             await db.execute(text("UPDATE clinic_settings SET angelwink_clinic_id = :cid WHERE id = 1"), {"cid": clinic_id})
             await db.commit()
         except Exception:
@@ -861,7 +881,7 @@ async def import_wink_invoices(
     _payer_cache: dict[str, tuple[Optional[int], Optional[str], Optional[str]]] = {}
 
     try:
-        # Query invoices joined with patients from Wink sync PostgreSQL
+        # Query invoices joined with patients from AngelWink sync PostgreSQL
         invoices = await _query_wink_pg("""
             WITH inv AS (
                 SELECT DISTINCT ON (row_id) row_id, data

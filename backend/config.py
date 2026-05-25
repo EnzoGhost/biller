@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     AVAILITY_PAYER_ID: str = "56190"  # Envolve Vision payer ID
     AVAILITY_BASE_URL: str = "https://api.availity.com"
 
-    CORS_ORIGINS: str = "http://localhost:5174,http://127.0.0.1:5174,tauri://localhost,https://tauri.localhost"
+    CORS_ORIGINS: str = "http://localhost:5174,http://127.0.0.1:5174,tauri://localhost,https://tauri.localhost,https://admin.angelclaims.app,https://app.angelclaims.app"
 
     # Public URL for QR scanner camera links (set this in production)
     APP_URL: str = "http://localhost:8100"

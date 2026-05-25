@@ -23,6 +23,8 @@ const PaymentsPage     = lazy(() => import('./pages/PaymentsPage'));
 const FollowUpPage     = lazy(() => import('./pages/FollowUpPage'));
 const SetupWizardPage  = lazy(() => import('./pages/SetupWizardPage'));
 const FeeSchedulePage  = lazy(() => import('./pages/FeeSchedulePage'));
+const AccountPage      = lazy(() => import('./pages/AccountPage'));
+const RolesPage        = lazy(() => import('./pages/RolesPage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,6 +79,8 @@ export default function App() {
               <Route path="follow-up" element={<FollowUpPage />} />
               <Route path="setup" element={<SetupWizardPage />} />
               <Route path="fee-schedule" element={<FeeSchedulePage />} />
+              <Route path="account" element={<AccountPage />} />
+              <Route path="roles" element={<RolesPage />} />
               {/* fallback */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

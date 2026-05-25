@@ -151,7 +151,7 @@ function PatientDocuments({
     enabled: !!claimId && source === 'vistanet',
   });
 
-  // Wink patient documents (from sync server)
+  // AngelWink patient documents (from sync server)
   const { data: winkDocs } = useQuery<Attachment[]>({
     queryKey: ['wink-patient-docs', winkPatientId],
     queryFn: () => api.get(`/wink/patient-documents/${winkPatientId}`).then(r => Array.isArray(r.data) ? r.data : []),
@@ -187,12 +187,20 @@ function PatientDocuments({
                       const tk = localStorage.getItem('biller_token') || '';
                       setFullSizeImg(`/api${att.url}?token=${tk}`);
                     }}
-                    className="block w-full rounded-lg border border-slate-200 overflow-hidden hover:border-sky-400 hover:shadow-md transition-all cursor-pointer"
+                    draggable
+                    onDragStart={(e) => {
+                      const tk = localStorage.getItem('biller_token') || '';
+                      const imgUrl = `/api${att.url}?token=${tk}`;
+                      e.dataTransfer.setData('text/plain', imgUrl);
+                      e.dataTransfer.setData('application/x-card-type', att.attachment_type || 'insurance_card');
+                      e.dataTransfer.effectAllowed = 'copy';
+                    }}
+                    className="block w-full rounded-lg border border-slate-200 overflow-hidden hover:border-sky-400 hover:shadow-md transition-all cursor-grab active:cursor-grabbing"
                   >
                     <img
                       src={`/api${att.url}?token=${localStorage.getItem('biller_token') || ''}`}
                       alt={DOC_TYPE_LABELS[att.attachment_type] ?? att.attachment_type}
-                      className="w-full h-32 object-cover bg-slate-50"
+                      className="w-full h-32 object-cover bg-slate-50 pointer-events-none"
                       loading="lazy"
                       onError={(e) => {
                         const el = e.currentTarget;
@@ -495,6 +503,9 @@ function ClaimDetailPageInner() {
 
   // Insurance extraction state
   const [extractingInsurance, setExtractingInsurance] = useState(false);
+  const [insuranceDropActive, setInsuranceDropActive] = useState(false);
+  const [checkingEligibility, setCheckingEligibility] = useState(false);
+  const [eligibilityResult, setEligibilityResult] = useState<any>(null);
 
   // Inmediata response viewer state
   const [showInmediataResponses, setShowInmediataResponses] = useState(false);
@@ -620,7 +631,7 @@ function ClaimDetailPageInner() {
     staleTime: 30_000,
   });
 
-  // Poll for approval status updates from Wink sync server every 10s when there are pending approvals
+  // Poll for approval status updates from AngelWink sync server every 10s when there are pending approvals
   useEffect(() => {
     if (!approvalRequests?.some(a => a.status === 'pending')) return;
     const interval = setInterval(async () => {
@@ -1332,9 +1343,51 @@ function ClaimDetailPageInner() {
           ) : <p className="text-slate-400 text-sm">{t('claims.patient')} #{claim.patient_id}</p>}
         </div>
 
-        {/* Provider + Payer */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <h2 className="text-sm font-semibold text-slate-700 mb-3">{t('claims.provider_payer')}</h2>
+        {/* Provider + Payer — drop zone for insurance card extraction */}
+        <div
+          className={`bg-white rounded-xl border-2 p-4 transition-all ${insuranceDropActive ? 'border-sky-400 bg-sky-50/50 shadow-lg shadow-sky-100' : 'border-slate-200'}`}
+          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setInsuranceDropActive(true); }}
+          onDragLeave={() => setInsuranceDropActive(false)}
+          onDrop={async (e) => {
+            e.preventDefault();
+            setInsuranceDropActive(false);
+            const imgUrl = e.dataTransfer.getData('text/plain');
+            const cardType = e.dataTransfer.getData('application/x-card-type');
+            if (!imgUrl || !imgUrl.includes('/api/')) return;
+            // Only accept insurance card images, not licenses or other docs
+            if (cardType && !cardType.includes('insurance')) {
+              showToast('Drop an insurance card image, not a license/ID', false);
+              return;
+            }
+            setExtractingInsurance(true);
+            try {
+              const resp = await api.post('/ai/extract-insurance', { claim_id: claim.id, image_url: imgUrl });
+              showToast('Insurance info extracted!');
+              queryClient.invalidateQueries({ queryKey: ['claim', claim.id.toString()] });
+            } catch (err: any) {
+              showToast(err.response?.data?.detail || 'Failed to extract insurance info', false);
+            } finally {
+              setExtractingInsurance(false);
+            }
+          }}
+        >
+          <h2 className="text-sm font-semibold text-slate-700 mb-3">
+            {t('claims.provider_payer')}
+            {insuranceDropActive && <span className="ml-2 text-sky-500 text-xs font-normal animate-pulse">Drop to extract insurance info</span>}
+          </h2>
+          {extractingInsurance && (
+            <div className="mb-3 p-3 rounded-lg bg-sky-50 border border-sky-100">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sky-600 text-xs font-medium">Reading insurance card...</span>
+              </div>
+              <div className="mt-2 space-y-1.5">
+                <div className="h-3 rounded bg-gradient-to-r from-sky-100 via-sky-50 to-sky-100 animate-pulse" style={{width:'60%'}} />
+                <div className="h-3 rounded bg-gradient-to-r from-sky-100 via-sky-50 to-sky-100 animate-pulse" style={{width:'40%'}} />
+                <div className="h-3 rounded bg-gradient-to-r from-sky-100 via-sky-50 to-sky-100 animate-pulse" style={{width:'50%'}} />
+              </div>
+            </div>
+          )}
           <div className="space-y-1 text-sm">
             <p className="font-medium text-slate-900">
               {claim.provider ? `Dr. ${claim.provider.first_name} ${claim.provider.last_name}` : `#${claim.provider_id}`}
@@ -1436,6 +1489,53 @@ function ClaimDetailPageInner() {
                     {ins.subscriber_name && (
                       <p className="text-slate-500 text-xs">Subscriber: {ins.subscriber_name}</p>
                     )}
+                    {/* Check Eligibility button — like AngelWink */}
+                    {ins.member_id && claim.payer_id && (
+                      <button
+                        onClick={async () => {
+                          setCheckingEligibility(true);
+                          setEligibilityResult(null);
+                          try {
+                            const { data } = await api.post('/eligibility/check', {
+                              patient_id: claim.patient_id,
+                              insurance_id: ins.id,
+                            });
+                            setEligibilityResult(data);
+                            showToast(data.status === 'active' ? 'Eligible ✓' : `Status: ${data.status}`);
+                          } catch (err: any) {
+                            showToast(err.response?.data?.detail || 'Eligibility check failed', false);
+                          } finally {
+                            setCheckingEligibility(false);
+                          }
+                        }}
+                        disabled={checkingEligibility}
+                        className="flex items-center gap-1 mt-2 px-2 py-1 text-xs font-medium text-sky-600 hover:text-sky-700 border border-sky-200 hover:border-sky-300 rounded-lg hover:bg-sky-50 transition-colors disabled:opacity-50"
+                      >
+                        <ShieldCheck className="w-3 h-3" />
+                        {checkingEligibility ? 'Checking...' : 'Check Eligibility'}
+                      </button>
+                    )}
+                    {eligibilityResult && (() => {
+                      const rp = eligibilityResult.response_parsed || {};
+                      const isActive = eligibilityResult.status === 'active';
+                      const isInactive = eligibilityResult.status === 'inactive';
+                      const msg = rp.reject_reason || rp.error || rp.inmediata_message || '';
+                      return (
+                        <div className={`mt-2 p-2.5 rounded-lg text-xs border ${
+                          isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : isInactive ? 'bg-red-50 text-red-700 border-red-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                          <p className="font-medium">
+                            {isActive ? '✓ Eligible' : isInactive ? '✗ Inactive / Not Eligible' : `⚠ ${eligibilityResult.status}`}
+                          </p>
+                          {msg && <p className="mt-0.5 text-xs opacity-80">{msg}</p>}
+                          {rp.plan_name && <p className="mt-1">Plan: {rp.plan_name}</p>}
+                          {rp.copay && <p>Copay: ${rp.copay}</p>}
+                          {rp.plan_begin_date && <p>Coverage: {rp.plan_begin_date} — {rp.plan_end_date || 'present'}</p>}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })()}
@@ -1445,7 +1545,8 @@ function ClaimDetailPageInner() {
       </div>
 
       {/* Patient Documents (Insurance Card, License, Signature) */}
-      {(claim.source === 'vistanet' || claim.source === 'wink') && (
+      {/* Show patient documents for any claim with a wink patient ID or vistanet source */}
+      {(claim.source === 'vistanet' || claim.source === 'wink' || claim.patient?.wink_patient_id) && (
         <ErrorBoundary fallback={<div className="p-4 text-red-500 text-sm">Error loading patient documents</div>}>
           <PatientDocuments
             claimId={claim.id}
@@ -1453,7 +1554,7 @@ function ClaimDetailPageInner() {
             setShowDocs={setShowDocs}
             fullSizeImg={fullSizeImg}
             setFullSizeImg={setFullSizeImg}
-            source={claim.source}
+            source={claim.patient?.wink_patient_id ? 'wink' : claim.source}
             winkPatientId={claim.patient?.wink_patient_id || claim.patient?.mrn}
           />
         </ErrorBoundary>
@@ -1645,10 +1746,10 @@ function ClaimDetailPageInner() {
           try {
             await api.patch(`/claims/${id}`, { diagnosis_codes: newCodes });
             qc.invalidateQueries({ queryKey: ['claim', id] });
-            // If from Wink, track as suggestion
+            // If from AngelWink, track as suggestion
             if (claim.source === 'wink') {
               setDxSuggestions(prev => [...prev, code]);
-              showToast(`Added ${code} as suggestion (needs doctor approval in Wink)`);
+              showToast(`Added ${code} as suggestion (needs doctor approval in AngelWink)`);
             } else {
               showToast(`Added ${code}`);
             }
@@ -1797,7 +1898,7 @@ function ClaimDetailPageInner() {
               <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs mt-3">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
                 <span className="text-amber-800">
-                  {dxSuggestions.length} Dx code{dxSuggestions.length > 1 ? 's' : ''} added as suggestion{dxSuggestions.length > 1 ? 's' : ''} — needs doctor approval in Wink
+                  {dxSuggestions.length} Dx code{dxSuggestions.length > 1 ? 's' : ''} added as suggestion{dxSuggestions.length > 1 ? 's' : ''} — needs doctor approval in AngelWink
                 </span>
               </div>
             )}

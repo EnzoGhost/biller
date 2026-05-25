@@ -121,7 +121,7 @@ export default function ImportPage() {
   const [csvResult, setCsvResult] = useState<ImportResult | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
 
-  // Wink connection state
+  // AngelWink connection state
   const [winkConnected, setWinkConnected] = useState<string | null>(() => {
     return localStorage.getItem('angelwink_clinic_name');
   });
@@ -132,12 +132,12 @@ export default function ImportPage() {
   const [joinVerifying, setJoinVerifying] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
 
-  // Wink patients state
+  // AngelWink patients state
   const [winkLoading, setWinkLoading] = useState(false);
   const [winkResult, setWinkResult] = useState<ImportResult | null>(null);
   const [winkError, setWinkError] = useState<string | null>(null);
 
-  // Wink encounters state
+  // AngelWink encounters state
   const [encLoading, setEncLoading] = useState(false);
   const [encResult, setEncResult] = useState<ImportResult | null>(null);
   const [encError, setEncError] = useState<string | null>(null);
@@ -258,7 +258,7 @@ export default function ImportPage() {
     }
   };
 
-  const handleDisconnectWink = () => {
+  const handleDisconnectAngelWink = () => {
     setWinkConnected(null);
     setWinkClinicId(null);
     localStorage.removeItem('angelwink_clinic_name');
@@ -322,7 +322,7 @@ export default function ImportPage() {
         <p className="text-xs text-slate-500 mb-4">{t('import.wink_desc')}</p>
 
         {!winkConnected ? (
-          /* Join Code Entry — Wink not connected */
+          /* Join Code Entry — AngelWink not connected */
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
             <p className="text-sm font-medium text-slate-700 mb-2">Enter Clinic Code</p>
             <p className="text-xs text-slate-500 mb-3">
@@ -358,7 +358,7 @@ export default function ImportPage() {
               <CheckCircle className="w-4 h-4 text-emerald-600" />
               <span className="text-sm text-emerald-700 font-medium">Connected to {winkConnected}</span>
               <button
-                onClick={handleDisconnectWink}
+                onClick={handleDisconnectAngelWink}
                 className="ml-auto text-xs text-slate-500 hover:text-red-600"
               >
                 Disconnect

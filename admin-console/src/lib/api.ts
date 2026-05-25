@@ -53,6 +53,10 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }))
     throw new Error(err.detail || `API error: ${res.status}`)
   }
+  // Handle 204 No Content (e.g. DELETE responses)
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    return {} as T
+  }
   return res.json()
 }
 
@@ -221,4 +225,38 @@ export async function fetchProviders(): Promise<AdminProvider[]> {
 
 export async function deleteProvider(id: number): Promise<void> {
   await apiFetch<void>(`/api/admin/providers/${id}`, { method: 'DELETE' })
+}
+
+export async function deleteUser(id: number): Promise<void> {
+  await apiFetch<void>(`/api/admin/users/${id}`, { method: 'DELETE' })
+}
+
+export async function deleteOrganization(id: number): Promise<void> {
+  await apiFetch<void>(`/api/admin/organizations/${id}`, { method: 'DELETE' })
+}
+
+// ── Admin Account ─────────────────────────────────────────────────────────────
+
+export interface AdminMe {
+  id: number
+  email: string
+  full_name: string
+  is_super_admin: boolean
+  created_at: string
+}
+
+export async function fetchAdminMe(): Promise<AdminMe> {
+  return apiFetch('/api/admin/me')
+}
+
+export async function updateAdminMe(data: {
+  email?: string
+  full_name?: string
+  current_password?: string
+  new_password?: string
+}): Promise<{ id: number; email: string; full_name: string; token: string }> {
+  return apiFetch('/api/admin/me', {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
 }

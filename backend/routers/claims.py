@@ -22,10 +22,10 @@ class BulkDeleteRequest(BaseModel):
 router = APIRouter(prefix="/claims", tags=["claims"])
 
 
-# ── Push claim status back to Wink sync server ────────────────────────────────
+# ── Push claim status back to AngelWink sync server ────────────────────────────────
 
 async def push_claim_status_to_wink(claim_id: int, status: str, external_ref: str):
-    """Push claim status back to Wink sync server so invoices show billing status."""
+    """Push claim status back to AngelWink sync server so invoices show billing status."""
     import httpx
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -38,15 +38,15 @@ async def push_claim_status_to_wink(claim_id: int, status: str, external_ref: st
                 }
             )
             if resp.status_code == 200:
-                print(f"[claims] Pushed status '{status}' to Wink for {external_ref}")
+                print(f"[claims] Pushed status '{status}' to AngelWink for {external_ref}")
             else:
                 print(f"[claims] Wink status push returned {resp.status_code}: {resp.text}")
     except Exception as e:
-        print(f"[claims] Failed to push status to Wink: {e}")
+        print(f"[claims] Failed to push status to AngelWink: {e}")
 
 
 async def _maybe_push_wink_status(claim: 'Claim', new_status: str):
-    """If claim is from Wink, push the new status."""
+    """If claim is from AngelWink, push the new status."""
     if getattr(claim, 'source', None) == 'wink' and getattr(claim, 'external_ref', None):
         import asyncio
         asyncio.create_task(push_claim_status_to_wink(claim.id, new_status, claim.external_ref))
@@ -249,7 +249,7 @@ async def submit_claim(
         raise HTTPException(400, f"No se puede someter una reclamación en estado '{claim.status}'")
 
     # ── CPT enforcement for outside prescriptions (Ruth safety) ───────────
-    # If the claim did NOT originate from Wink, CPT codes are REQUIRED.
+    # If the claim did NOT originate from AngelWink, CPT codes are REQUIRED.
     # No CPT = blocked submission. This prevents billing errors on walk-in Rx.
     if claim.source != "wink":
         has_cpt = any(sl.cpt_code for sl in claim.service_lines)

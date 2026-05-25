@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ChevronDown, Building2, Check } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import api from '../../lib/api';
+import { useAuthStore } from '../../hooks/useAuth';
 
 interface ProviderOption {
   id: number;
@@ -42,12 +43,22 @@ export default function ProviderSwitcher({ collapsed }: { collapsed: boolean }) 
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleSelect = (p: ProviderOption) => {
+  const handleSelect = async (p: ProviderOption) => {
     setCurrent(p);
     localStorage.setItem('angelclaims_active_provider', String(p.id));
     setOpen(false);
-    // Reload the page to re-fetch data for the new provider
-    window.location.reload();
+    // Switch provider via API to get new JWT with updated provider_id
+    try {
+      const { data } = await api.post('/auth/select-provider', { provider_id: p.id });
+      if (data.access_token) {
+        localStorage.setItem('biller_token', data.access_token);
+        useAuthStore.setState({ token: data.access_token });
+      }
+      // Soft reload — navigate to dashboard to refresh data
+      window.location.href = '/';
+    } catch {
+      window.location.reload();
+    }
   };
 
   if (providers.length === 0 || collapsed) return null;

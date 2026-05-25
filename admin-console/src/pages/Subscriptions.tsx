@@ -115,7 +115,7 @@ export default function Subscriptions() {
                     <td className="px-5 py-3.5">
                       {isEditing ? (
                         <input
-                          type="date"
+                          type="text" placeholder="YYYY-MM-DD"
                           value={editExpires}
                           onChange={(e) => setEditExpires(e.target.value)}
                           className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white text-xs focus:outline-none focus:ring-1 focus:ring-sky-500"

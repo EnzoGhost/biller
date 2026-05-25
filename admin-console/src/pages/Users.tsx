@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Plus, Users as UsersIcon, KeyRound } from 'lucide-react'
+import { Plus, Users as UsersIcon, KeyRound, Trash2 } from 'lucide-react'
 import Badge from '../components/Badge'
+import ConfirmDialog from '../components/ConfirmDialog'
+import Toast from '../components/Toast'
 import {
   fetchUsers,
   fetchOrganizations,
   createUser,
   updateUser,
   resetUserPassword,
+  deleteUser,
   type AdminUser,
   type Organization,
 } from '../lib/api'
@@ -32,6 +35,8 @@ export default function Users() {
   const [resetPw, setResetPw] = useState('')
   const [resetting, setResetting] = useState(false)
   const [resetMsg, setResetMsg] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   async function load() {
     try {
@@ -259,13 +264,22 @@ export default function Users() {
                   </td>
                   <td className="px-5 py-3.5 text-slate-400 text-sm">{formatDate(u.created_at)}</td>
                   <td className="px-5 py-3.5">
-                    <button
-                      onClick={() => setResetModal(u)}
-                      className="text-slate-500 hover:text-slate-300 transition-colors"
-                      title="Reset password"
-                    >
-                      <KeyRound size={15} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setResetModal(u)}
+                        className="text-slate-500 hover:text-slate-300 transition-colors"
+                        title="Reset password"
+                      >
+                        <KeyRound size={15} />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(u)}
+                        className="text-slate-500 hover:text-red-400 transition-colors"
+                        title="Delete user"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -273,6 +287,28 @@ export default function Users() {
           </table>
         )}
       </div>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete User"
+        message={`Permanently delete "${deleteTarget?.full_name}" (${deleteTarget?.email})? This removes them from all organizations.`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={async () => {
+          if (!deleteTarget) return
+          try {
+            await deleteUser(deleteTarget.id)
+            setDeleteTarget(null)
+            setToast({ message: 'User deleted', type: 'success' })
+            await load()
+          } catch (e: any) {
+            setToast({ message: e.message || 'Failed to delete', type: 'error' })
+            setDeleteTarget(null)
+          }
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   )
 }

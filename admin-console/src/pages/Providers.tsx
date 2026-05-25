@@ -3,6 +3,8 @@ import { Stethoscope, Search, Trash2 } from 'lucide-react'
 import Badge from '../components/Badge'
 import { fetchProviders, deleteProvider, type AdminProvider } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/utils'
+import ConfirmDialog from '../components/ConfirmDialog'
+import Toast from '../components/Toast'
 
 export default function Providers() {
   const [providers, setProviders] = useState<AdminProvider[]>([])
@@ -10,19 +12,8 @@ export default function Providers() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [deleting, setDeleting] = useState<number | null>(null)
-
-  async function handleDelete(p: AdminProvider) {
-    if (!confirm(`Deactivate provider "${p.full_name}"? This is a soft delete.`)) return
-    setDeleting(p.id)
-    try {
-      await deleteProvider(p.id)
-      setProviders((prev) => prev.filter((x) => x.id !== p.id))
-    } catch {
-      alert('Failed to delete provider')
-    } finally {
-      setDeleting(null)
-    }
-  }
+  const [deleteTarget, setDeleteTarget] = useState<AdminProvider | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   useEffect(() => {
     fetchProviders()
@@ -113,10 +104,10 @@ export default function Providers() {
                   <td className="px-5 py-3.5 text-slate-400 text-sm">{formatDate(p.created_at)}</td>
                   <td className="px-5 py-3.5">
                     <button
-                      onClick={() => handleDelete(p)}
+                      onClick={() => setDeleteTarget(p)}
                       disabled={deleting === p.id}
                       className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                      title="Deactivate provider"
+                      title="Delete provider"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -127,6 +118,30 @@ export default function Providers() {
           </table>
         )}
       </div>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Provider"
+        message={`Delete provider "${deleteTarget?.full_name}" (NPI: ${deleteTarget?.npi})? This will deactivate them and their claims will no longer be visible.`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={async () => {
+          if (!deleteTarget) return
+          setDeleting(deleteTarget.id)
+          try {
+            await deleteProvider(deleteTarget.id)
+            setProviders(prev => prev.filter(x => x.id !== deleteTarget.id))
+            setToast({ message: 'Provider deleted', type: 'success' })
+          } catch {
+            setToast({ message: 'Failed to delete provider', type: 'error' })
+          } finally {
+            setDeleting(null)
+            setDeleteTarget(null)
+          }
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   )
 }

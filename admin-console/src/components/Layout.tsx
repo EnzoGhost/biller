@@ -8,6 +8,7 @@ import {
   Stethoscope,
   LogOut,
   ChevronDown,
+  UserCog,
 } from 'lucide-react'
 import { logout, getAdminEmail } from '../lib/api'
 
@@ -17,6 +18,7 @@ const navItems = [
   { to: '/users', label: 'Users', icon: Users },
   { to: '/subscriptions', label: 'Subscriptions', icon: CreditCard },
   { to: '/providers', label: 'Providers', icon: Stethoscope },
+  { to: '/account', label: 'My Account', icon: UserCog },
 ]
 
 export default function Layout() {
@@ -66,6 +68,14 @@ export default function Layout() {
 
           {dropdownOpen && (
             <div className="absolute right-0 top-full mt-1 w-44 bg-slate-900 border border-slate-800 rounded-xl shadow-xl overflow-hidden z-50">
+              <NavLink
+                to="/account"
+                onClick={() => setDropdownOpen(false)}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <UserCog size={14} />
+                My Account
+              </NavLink>
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"

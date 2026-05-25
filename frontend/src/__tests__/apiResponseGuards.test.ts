@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
  * These tests verify that our defensive patterns handle all the ways
  * API responses can crash .map() calls.
  *
- * Every SometeoPR crash on 2026-05-03 was caused by calling .map() on
+ * Every AngelClaims crash on 2026-05-03 was caused by calling .map() on
  * data that wasn't actually an array (null, undefined, HTML error page,
  * string, object, etc).
  */

@@ -16,7 +16,7 @@ describe('Array safety guards', () => {
     expect(Array.isArray({})).toBe(false);
     expect(Array.isArray('hello')).toBe(false);
     expect(Array.isArray(42)).toBe(false);
-    // This is what caused the SometeoPR crash — HTML response from missing endpoint
+    // This is what caused the AngelClaims crash — HTML response from missing endpoint
     expect(Array.isArray('<!doctype html>')).toBe(false);
   });
 

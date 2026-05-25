@@ -88,34 +88,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Notifications + User */}
-      <div className="p-3 border-t border-slate-700">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs font-bold shrink-0">
-            {initials}
-          </div>
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex-1 min-w-0"
-              >
-                <p className="text-xs font-medium text-slate-200 truncate">{user?.full_name}</p>
-                <p className="text-xs text-slate-500 truncate">{user?.role}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <button
-            onClick={handleLogout}
-            className="p-1 text-slate-500 hover:text-slate-300 rounded shrink-0"
-            title={t('common.logout')}
-          >
-            <LogOut className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
+      {/* Account moved to TopBar — Dagger style */}
 
       {/* Collapse toggle */}
       <button

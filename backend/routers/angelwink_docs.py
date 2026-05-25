@@ -145,7 +145,7 @@ async def get_wink_patient_documents(
     wink_patient_id: str,
     _: User = Depends(get_current_user),
 ):
-    """Fetch patient documents from Wink sync server."""
+    """Fetch patient documents from AngelWink sync server."""
     import asyncio
     loop = asyncio.get_event_loop()
     try:

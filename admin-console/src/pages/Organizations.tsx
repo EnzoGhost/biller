@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Building2, ChevronRight } from 'lucide-react'
+import { Plus, Building2, ChevronRight, Trash2 } from 'lucide-react'
 import Badge from '../components/Badge'
-import { fetchOrganizations, createOrganization, type Organization } from '../lib/api'
+import ConfirmDialog from '../components/ConfirmDialog'
+import Toast from '../components/Toast'
+import { fetchOrganizations, createOrganization, deleteOrganization, type Organization } from '../lib/api'
 import { formatDate, tierColor } from '../lib/utils'
 
 export default function Organizations() {
@@ -13,6 +15,8 @@ export default function Organizations() {
   const [newName, setNewName] = useState('')
   const [newTier, setNewTier] = useState<'free' | 'pro' | 'enterprise'>('free')
   const [creating, setCreating] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<Organization | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   async function load() {
     try {
@@ -162,12 +166,21 @@ export default function Organizations() {
                   </td>
                   <td className="px-5 py-3.5 text-slate-400 text-sm">{formatDate(org.created_at)}</td>
                   <td className="px-5 py-3.5">
-                    <Link
-                      to={`/organizations/${org.id}`}
-                      className="text-slate-400 hover:text-white transition-colors"
-                    >
-                      <ChevronRight size={16} />
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setDeleteTarget(org)}
+                        className="text-slate-500 hover:text-red-400 transition-colors"
+                        title="Delete organization"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      <Link
+                        to={`/organizations/${org.id}`}
+                        className="text-slate-400 hover:text-white transition-colors"
+                      >
+                        <ChevronRight size={16} />
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -175,6 +188,28 @@ export default function Organizations() {
           </table>
         )}
       </div>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Organization"
+        message={`Permanently delete "${deleteTarget?.name}"? All user memberships will be removed and providers will be unlinked.`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={async () => {
+          if (!deleteTarget) return
+          try {
+            await deleteOrganization(deleteTarget.id)
+            setDeleteTarget(null)
+            setToast({ message: 'Organization deleted', type: 'success' })
+            await load()
+          } catch (e: any) {
+            setToast({ message: e.message || 'Failed to delete', type: 'error' })
+            setDeleteTarget(null)
+          }
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   )
 }

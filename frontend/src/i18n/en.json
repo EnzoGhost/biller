@@ -543,7 +543,7 @@
     "route_medical_bypass": "Bypass Envolve — bill medical",
     "cpt_required": "CPT codes required. Add at least one procedure code.",
     "cpt_required_outside_rx": "Outside Prescription — CPT Codes Required",
-    "cpt_required_outside_rx_detail": "This claim did not come from Wink. You must add at least one CPT code (service line) before submitting.",
+    "cpt_required_outside_rx_detail": "This claim did not come from AngelWink. You must add at least one CPT code (service line) before submitting.",
     "msg": {
       "invalid_npi": "NPI '{{npi}}' failed Luhn validation. Please verify the number.",
       "missing_tax_id": "EIN/Tax ID missing or incorrect format (must be XX-XXXXXXX).",

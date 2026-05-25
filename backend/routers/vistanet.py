@@ -750,6 +750,8 @@ VISTANET_PLAN_ALIASES: dict[str, str] = {
     "HUMANA GOLD PLUS": "HUMPR",
     # Envolve
     "ENVOLVE": "ENVOLVE",
+    # Inmediata (clearinghouse, but sometimes appears as plan name)
+    "INMEDIATA": "INMEDIATA",
     # Plan de Salud Menonita
     "PLAN DE SALUD MENONITA": "MENONITA",
     "PLAN DE SALUD MENONITA VITAL": "MENONITAV",

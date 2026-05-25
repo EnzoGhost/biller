@@ -8,6 +8,7 @@ import OrgDetail from './pages/OrgDetail'
 import Users from './pages/Users'
 import Subscriptions from './pages/Subscriptions'
 import Providers from './pages/Providers'
+import Account from './pages/Account'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   if (!isAuthenticated()) {
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="users" element={<Users />} />
           <Route path="subscriptions" element={<Subscriptions />} />
           <Route path="providers" element={<Providers />} />
+          <Route path="account" element={<Account />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

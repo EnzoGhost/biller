@@ -1,5 +1,5 @@
 """
-Approval Requests — Bridge between SometeoPR (biller) and Wink (clinic desktop).
+Approval Requests — Bridge between AngelClaims (biller) and Wink (clinic desktop).
 Stores approval requests locally and optionally forwards to sync server.
 """
 from datetime import datetime
@@ -91,7 +91,7 @@ async def create_approval(
     await db.commit()
     await db.refresh(approval)
 
-    # Forward to Wink sync server so the doctor gets notified
+    # Forward to AngelWink sync server so the doctor gets notified
     import httpx
     try:
         import os as _os
@@ -123,7 +123,7 @@ async def create_approval(
                     }
                 )
             if resp.status_code == 200:
-                print(f"[approvals] Forwarded to Wink sync server")
+                print(f"[approvals] Forwarded to AngelWink sync server")
             else:
                 print(f"[approvals] Sync server returned {resp.status_code}: {resp.text}")
     except Exception as e:

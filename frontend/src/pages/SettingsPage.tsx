@@ -8,6 +8,7 @@ import { formatPhone } from '../lib/format';
 const ProvidersPage = lazy(() => import('./ProvidersPage'));
 const PayersPage = lazy(() => import('./PayersPage'));
 const FeeSchedulePage = lazy(() => import('./FeeSchedulePage'));
+const RolesPage = lazy(() => import('./RolesPage'));
 
 // ── Module-level audit state (persists across tab switches) ─────────────────
 interface AuditEntry {
@@ -56,6 +57,7 @@ function _setAuditState(patch: Partial<ModuleAuditState>) {
 export default function SettingsPage() {
   const { t, i18n } = useTranslation();
   const [active, setActive] = useState('clinic');
+  const [teamTab, setTeamTab] = useState<'users' | 'roles'>('users');
   const [saved, setSaved] = useState(false);
 
   // Clinic
@@ -120,7 +122,7 @@ export default function SettingsPage() {
     innovamd: { ...defaultPortal, url: 'https://provider.innovamd.com' },
   });
 
-  // Wink connection state
+  // AngelWink connection state
   const [winkClinicId, setWinkClinicId] = useState<string | null>(null);
   const [winkClinicName, setWinkClinicName] = useState<string | null>(null);
   const [winkJoinCode, setWinkJoinCode] = useState('');
@@ -282,8 +284,21 @@ export default function SettingsPage() {
       }).catch(() => {});
 
       // Load Wink state from localStorage
-      setWinkClinicId(localStorage.getItem('angelwink_clinic_id'));
-      setWinkClinicName(localStorage.getItem('angelwink_clinic_name'));
+      // Load AngelWink pairing from server (per-provider), not localStorage
+      api.get('/clinic/config').then(res => {
+        const d = res.data;
+        if (d.angelwink_clinic_id) {
+          setWinkClinicId(d.angelwink_clinic_id);
+          setWinkClinicName(d.clinic_name || 'Connected');
+        } else {
+          // Fallback to localStorage for legacy
+          setWinkClinicId(localStorage.getItem('angelwink_clinic_id'));
+          setWinkClinicName(localStorage.getItem('angelwink_clinic_name'));
+        }
+      }).catch(() => {
+        setWinkClinicId(localStorage.getItem('angelwink_clinic_id'));
+        setWinkClinicName(localStorage.getItem('angelwink_clinic_name'));
+      });
     }
   }, [active]);
 
@@ -321,8 +336,8 @@ export default function SettingsPage() {
         setInmSubmitterId(d.submitter_id || '');
         setInmWsEnv(d.ws_env === 'prod' ? 'prod' : 'uat');
         setInmWsUsername(d.ws_username || '');
-        setInmWsConfigured(d.ws_configured || false);
-        // Don't populate password — it's masked on the server
+        setInmWsConfigured(d.ws_has_password || d.ws_configured || false);
+        // Show placeholder dots when password exists (never send actual password back)
       }).catch(() => {});
     }
   }, [active]);
@@ -391,7 +406,7 @@ export default function SettingsPage() {
     finally { setVnDisconnecting(false); }
   };
 
-  // Wink handlers
+  // AngelWink handlers
   const handleWinkPair = async () => {
     if (!winkJoinCode.trim()) return;
     setWinkPairing(true);
@@ -408,7 +423,10 @@ export default function SettingsPage() {
     finally { setWinkPairing(false); }
   };
 
-  const handleWinkDisconnect = () => {
+  const handleWinkDisconnect = async () => {
+    try {
+      await api.post('/clinic/angelwink/disconnect');
+    } catch { /* best-effort */ }
     localStorage.removeItem('angelwink_clinic_id');
     localStorage.removeItem('angelwink_clinic_name');
     setWinkClinicId(null);
@@ -534,6 +552,8 @@ export default function SettingsPage() {
   const [teamError, setTeamError] = useState<string | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePassword, setInvitePassword] = useState('');
+  const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState('biller');
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -587,7 +607,7 @@ export default function SettingsPage() {
     setInviting(true);
     setInviteError(null);
     try {
-      await api.post('/organizations/me/users', { email: inviteEmail.trim(), role: inviteRole });
+      await api.post('/organizations/me/users', { email: inviteEmail.trim(), password: invitePassword || undefined, full_name: inviteName || undefined, role: inviteRole });
       setShowInviteModal(false);
       setInviteEmail('');
       setInviteRole('biller');
@@ -661,8 +681,8 @@ export default function SettingsPage() {
   };
 
   const SECTIONS = [
-    { key: 'account',      labelKey: 'Account',               icon: UserCog },
-    { key: 'team',         labelKey: 'Team',                  icon: Users },
+    // Account moved to TopBar dropdown (Dagger-style)
+    { key: 'team',         labelKey: 'Team & Roles',          icon: Users },
     { key: 'clinic',       labelKey: 'settings.clinic_info',  icon: Building2 },
     { key: 'providers',    labelKey: 'nav.providers',         icon: Stethoscope },
     { key: 'payers',       labelKey: 'nav.payers',            icon: Building2 },
@@ -672,7 +692,7 @@ export default function SettingsPage() {
     { key: 'portals',      labelKey: 'Insurance Portals',     icon: Shield },
     { key: 'availity',     labelKey: 'settings.availity',     icon: Users },
     { key: 'inmediata',    labelKey: 'inmediata.title',       icon: Zap },
-    { key: 'ai',           labelKey: 'settings.ai',           icon: Cpu },
+    // AI settings removed — managed centrally, not per-user
     { key: 'audit',        labelKey: 'Revenue Audit',         icon: AlertTriangle },
     { key: 'lang',         labelKey: 'settings.language',     icon: Globe },
   ];
@@ -953,7 +973,7 @@ export default function SettingsPage() {
                       value={inmWsPassword}
                       onChange={e => setInmWsPassword(e.target.value)}
                       className={inputClass}
-                      placeholder={inmWsConfigured ? 'Enter new password to change' : 'password'}
+                      placeholder={inmWsConfigured ? '•••••••• (saved — enter new to change)' : 'password'}
                       autoComplete="new-password"
                     />
                     <button
@@ -1048,7 +1068,7 @@ export default function SettingsPage() {
             </Suspense>
           )}
 
-          {/* Connections — VistaNet + Wink */}
+                    {/* Connections — VistaNet + AngelWink */}
           {active === 'connections' && (
             <div className="space-y-6">
               <h2 className="font-semibold text-slate-800 mb-4">Connections</h2>
@@ -1122,17 +1142,12 @@ export default function SettingsPage() {
                       </div>
                       <div>
                         <label className={labelClass}>Location</label>
-                        <select
+                        <input
                           value={vnLocation}
                           onChange={e => setVnLocation(e.target.value)}
                           className={inputClass}
-                        >
-                          {vnLocations.length > 0 ? vnLocations.map(loc => (
-                            <option key={loc} value={loc}>{loc}</option>
-                          )) : (
-                            <option value="MANATI">MANATI</option>
-                          )}
-                        </select>
+                          placeholder="e.g. MANATI"
+                        />
                       </div>
                     </div>
                     <div>
@@ -1166,7 +1181,7 @@ export default function SettingsPage() {
                 )}
               </div>
 
-              {/* Wink */}
+              {/* AngelWink */}
               <div className="border border-slate-200 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
@@ -1220,7 +1235,7 @@ export default function SettingsPage() {
             <div className="space-y-4">
               <h2 className="font-semibold text-slate-800 mb-4">Clinic Pairing</h2>
               <p className="text-sm text-slate-600">
-                Generate a temporary join code to pair an external system (like Wink) with this clinic.
+                Generate a temporary join code to pair an external system (like AngelWink) with this clinic.
                 Codes expire after 5 minutes.
               </p>
               {joinCode ? (
@@ -1306,15 +1321,12 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">Location</label>
-                      <select
+                      <input
                         value={directLocation}
                         onChange={e => setDirectLocation(e.target.value)}
                         className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white"
-                      >
-                        {VISTANET_LOCATIONS.map(loc => (
-                          <option key={loc} value={loc}>{loc}</option>
-                        ))}
-                      </select>
+                        placeholder="e.g. MANATI"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">Username</label>
@@ -1577,11 +1589,33 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Team Management */}
+          {/* Team & Roles */}
           {active === 'team' && (
             <div className="space-y-4">
+              {/* Dagger-style sub-tabs */}
+              <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 w-fit">
+                {([['users', 'Users', teamMembers.length] as const, ['roles', 'Roles & Permissions', null] as const]).map(([key, label, count]) => (
+                  <button
+                    key={key}
+                    onClick={() => setTeamTab(key)}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                      teamTab === key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    {label}{count != null ? ` (${count})` : ''}
+                  </button>
+                ))}
+              </div>
+
+              {teamTab === 'roles' && (
+                <Suspense fallback={<div className="text-slate-400 text-sm p-4">Loading…</div>}>
+                  <RolesPage />
+                </Suspense>
+              )}
+
+              {teamTab === 'users' && (<>
               <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-slate-800">Team Management</h2>
+                <h2 className="font-semibold text-slate-800">Users</h2>
                 {currentUserRole === 'admin' && (
                   <button
                     onClick={() => { setShowInviteModal(true); setInviteError(null); }}
@@ -1674,19 +1708,37 @@ export default function SettingsPage() {
               {showInviteModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
                   <div className="bg-white rounded-xl border border-slate-200 shadow-xl p-6 w-full max-w-md mx-4">
-                    <h3 className="font-semibold text-slate-800 mb-4">Invite User</h3>
+                    <h3 className="font-semibold text-slate-800 mb-4">Add User</h3>
                     <p className="text-sm text-slate-500 mb-4">
-                      The user must already have an account. Enter their email to add them to your organization.
+                      Create a new account and add them to your organization, or enter an existing user's email.
                     </p>
                     <div className="space-y-3">
                       <div>
-                        <label className={labelClass}>Email</label>
+                        <label className={labelClass}>Username / Email</label>
                         <input
                           value={inviteEmail}
                           onChange={e => setInviteEmail(e.target.value)}
                           className={inputClass}
-                          placeholder="user@example.com"
-                          type="email"
+                          placeholder="username or email"
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Full Name</label>
+                        <input
+                          value={inviteName}
+                          onChange={e => setInviteName(e.target.value)}
+                          className={inputClass}
+                          placeholder="Full name (optional for existing users)"
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Password <span className="text-slate-400 font-normal">(for new accounts)</span></label>
+                        <input
+                          value={invitePassword}
+                          onChange={e => setInvitePassword(e.target.value)}
+                          className={inputClass}
+                          placeholder="Password (leave blank if user exists)"
+                          type="password"
                         />
                       </div>
                       <div>
@@ -1724,6 +1776,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
               )}
+              </>)}
             </div>
           )}
 

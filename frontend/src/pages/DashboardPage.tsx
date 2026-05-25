@@ -212,8 +212,26 @@ function WinkPullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
   const [result, setResult] = useState<PullResult | null>(null);
 
   // Pairing state
-  const [winkClinicId, setWinkClinicId] = useState<string | null>(() => localStorage.getItem('angelwink_clinic_id'));
-  const [winkClinicName, setWinkClinicName] = useState<string | null>(() => localStorage.getItem('angelwink_clinic_name'));
+  const [winkClinicId, setWinkClinicId] = useState<string | null>(null);
+  const [winkClinicName, setWinkClinicName] = useState<string | null>(null);
+
+  // Load AngelWink pairing from server (per-provider), not localStorage
+  useEffect(() => {
+    api.get('/clinic/config').then(res => {
+      const d = res.data;
+      if (d.angelwink_clinic_id) {
+        setWinkClinicId(d.angelwink_clinic_id);
+        setWinkClinicName(d.clinic_name || 'Connected');
+      } else {
+        // Fallback to localStorage for legacy
+        setWinkClinicId(localStorage.getItem('angelwink_clinic_id'));
+        setWinkClinicName(localStorage.getItem('angelwink_clinic_name'));
+      }
+    }).catch(() => {
+      setWinkClinicId(localStorage.getItem('angelwink_clinic_id'));
+      setWinkClinicName(localStorage.getItem('angelwink_clinic_name'));
+    });
+  }, []);
   const [joinCode, setJoinCode] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -249,8 +267,7 @@ function WinkPullModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
         params: {
           date_from: dateFrom,
           date_to: dateTo,
-          provider_id: 1,
-          payer_id: 1,
+          // provider_id and payer_id come from JWT context on the backend
           clinic_id: winkClinicId,
         },
       });
@@ -1047,7 +1064,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Wink Pull Modal */}
+      {/* AngelWink Pull Modal */}
       {showWinkModal && (
         <WinkPullModal
           onClose={() => setShowWinkModal(false)}

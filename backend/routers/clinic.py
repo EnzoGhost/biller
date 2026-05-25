@@ -367,12 +367,16 @@ async def generate_join_code(
 
 
 @router.post("/join-codes/verify")
-async def verify_join_code(body: dict, db: AsyncSession = Depends(get_db)):
+async def verify_join_code(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Verify a join code by checking the AngelWink sync server.
     The code was generated in AngelWink and stored on the sync server's PostgreSQL.
-    On success, stores the clinic_id in clinic_settings for multi-tenant support.
-    No auth required — the code IS the auth.
+    On success, stores the clinic_id in provider_settings for the specific provider
+    (falling back to clinic_settings for backward compatibility).
     """
     import requests as _requests
     code = body.get("code", "").upper().strip()
@@ -389,9 +393,39 @@ async def verify_join_code(body: dict, db: AsyncSession = Depends(get_db)):
         if resp.ok:
             data = resp.json()
             if data.get("clinic_id"):
-                # Persist the paired clinic ID in clinic_settings
+                # Persist the paired clinic ID — per-provider (primary) + global clinic_settings (backward compat)
                 try:
                     from sqlalchemy import text
+                    from models import OrgUser, Provider, ProviderSettings
+                    # Resolve provider for this user
+                    org_result = await db.execute(
+                        select(OrgUser).where(OrgUser.user_id == current_user.id).limit(1)
+                    )
+                    org_user = org_result.scalar_one_or_none()
+                    if org_user:
+                        prov_result = await db.execute(
+                            select(Provider).where(
+                                Provider.organization_id == org_user.organization_id,
+                                Provider.is_active == True
+                            ).limit(1)
+                        )
+                        provider = prov_result.scalar_one_or_none()
+                        if provider:
+                            # Write to provider_settings (primary)
+                            ps_result = await db.execute(
+                                select(ProviderSettings).where(ProviderSettings.provider_id == provider.id).limit(1)
+                            )
+                            ps = ps_result.scalar_one_or_none()
+                            if ps:
+                                await db.execute(text(
+                                    "UPDATE provider_settings SET angelwink_clinic_id = :cid WHERE provider_id = :pid"
+                                ), {"cid": data["clinic_id"], "pid": provider.id})
+                            else:
+                                await db.execute(text(
+                                    "INSERT INTO provider_settings (provider_id, angelwink_clinic_id) VALUES (:pid, :cid)"
+                                    " ON CONFLICT (provider_id) DO UPDATE SET angelwink_clinic_id = :cid"
+                                ), {"cid": data["clinic_id"], "pid": provider.id})
+                    # Also write to clinic_settings for backward compatibility
                     await db.execute(text(
                         "UPDATE clinic_settings SET angelwink_clinic_id = :cid WHERE id = 1"
                     ), {"cid": data["clinic_id"]})
@@ -400,7 +434,7 @@ async def verify_join_code(body: dict, db: AsyncSession = Depends(get_db)):
                     pass
                 return {
                     "valid": True,
-                    "clinic_name": data.get("name", "AngelAngelWink Clinic"),
+                    "clinic_name": data.get("name", "AngelWink Clinic"),
                     "angelwink_clinic_id": data["clinic_id"],
                 }
             else:
@@ -411,7 +445,7 @@ async def verify_join_code(body: dict, db: AsyncSession = Depends(get_db)):
     except Exception as e:
         pass  # Fall through to local check
 
-    # Fallback: check SometeoPR's own join codes (for SometeoPR-generated codes)
+    # Fallback: check AngelClaims's own join codes (for AngelClaims-generated codes)
     _clean_expired_codes()
     entry = _join_codes.get(code)
     if not entry:
