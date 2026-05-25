@@ -23,7 +23,7 @@ router = APIRouter(prefix="/missing-claims", tags=["missing-claims"])
 
 # ── Lost Revenue Audit ─────────────────────────────────────────────────────────
 
-WINK_PG_DSN = "dbname=wink_sync user=wink password=wink_sync_2026! host=localhost port=5432"
+ANGELWINK_PG_DSN = "dbname=wink_sync user=wink password=wink_sync_2026! host=localhost port=5432"
 
 
 async def _pg_query(query: str, params: tuple = ()):
@@ -35,7 +35,7 @@ async def _pg_query(query: str, params: tuple = ()):
     loop = asyncio.get_event_loop()
 
     def _run():
-        conn = psycopg2.connect(WINK_PG_DSN)
+        conn = psycopg2.connect(ANGELWINK_PG_DSN)
         conn.set_client_encoding('UTF8')
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute(query, params)

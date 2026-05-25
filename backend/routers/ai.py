@@ -540,8 +540,8 @@ async def _fetch_insurance_card_bytes(claim, db: AsyncSession) -> tuple[bytes, s
     from concurrent.futures import ThreadPoolExecutor
 
     if claim.source == "wink":
-        # Wink claims: fetch from sync server / B2 via the wink_docs logic
-        from routers.wink_docs import _query_patient_docs, _query_doc_by_id, _get_device_token, SYNC_SERVER_URL, _guess_content_type
+        # AngelWink claims: fetch from sync server / B2 via the angelwink_docs logic
+        from routers.angelwink_docs import _query_patient_docs, _query_doc_by_id, _get_device_token, SYNC_SERVER_URL, _guess_content_type
         wink_patient_id = claim.patient.wink_patient_id if claim.patient else None
         if not wink_patient_id:
             return None

@@ -24,7 +24,7 @@ router = APIRouter(prefix="/claims", tags=["claims"])
 
 # ── Push claim status back to AngelWink sync server ────────────────────────────────
 
-async def push_claim_status_to_wink(claim_id: int, status: str, external_ref: str):
+async def push_claim_status_to_angelwink(claim_id: int, status: str, external_ref: str):
     """Push claim status back to AngelWink sync server so invoices show billing status."""
     import httpx
     try:
@@ -40,16 +40,16 @@ async def push_claim_status_to_wink(claim_id: int, status: str, external_ref: st
             if resp.status_code == 200:
                 print(f"[claims] Pushed status '{status}' to AngelWink for {external_ref}")
             else:
-                print(f"[claims] Wink status push returned {resp.status_code}: {resp.text}")
+                print(f"[claims] AngelWink status push returned {resp.status_code}: {resp.text}")
     except Exception as e:
         print(f"[claims] Failed to push status to AngelWink: {e}")
 
 
-async def _maybe_push_wink_status(claim: 'Claim', new_status: str):
+async def _maybe_push_angelwink_status(claim: 'Claim', new_status: str):
     """If claim is from AngelWink, push the new status."""
     if getattr(claim, 'source', None) == 'wink' and getattr(claim, 'external_ref', None):
         import asyncio
-        asyncio.create_task(push_claim_status_to_wink(claim.id, new_status, claim.external_ref))
+        asyncio.create_task(push_claim_status_to_angelwink(claim.id, new_status, claim.external_ref))
 
 
 def generate_claim_number() -> str:
@@ -216,7 +216,7 @@ async def update_claim(
             new_value=updates["status"],
             user=current_user,
         )
-        await _maybe_push_wink_status(claim, updates["status"])
+        await _maybe_push_angelwink_status(claim, updates["status"])
     elif updates:
         await log_action(
             db, "claim", claim_id, "updated",
@@ -267,7 +267,7 @@ async def submit_claim(
         claim_id=claim_id, old_value=str(old_status),
         new_value=ClaimStatus.SUBMITTED, user=current_user,
     )
-    await _maybe_push_wink_status(claim, "submitted")
+    await _maybe_push_angelwink_status(claim, "submitted")
     await db.commit()
     result = await db.execute(
         select(Claim).options(*claim_with_relations()).where(Claim.id == claim_id)
@@ -295,7 +295,7 @@ async def resubmit_claim(
         new_value=ClaimStatus.READY, user=current_user,
         notes="Claim reset for resubmission",
     )
-    await _maybe_push_wink_status(claim, "ready")
+    await _maybe_push_angelwink_status(claim, "ready")
     await db.commit()
     result = await db.execute(
         select(Claim).options(*claim_with_relations()).where(Claim.id == claim_id)
@@ -325,7 +325,7 @@ async def reopen_claim(
         new_value=ClaimStatus.DRAFT, user=current_user,
         notes="Claim reopened as draft for editing",
     )
-    await _maybe_push_wink_status(claim, "draft")
+    await _maybe_push_angelwink_status(claim, "draft")
     await db.commit()
     result = await db.execute(
         select(Claim).options(*claim_with_relations()).where(Claim.id == claim_id)
@@ -350,7 +350,7 @@ async def void_claim(
         claim_id=claim_id, old_value=str(old_status),
         new_value=ClaimStatus.VOID, user=current_user,
     )
-    await _maybe_push_wink_status(claim, "void")
+    await _maybe_push_angelwink_status(claim, "void")
     await db.commit()
     result = await db.execute(
         select(Claim).options(*claim_with_relations()).where(Claim.id == claim_id)
@@ -386,7 +386,7 @@ async def post_payment(
     claim.patient_responsibility = body.patient_responsibility
     if claim.total_paid >= claim.total_billed * 0.9:
         claim.status = ClaimStatus.PAID
-        await _maybe_push_wink_status(claim, "paid")
+        await _maybe_push_angelwink_status(claim, "paid")
     await db.commit()
     await db.refresh(payment)
     return PaymentOut.model_validate(payment)

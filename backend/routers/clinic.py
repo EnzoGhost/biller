@@ -340,7 +340,7 @@ async def generate_join_code(
 ):
     """
     Admin-only: generate a 6-char join code that expires in 5 minutes.
-    Used for pairing external clinic systems (e.g. Wink).
+    Used for pairing external clinic systems (e.g. AngelWink).
     """
     if user.role not in ("admin", "owner"):
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -383,7 +383,7 @@ async def verify_join_code(
     if not code:
         raise HTTPException(status_code=400, detail="Code is required")
 
-    # First try the Wink sync server (where the code actually lives)
+    # First try the AngelWink sync server (where the code actually lives)
     try:
         resp = _requests.post(
             "http://localhost:3100/api/sync/join-codes/verify",

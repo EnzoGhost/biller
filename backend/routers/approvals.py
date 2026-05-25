@@ -1,5 +1,5 @@
 """
-Approval Requests — Bridge between AngelClaims (biller) and Wink (clinic desktop).
+Approval Requests — Bridge between AngelClaims (biller) and AngelWink (clinic desktop).
 Stores approval requests locally and optionally forwards to sync server.
 """
 from datetime import datetime
@@ -132,7 +132,7 @@ async def create_approval(
     return approval
 
 
-WINK_SYNC_SERVER = "http://159.65.235.231:3100"
+ANGELWINK_SYNC_SERVER = "http://159.65.235.231:3100"
 
 
 @router.get("/sync-status/{claim_id}")
@@ -146,7 +146,7 @@ async def check_approval_sync_status(
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
-                f"{WINK_SYNC_SERVER}/api/sync/approval-bridge/status",
+                f"{ANGELWINK_SYNC_SERVER}/api/sync/approval-bridge/status",
                 params={"claim_id": claim_id},
             )
             if resp.status_code == 200:

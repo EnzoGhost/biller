@@ -1,6 +1,6 @@
 """
 Data import endpoints:
-- Wink (iris) patient/encounter import
+- AngelWink (iris) patient/encounter import
 - Generic superbill CSV import
 """
 import csv
@@ -23,7 +23,7 @@ from models import User
 router = APIRouter(prefix="/import", tags=["import"])
 
 
-# ── Wink Push Endpoint (Wink calls this directly) ────────────────────────────────
+# ── AngelWink Push Endpoint (AngelWink calls this directly) ────────────────────────────────
 
 from typing import List
 from pydantic import BaseModel
@@ -78,7 +78,7 @@ class WinkEncounterPayload(BaseModel):
 
 
 @router.post("/wink/encounter")
-async def receive_wink_encounter(
+async def receive_angelwink_encounter(
     payload: WinkEncounterPayload,
     db: AsyncSession = Depends(get_db),
     # Note: authentication may use API key header in production
@@ -354,23 +354,23 @@ async def receive_wink_encounter(
     }
 
 
-# ── Wink Integration (pull from local SQLite) ───────────────────────────────────────────
+# ── AngelWink Integration (pull from local SQLite) ───────────────────────────────────────────
 
-def _wink_conn():
-    """Open a read-only connection to the Wink (iris) SQLite database."""
-    if not settings.WINK_DB_PATH:
-        raise HTTPException(400, "WINK_DB_PATH no configurado. Configure la ruta a la base de datos de Wink.")
+def _angelwink_conn():
+    """Open a read-only connection to the AngelWink (iris) SQLite database."""
+    if not settings.ANGELWINK_DB_PATH:
+        raise HTTPException(400, "ANGELWINK_DB_PATH no configurado. Configure la ruta a la base de datos de AngelWink.")
     try:
-        conn = sqlite3.connect(f"file:{settings.WINK_DB_PATH}?mode=ro", uri=True)
+        conn = sqlite3.connect(f"file:{settings.ANGELWINK_DB_PATH}?mode=ro", uri=True)
     except sqlite3.OperationalError:
         # Fall back to normal (not URI-mode) if path has no read-only flag support
-        conn = sqlite3.connect(settings.WINK_DB_PATH)
+        conn = sqlite3.connect(settings.ANGELWINK_DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 @router.post("/wink", response_model=ImportResult)
-async def import_from_wink(
+async def import_from_angelwink(
     provider_id: int,
     default_payer_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
@@ -378,7 +378,7 @@ async def import_from_wink(
 ):
     """
     Pull patients from AngelWink's iris.db SQLite database.
-    Maps Wink patient schema to Biller patients, skips duplicates by wink_patient_id.
+    Maps AngelWink patient schema to Biller patients, skips duplicates by wink_patient_id.
     Also imports patient insurance data when available.
     """
     imported = 0
@@ -387,7 +387,7 @@ async def import_from_wink(
     claim_ids: list[int] = []
 
     try:
-        conn = _wink_conn()
+        conn = _angelwink_conn()
         cursor = conn.cursor()
 
         # iris.db patients schema:
@@ -407,9 +407,9 @@ async def import_from_wink(
                 WHERE p.active = 1
                 LIMIT 500
             """)
-            wink_patients = cursor.fetchall()
+            angelwink_patients = cursor.fetchall()
         except sqlite3.OperationalError as e:
-            raise HTTPException(500, f"Error leyendo tabla patients de Wink DB: {e}")
+            raise HTTPException(500, f"Error leyendo tabla patients de AngelWink DB: {e}")
 
         # Pre-load existing patient insurance enrollments from patient_insurance table
         try:
@@ -419,16 +419,16 @@ async def import_from_wink(
                 JOIN insurance_plans ip ON ip.id = pi.insurance_plan_id
                 WHERE pi.is_primary = 1
             """)
-            wink_ins_rows = cursor.fetchall()
-            wink_insurance_map: dict[int, sqlite3.Row] = {}
-            for row in wink_ins_rows:
+            angelwink_ins_rows = cursor.fetchall()
+            angelwink_insurance_map: dict[int, sqlite3.Row] = {}
+            for row in angelwink_ins_rows:
                 pid = row["patient_id"]
-                if pid not in wink_insurance_map:
-                    wink_insurance_map[pid] = row
+                if pid not in angelwink_insurance_map:
+                    angelwink_insurance_map[pid] = row
         except sqlite3.OperationalError:
-            wink_insurance_map = {}
+            angelwink_insurance_map = {}
 
-        for wp in wink_patients:
+        for wp in angelwink_patients:
             # Skip if already imported
             existing = await db.execute(
                 select(Patient).where(Patient.wink_patient_id == str(wp["id"]))
@@ -470,8 +470,8 @@ async def import_from_wink(
                 # Insurance: prefer payer from patient_insurance join, fall back to inline fields
                 # Only create insurance if there is a REAL member_id — never use fake WINK- IDs
                 if default_payer_id:
-                    wink_ins = wink_insurance_map.get(wp["id"])
-                    real_member_id = (wink_ins["member_id"] if wink_ins and wink_ins["member_id"] else None) \
+                    angelwink_ins = angelwink_insurance_map.get(wp["id"])
+                    real_member_id = (angelwink_ins["member_id"] if angelwink_ins and angelwink_ins["member_id"] else None) \
                                      or wp["insurance_id"] or None
                     if real_member_id:
                         ins = PatientInsurance(
@@ -500,7 +500,7 @@ async def import_from_wink(
 
 
 @router.post("/wink/encounters", response_model=ImportResult)
-async def import_wink_encounters(
+async def import_angelwink_encounters(
     provider_id: int,
     payer_id: int,
     db: AsyncSession = Depends(get_db),
@@ -521,7 +521,7 @@ async def import_wink_encounters(
     claim_ids: list[int] = []
 
     try:
-        conn = _wink_conn()
+        conn = _angelwink_conn()
         cursor = conn.cursor()
 
         try:
@@ -536,7 +536,7 @@ async def import_wink_encounters(
             """)
             encounters = cursor.fetchall()
         except sqlite3.OperationalError as e:
-            raise HTTPException(500, f"Error leyendo exam_encounters de Wink DB: {e}")
+            raise HTTPException(500, f"Error leyendo exam_encounters de AngelWink DB: {e}")
 
         conn.close()
 
@@ -560,7 +560,7 @@ async def import_wink_encounters(
             )
             patient = patient_result.scalar_one_or_none()
             if not patient:
-                errors.append(f"Encuentro {enc['id']}: paciente Wink {enc['patient_id']} no importado aún")
+                errors.append(f"Encuentro {enc['id']}: paciente AngelWink {enc['patient_id']} no importado aún")
                 skipped += 1
                 continue
 
@@ -662,21 +662,21 @@ async def import_wink_encounters(
     return ImportResult(imported=imported, skipped=skipped, errors=errors, claims_created=claim_ids)
 
 
-# ── Wink Invoice Import (PostgreSQL sync server) ────────────────────────────
+# ── AngelWink Invoice Import (PostgreSQL sync server) ────────────────────────────
 
 import asyncio
 
-WINK_PG_DSN = "dbname=wink_sync user=wink password=wink_sync_2026! host=localhost port=5432"
+ANGELWINK_PG_DSN = "dbname=wink_sync user=wink password=wink_sync_2026! host=localhost port=5432"
 
 
-async def _query_wink_pg(query: str, params: tuple = ()):
-    """Run a query against the Wink sync PostgreSQL database."""
+async def _query_angelwink_pg(query: str, params: tuple = ()):
+    """Run a query against the AngelWink sync PostgreSQL database."""
     import psycopg2
     import psycopg2.extras
     loop = asyncio.get_event_loop()
 
     def _run():
-        conn = psycopg2.connect(WINK_PG_DSN)
+        conn = psycopg2.connect(ANGELWINK_PG_DSN)
         conn.set_client_encoding('UTF8')
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute(query, params)
@@ -687,7 +687,7 @@ async def _query_wink_pg(query: str, params: tuple = ()):
     return await loop.run_in_executor(None, _run)
 
 
-async def _resolve_payer_from_wink(
+async def _resolve_payer_from_angelwink(
     insurance_provider: Optional[str],
     wink_patient_id: str,
     clinic_id: str,
@@ -695,7 +695,7 @@ async def _resolve_payer_from_wink(
     db: AsyncSession,
 ) -> tuple[Optional[int], Optional[str], Optional[str]]:
     """
-    Resolve the correct AngelClaims payer_id for a Wink patient.
+    Resolve the correct AngelClaims payer_id for an AngelWink patient.
 
     Strategy:
     1. Try patient_insurance from AngelWink sync server for plan name
@@ -708,9 +708,9 @@ async def _resolve_payer_from_wink(
 
     candidate_names: list[str] = []
 
-    # 1. Query Wink sync server's patient_insurance table for this patient
+    # 1. Query AngelWink sync server's patient_insurance table for this patient
     try:
-        wink_ins_rows = await _query_wink_pg("""
+        angelwink_ins_rows = await _query_angelwink_pg("""
             WITH pi AS (
                 SELECT DISTINCT ON (row_id) data
                 FROM sync_changes
@@ -736,18 +736,18 @@ async def _resolve_payer_from_wink(
             LEFT JOIN plans pl ON (pl.data->>'id')::int = (pi.data->>'insurance_plan_id')::int
             LIMIT 1
         """, (clinic_id, int(wink_patient_id), clinic_id))
-        if wink_ins_rows:
-            row = wink_ins_rows[0]
+        if angelwink_ins_rows:
+            row = angelwink_ins_rows[0]
             if row.get("insurance_company"):
                 candidate_names.append(row["insurance_company"])
             if row.get("plan_name"):
                 candidate_names.append(row["plan_name"])
             # Capture group_number from the insurance record
-            _wink_group_number = row.get("group_number") or None
+            _angelwink_group_number = row.get("group_number") or None
         else:
-            _wink_group_number = None
+            _angelwink_group_number = None
     except Exception:
-        _wink_group_number = None
+        _angelwink_group_number = None
         pass  # Table may not exist yet; fall through
 
     # 2. Use insurance_provider from synced_patients (already in the invoice query)
@@ -769,7 +769,7 @@ async def _resolve_payer_from_wink(
         )
         payer = res.scalar_one_or_none()
         if payer:
-            return payer.id, f"exact:{clean_name}", _wink_group_number
+            return payer.id, f"exact:{clean_name}", _angelwink_group_number
 
         # Partial match (ILIKE %name%)
         res = await db.execute(
@@ -780,7 +780,7 @@ async def _resolve_payer_from_wink(
         )
         payer = res.scalar_one_or_none()
         if payer:
-            return payer.id, f"partial:{clean_name}→{payer.name}", _wink_group_number
+            return payer.id, f"partial:{clean_name}→{payer.name}", _angelwink_group_number
 
         # Reverse partial: payer name contained in insurance_provider string
         all_payers_res = await db.execute(
@@ -789,7 +789,7 @@ async def _resolve_payer_from_wink(
         all_payers = all_payers_res.scalars().all()
         for p in all_payers:
             if p.name.lower() in clean_name.lower():
-                return p.id, f"reverse:{clean_name}→{p.name}", _wink_group_number
+                return p.id, f"reverse:{clean_name}→{p.name}", _angelwink_group_number
 
     # 4. Auto-create payer if we know the insurance name
     if candidate_names:
@@ -805,14 +805,14 @@ async def _resolve_payer_from_wink(
             )
             db.add(new_payer)
             await db.flush()
-            return new_payer.id, f"auto_created:{new_name}", _wink_group_number
+            return new_payer.id, f"auto_created:{new_name}", _angelwink_group_number
 
     # 5. No insurance data at all — patient is uninsured
     return None, "uninsured", None
 
 
 @router.post("/angelwink-invoices", response_model=ImportResult)
-async def import_wink_invoices(
+async def import_angelwink_invoices(
     date_from: str,
     date_to: str,
     provider_id: int = 1,
@@ -882,7 +882,7 @@ async def import_wink_invoices(
 
     try:
         # Query invoices joined with patients from AngelWink sync PostgreSQL
-        invoices = await _query_wink_pg("""
+        invoices = await _query_angelwink_pg("""
             WITH inv AS (
                 SELECT DISTINCT ON (row_id) row_id, data
                 FROM sync_changes
@@ -1006,7 +1006,7 @@ async def import_wink_invoices(
             if wink_patient_id in _payer_cache:
                 resolved_payer_id, match_source, insurance_group_number = _payer_cache[wink_patient_id]
             else:
-                resolved_payer_id, match_source, insurance_group_number = await _resolve_payer_from_wink(
+                resolved_payer_id, match_source, insurance_group_number = await _resolve_payer_from_angelwink(
                     insurance_provider=inv.get("insurance_provider"),
                     wink_patient_id=wink_patient_id,
                     clinic_id=clinic_id,
@@ -1092,7 +1092,7 @@ async def import_wink_invoices(
                         dx_codes = [c.strip() for c in str(raw_dx).split(",") if c.strip()]
 
                 # Get service line items from synced_invoice_items
-                items = await _query_wink_pg("""
+                items = await _query_angelwink_pg("""
                     SELECT DISTINCT ON (row_id)
                         data->>'cpt_code' AS cpt_code,
                         data->>'description' AS description,
@@ -1149,7 +1149,7 @@ async def import_wink_invoices(
                     cpt_list = [{"code": "", "units": 1, "amount": 0.0, "description": "No procedures found"}]  # flagged for review
 
                 # Apply fee schedule: look up proper billed amount for each CPT code.
-                # Wink stores $0 unit_price for insurance-covered items, so we must
+                # AngelWink stores $0 unit_price for insurance-covered items, so we must
                 # pull the correct rate from our fee schedule instead.
                 for cpt_item in cpt_list:
                     code = cpt_item.get("code")

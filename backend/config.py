@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"
 
-    WINK_DB_PATH: str = ""
+    ANGELWINK_DB_PATH: str = ""
 
     # Availity / Envolve Vision integration
     AVAILITY_CLIENT_ID: str = ""
