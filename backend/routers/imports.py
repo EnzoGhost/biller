@@ -9,7 +9,7 @@ import sqlite3
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 
@@ -828,6 +828,7 @@ async def _resolve_payer_from_angelwink(
 
 
 @router.post("/angelwink-invoices", response_model=ImportResult)
+@router.post("/wink-invoices", response_model=ImportResult)  # backward-compat alias
 async def import_angelwink_invoices(
     date_from: str,
     date_to: str,
@@ -1480,17 +1481,45 @@ class InvoiceImportPayload(BaseModel):
     referring_provider: Optional[str] = None
 
 
+async def _verify_pairing_key(request: Request, db: AsyncSession) -> bool:
+    """Verify X-Pairing-Key header against stored pairing keys. HIPAA-compliant: constant-time compare."""
+    import hmac
+    key = request.headers.get("X-Pairing-Key", "").strip()
+    if not key:
+        return False
+    # Check all provider_settings for a matching pairing key
+    try:
+        from models import ProviderSettings
+        result = await db.execute(select(ProviderSettings).where(ProviderSettings.angelwink_pairing_key.isnot(None)))
+        for ps in result.scalars().all():
+            if ps.angelwink_pairing_key and hmac.compare_digest(ps.angelwink_pairing_key, key):
+                return True
+    except Exception:
+        pass
+    return False
+
+
 @router.post("/invoice")
 async def import_invoice(
     payload: InvoiceImportPayload,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
 ):
     """
     Receive a single invoice directly from AngelWink's 'Send to Biller' button.
+    Authenticates via either JWT (user session) or X-Pairing-Key (cross-app pairing).
     Creates a DRAFT claim visible in the AngelClaims dashboard.
     Returns { ok: true, claim_id: int, claim_number: str }.
     """
+    # Auth: accept either JWT or pairing key
+    from auth import get_current_user
+    try:
+        user = await get_current_user(request=request, db=db)
+    except Exception:
+        user = None
+    if not user:
+        if not await _verify_pairing_key(request, db):
+            raise HTTPException(status_code=401, detail="Authentication required (JWT or pairing key)")
     import random
     import string as _string
     from datetime import datetime

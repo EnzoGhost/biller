@@ -7,7 +7,7 @@ import random
 import string
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -393,7 +393,11 @@ async def verify_join_code(
         if resp.ok:
             data = resp.json()
             if data.get("clinic_id"):
-                # Persist the paired clinic ID — per-provider (primary) + global clinic_settings (backward compat)
+                # Generate a secure pairing key for cross-app auth (HIPAA: use cryptographic random)
+                import secrets
+                pairing_key = secrets.token_urlsafe(48)  # 64-char URL-safe random key
+
+                # Persist the paired clinic ID + pairing key
                 try:
                     from sqlalchemy import text
                     from models import OrgUser, Provider, ProviderSettings
@@ -418,13 +422,13 @@ async def verify_join_code(
                             ps = ps_result.scalar_one_or_none()
                             if ps:
                                 await db.execute(text(
-                                    "UPDATE provider_settings SET angelwink_clinic_id = :cid WHERE provider_id = :pid"
-                                ), {"cid": data["clinic_id"], "pid": provider.id})
+                                    "UPDATE provider_settings SET angelwink_clinic_id = :cid, angelwink_pairing_key = :pkey WHERE provider_id = :pid"
+                                ), {"cid": data["clinic_id"], "pkey": pairing_key, "pid": provider.id})
                             else:
                                 await db.execute(text(
-                                    "INSERT INTO provider_settings (provider_id, angelwink_clinic_id) VALUES (:pid, :cid)"
-                                    " ON CONFLICT (provider_id) DO UPDATE SET angelwink_clinic_id = :cid"
-                                ), {"cid": data["clinic_id"], "pid": provider.id})
+                                    "INSERT INTO provider_settings (provider_id, angelwink_clinic_id, angelwink_pairing_key) VALUES (:pid, :cid, :pkey)"
+                                    " ON CONFLICT (provider_id) DO UPDATE SET angelwink_clinic_id = :cid, angelwink_pairing_key = :pkey"
+                                ), {"cid": data["clinic_id"], "pkey": pairing_key, "pid": provider.id})
                     # Also write to clinic_settings for backward compatibility
                     await db.execute(text(
                         "UPDATE clinic_settings SET angelwink_clinic_id = :cid WHERE id = 1"
@@ -436,6 +440,7 @@ async def verify_join_code(
                     "valid": True,
                     "clinic_name": data.get("name", "AngelWink Clinic"),
                     "angelwink_clinic_id": data["clinic_id"],
+                    "pairing_key": pairing_key,  # AngelWink stores this for authenticated requests
                 }
             else:
                 return {"valid": False, "message": data.get("error", "Invalid or expired code")}
@@ -462,3 +467,40 @@ async def verify_join_code(
         "clinic_name": clinic_name,
         "angelwink_clinic_id": angelwink_clinic_id,
     }
+
+
+@router.post("/angelwink/disconnect")
+async def disconnect_angelwink(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Disconnect AngelWink pairing. Called from AngelWink when user unpairs.
+    Authenticates via X-Pairing-Key header (the shared secret from pairing).
+    Clears angelwink_clinic_id and angelwink_pairing_key from provider_settings + clinic_settings.
+    """
+    import hmac
+    key = request.headers.get("X-Pairing-Key", "").strip()
+    if not key:
+        raise HTTPException(status_code=401, detail="Pairing key required")
+
+    # Find and clear the matching provider_settings
+    from models import ProviderSettings
+    result = await db.execute(select(ProviderSettings).where(ProviderSettings.angelwink_pairing_key.isnot(None)))
+    matched = False
+    for ps in result.scalars().all():
+        if ps.angelwink_pairing_key and hmac.compare_digest(ps.angelwink_pairing_key, key):
+            from sqlalchemy import text
+            await db.execute(text(
+                "UPDATE provider_settings SET angelwink_clinic_id = NULL, angelwink_pairing_key = NULL WHERE provider_id = :pid"
+            ), {"pid": ps.provider_id})
+            matched = True
+
+    # Also clear clinic_settings
+    if matched:
+        from sqlalchemy import text
+        await db.execute(text("UPDATE clinic_settings SET angelwink_clinic_id = NULL WHERE id = 1"))
+        await db.commit()
+        return {"ok": True, "message": "AngelWink pairing cleared"}
+    else:
+        raise HTTPException(status_code=403, detail="Invalid pairing key")

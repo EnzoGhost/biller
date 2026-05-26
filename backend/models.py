@@ -227,6 +227,7 @@ class ProviderSettings(Base):
     payer_enrollments: Mapped[Optional[dict]] = mapped_column(JSON, default=list)
     setup_complete: Mapped[bool] = mapped_column(Boolean, default=False)
     angelwink_clinic_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    angelwink_pairing_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
