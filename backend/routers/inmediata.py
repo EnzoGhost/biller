@@ -30,7 +30,8 @@ from sqlalchemy.orm import selectinload
 
 from auth import get_current_user
 from config import settings
-from database import get_db
+from database import get_db, engine
+from sqlalchemy import text
 from edi.x12_837p import generate_837p, generate_837p_batch
 from edi.x12_835 import parse_835, match_era_to_claims, ERAResult
 from models import Claim, ClaimStatus, Payment, User, Patient, SubmissionMethod
@@ -41,6 +42,61 @@ router = APIRouter(prefix="/inmediata", tags=["inmediata"])
 
 # Runtime config overrides (set via /config endpoint)
 _runtime_config: dict = {}
+_persisted_config_loaded: bool = False
+
+
+async def _load_persisted_ws_config():
+    """Load WS creds from DB into runtime config (called lazily on first access)."""
+    global _persisted_config_loaded
+    if _persisted_config_loaded:
+        return
+    _persisted_config_loaded = True
+    try:
+        async with engine.begin() as conn:
+            try:
+                result = await conn.execute(text(
+                    "SELECT inmediata_ws_username, inmediata_ws_password, inmediata_ws_env, inmediata_submitter_id "
+                    "FROM clinic_settings WHERE id = 1"
+                ))
+                row = result.fetchone()
+                if row:
+                    if row[0] and not _runtime_config.get("ws_username"): _runtime_config["ws_username"] = row[0]
+                    if row[1] and not _runtime_config.get("ws_password"): _runtime_config["ws_password"] = row[1]
+                    if row[2] and not _runtime_config.get("ws_env"): _runtime_config["ws_env"] = row[2]
+                    if row[3] and not _runtime_config.get("submitter_id"): _runtime_config["submitter_id"] = row[3]
+                    logger.info("Loaded Inmediata WS config from DB (env=%s, user=%s)", row[2], row[0])
+            except Exception:
+                pass  # columns don't exist yet
+    except Exception as exc:
+        logger.debug("Could not load persisted WS config: %s", exc)
+
+
+async def _persist_ws_config_to_db(db: AsyncSession):
+    """Persist current _runtime_config WS fields to clinic_settings."""
+    try:
+        # Ensure columns exist
+        for col in ["inmediata_ws_username", "inmediata_ws_password", "inmediata_ws_env", "inmediata_submitter_id"]:
+            try:
+                await db.execute(text(f"ALTER TABLE clinic_settings ADD COLUMN {col} TEXT"))
+            except Exception:
+                pass  # column already exists
+
+        await db.execute(text(
+            "UPDATE clinic_settings SET "
+            "inmediata_ws_username = :u, "
+            "inmediata_ws_password = :p, "
+            "inmediata_ws_env = :e, "
+            "inmediata_submitter_id = :s "
+            "WHERE id = 1"
+        ), {
+            "u": _runtime_config.get("ws_username", ""),
+            "p": _runtime_config.get("ws_password", ""),
+            "e": _runtime_config.get("ws_env", "uat"),
+            "s": _runtime_config.get("submitter_id", ""),
+        })
+        await db.commit()
+    except Exception as exc:
+        logger.warning("Failed to persist WS config to DB: %s", exc)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -417,10 +473,11 @@ class InmediataConfigRequest(BaseModel):
 @router.post("/config")
 async def save_inmediata_config(
     body: InmediataConfigRequest,
+    db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     """
-    Update Inmediata SFTP settings at runtime (in-memory override).
+    Update Inmediata SFTP settings at runtime and persist WS creds to DB.
     """
     if body.sftp_host is not None:        _runtime_config["sftp_host"] = body.sftp_host
     if body.sftp_user is not None:        _runtime_config["sftp_user"] = body.sftp_user
@@ -432,6 +489,11 @@ async def save_inmediata_config(
     if body.ws_password is not None and body.ws_password:
         _runtime_config["ws_password"] = body.ws_password
     if body.ws_env is not None:           _runtime_config["ws_env"] = body.ws_env
+
+    # Persist WS creds to DB so they survive restart
+    if any(getattr(body, f) is not None for f in ["ws_username", "ws_password", "ws_env", "submitter_id"]):
+        await _persist_ws_config_to_db(db)
+
     return {"status": "saved"}
 
 
@@ -440,6 +502,8 @@ async def get_inmediata_config(
     _: User = Depends(get_current_user),
 ):
     """Return current (non-secret) Inmediata config."""
+    if not _runtime_config.get("ws_username"):
+        await _load_persisted_ws_config()
     return {
         "sftp_host":        _runtime_config.get("sftp_host", settings.INMEDIATA_SFTP_HOST or ""),
         "sftp_user":        _runtime_config.get("sftp_user", settings.INMEDIATA_SFTP_USER or ""),
@@ -457,6 +521,7 @@ async def get_inmediata_config(
 @router.post("/ws-config")
 async def save_ws_config(
     body: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     """Save Inmediata Web Services configuration (username, password, env, submitter_id)."""
@@ -468,6 +533,10 @@ async def save_ws_config(
         _runtime_config["ws_env"] = body["ws_env"]
     if body.get("submitter_id") is not None:
         _runtime_config["submitter_id"] = body["submitter_id"]
+
+    # Persist to DB so creds survive restart
+    await _persist_ws_config_to_db(db)
+
     return {"status": "saved"}
 
 
@@ -507,13 +576,32 @@ async def get_api_config(
 async def test_inmediata_connection(
     _: User = Depends(get_current_user),
 ):
-    """Test Inmediata API connection with current config."""
-    key = _runtime_config.get("api_key")
-    if not key:
-        return {"success": False, "message": "API key not configured"}
-    base = _runtime_config.get("api_base_url", "https://api.inmediata.com")
-    # Placeholder — will implement real API test after the call with Inmediata
-    return {"success": True, "message": f"Configuration saved. Ready to connect to {base}"}
+    """Test Inmediata SecureTrack connection with current WS credentials."""
+    # Load persisted config if not already loaded
+    if not _runtime_config.get("ws_username"):
+        await _load_persisted_ws_config()
+
+    username = _runtime_config.get("ws_username")
+    password = _runtime_config.get("ws_password")
+    env = _runtime_config.get("ws_env", "uat")
+
+    if not username or not password:
+        return {"success": False, "message": "Inmediata WS credentials not configured. Save credentials first."}
+
+    try:
+        from edi.securetrack_client import SecureTrackClient
+        client = SecureTrackClient(username=username, password=password, env=env)
+        # Use GetRoutedFiles (read-only, no side effects with mark_as_downloaded=False)
+        # This verifies auth + endpoint connectivity
+        result = await client.get_routed_files(mark_as_downloaded=False)
+        return {"success": True, "message": f"Connected to Inmediata SecureTrack ({env.upper()}) successfully. Credentials verified."}
+    except Exception as exc:
+        error_msg = str(exc)
+        if "Authentication" in error_msg or "401" in error_msg or "credentials" in error_msg.lower() or "login" in error_msg.lower() or "Fault" in error_msg:
+            return {"success": False, "message": f"Invalid Login — check username and password. ({error_msg})"}
+        if "timeout" in error_msg.lower() or "connect" in error_msg.lower():
+            return {"success": False, "message": f"Connection timeout — check network. ({error_msg})"}
+        return {"success": False, "message": f"Connection test failed: {error_msg}"}
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
@@ -561,8 +649,10 @@ from edi.securetrack_client import SecureTrackClient
 from edi.x12_835 import parse_835, match_era_to_claims, ERAResult
 
 
-def _get_ws_client() -> SecureTrackClient:
+async def _get_ws_client() -> SecureTrackClient:
     """Return SecureTrackClient; raise 503 if not configured."""
+    if not _runtime_config.get("ws_username"):
+        await _load_persisted_ws_config()
     client = SecureTrackClient()
     if not client.username or not client.password:
         raise HTTPException(
@@ -601,7 +691,7 @@ async def submit_claim_ws(
     edi_content = generate_837p(claim, submitter_id=submitter_id)
     filename = _inmediata_filename(f"837P_{claim.claim_number}")
 
-    client = _get_ws_client()
+    client = await _get_ws_client()
     try:
         result = await client.send_x12_file(
             edi_content=edi_content,
@@ -655,7 +745,7 @@ async def submit_batch_ws(
     edi_content = generate_837p_batch(claims, submitter_id=submitter_id)
     filename = _inmediata_filename("837P_BATCH")
 
-    client = _get_ws_client()
+    client = await _get_ws_client()
     try:
         result = await client.send_x12_file(
             edi_content=edi_content,
@@ -741,7 +831,7 @@ async def check_claim_status_ws(
         f"IEA*1*{ctrl}~\n"
     )
 
-    client = _get_ws_client()
+    client = await _get_ws_client()
     try:
         rt_result = await client.send_realtime(x12_276)
     except Exception as exc:
@@ -770,7 +860,7 @@ async def poll_eras_ws(
     Use mark_downloaded=True only when your pipeline is fault-tolerant.
     Files are returned for caller to process; use /inmediata/reconcile to post payments.
     """
-    client = _get_ws_client()
+    client = await _get_ws_client()
     all_835s: list[str] = []
     more = True
     iterations = 0
@@ -828,7 +918,7 @@ async def list_files_ws(
     except ValueError:
         raise HTTPException(400, "date_from and date_to must be ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS")
 
-    client = _get_ws_client()
+    client = await _get_ws_client()
     try:
         result = await client.list_routed_files(
             date_from=date_from,
@@ -873,7 +963,7 @@ async def download_files_ws(
     if not req.msg_ids:
         raise HTTPException(400, "msg_ids list is required")
 
-    client = _get_ws_client()
+    client = await _get_ws_client()
     try:
         result = await client.get_routed_files_by_id(
             msg_ids=req.msg_ids,
@@ -913,7 +1003,7 @@ async def mark_downloaded_ws(
     if not req.msg_ids:
         raise HTTPException(400, "msg_ids list is required")
 
-    client = _get_ws_client()
+    client = await _get_ws_client()
     try:
         success = await client.mark_files_as_downloaded(req.msg_ids)
     except Exception as exc:
@@ -956,7 +1046,7 @@ async def get_claim_responses(
         return result
 
     try:
-        client = _get_ws_client()
+        client = await _get_ws_client()
         all_files = []
         iterations = 0
         while iterations < 10:
