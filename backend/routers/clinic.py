@@ -483,13 +483,17 @@ async def disconnect_angelwink(
     key = request.headers.get("X-Pairing-Key", "").strip()
     
     # Accept EITHER pairing key OR JWT auth (for AngelClaims frontend)
-    from auth import get_current_user
     authenticated = False
-    try:
-        user = await get_current_user(request=request, db=db)
-        authenticated = True
-    except Exception:
-        pass
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        try:
+            from auth import _decode_token
+            token = auth_header[7:]
+            payload = _decode_token(token)
+            if payload.get("sub"):
+                authenticated = True
+        except Exception:
+            pass
 
     if not key and not authenticated:
         raise HTTPException(status_code=401, detail="Authentication required")
