@@ -481,20 +481,36 @@ async def disconnect_angelwink(
     """
     import hmac
     key = request.headers.get("X-Pairing-Key", "").strip()
-    if not key:
-        raise HTTPException(status_code=401, detail="Pairing key required")
+    
+    # Accept EITHER pairing key OR JWT auth (for AngelClaims frontend)
+    from auth import get_current_user
+    authenticated = False
+    try:
+        user = await get_current_user(request=request, db=db)
+        authenticated = True
+    except Exception:
+        pass
+
+    if not key and not authenticated:
+        raise HTTPException(status_code=401, detail="Authentication required")
 
     # Find and clear the matching provider_settings
     from models import ProviderSettings
-    result = await db.execute(select(ProviderSettings).where(ProviderSettings.angelwink_pairing_key.isnot(None)))
+    from sqlalchemy import text
     matched = False
-    for ps in result.scalars().all():
-        if ps.angelwink_pairing_key and hmac.compare_digest(ps.angelwink_pairing_key, key):
-            from sqlalchemy import text
-            await db.execute(text(
-                "UPDATE provider_settings SET angelwink_clinic_id = NULL, angelwink_pairing_key = NULL WHERE provider_id = :pid"
-            ), {"pid": ps.provider_id})
-            matched = True
+    
+    if key:
+        result = await db.execute(select(ProviderSettings).where(ProviderSettings.angelwink_pairing_key.isnot(None)))
+        for ps in result.scalars().all():
+            if ps.angelwink_pairing_key and hmac.compare_digest(ps.angelwink_pairing_key, key):
+                await db.execute(text(
+                    "UPDATE provider_settings SET angelwink_clinic_id = NULL, angelwink_pairing_key = NULL WHERE provider_id = :pid"
+                ), {"pid": ps.provider_id})
+                matched = True
+    elif authenticated:
+        # JWT auth — clear all pairing for the user's provider
+        await db.execute(text("UPDATE provider_settings SET angelwink_clinic_id = NULL, angelwink_pairing_key = NULL WHERE angelwink_clinic_id IS NOT NULL"))
+        matched = True
 
     # Also clear clinic_settings
     if matched:
@@ -504,3 +520,77 @@ async def disconnect_angelwink(
         return {"ok": True, "message": "AngelWink pairing cleared"}
     else:
         raise HTTPException(status_code=403, detail="Invalid pairing key")
+
+
+@router.post("/pair-external")
+async def pair_external(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Public endpoint for AngelWink to pair with AngelClaims.
+    No JWT required — the join code itself is the authentication.
+    Returns pairing_key + clinic_name on success.
+    """
+    import requests as _requests
+    import secrets
+    code = body.get("code", "").upper().strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="Join code required")
+
+    # Verify with sync server
+    try:
+        resp = _requests.post(
+            "http://localhost:3100/api/sync/join-codes/verify",
+            json={"code": code},
+            timeout=5,
+        )
+        if resp.ok:
+            data = resp.json()
+            if data.get("clinic_id"):
+                # Generate pairing key
+                pairing_key = secrets.token_urlsafe(48)
+                
+                # Get org name
+                from sqlalchemy import text
+                try:
+                    org_result = await db.execute(text(
+                        "SELECT o.name FROM organizations o "
+                        "JOIN providers p ON p.organization_id = o.id "
+                        "JOIN provider_settings ps ON ps.provider_id = p.id "
+                        "LIMIT 1"
+                    ))
+                    org_row = org_result.fetchone()
+                    org_name = org_row[0] if org_row else "AngelClaims"
+                except Exception:
+                    org_name = "AngelClaims"
+                
+                # Store pairing key (find first provider, store there)
+                try:
+                    from models import Provider, ProviderSettings
+                    prov_result = await db.execute(select(Provider).where(Provider.is_active == True).limit(1))
+                    provider = prov_result.scalar_one_or_none()
+                    if provider:
+                        await db.execute(text(
+                            "UPDATE provider_settings SET angelwink_clinic_id = :cid, angelwink_pairing_key = :pkey "
+                            "WHERE provider_id = :pid"
+                        ), {"cid": data["clinic_id"], "pkey": pairing_key, "pid": provider.id})
+                    await db.execute(text(
+                        "UPDATE clinic_settings SET angelwink_clinic_id = :cid WHERE id = 1"
+                    ), {"cid": data["clinic_id"]})
+                    await db.commit()
+                except Exception:
+                    pass
+                
+                return {
+                    "valid": True,
+                    "clinic_name": org_name,
+                    "pairing_key": pairing_key,
+                    "angelwink_clinic_id": data["clinic_id"],
+                }
+            else:
+                return {"valid": False, "message": data.get("error", "Invalid or expired code")}
+        else:
+            return {"valid": False, "message": "Invalid or expired code"}
+    except Exception as e:
+        raise HTTPException(500, f"Could not verify code: {str(e)}")
