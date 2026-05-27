@@ -344,7 +344,8 @@ async def check_eligibility_direct(req: DirectEligibilityRequest):
         "subscriber_name": parsed.get("subscriber_name"),
         "subscriber_id": parsed.get("subscriber_id"),
         "payer_name": parsed.get("payer_name"),
-        "error": parsed.get("error"),
+        "error": parsed.get("error") or ('; '.join(parsed.get("errors", [])) if parsed.get("errors") else None),
+        "errors": parsed.get("errors", []),
         "raw": parsed,
     }
 
