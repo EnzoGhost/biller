@@ -31,7 +31,16 @@ async def lifespan(app: FastAPI):
     from startup_migration import run_startup_migration
     run_startup_migration()
     await init_db()
+
+    # Start cross-app relay polling in background
+    import asyncio
+    from routers.cross_app import poll_relay_background
+    poll_task = asyncio.create_task(poll_relay_background())
+
     yield
+
+    # Cleanup
+    poll_task.cancel()
 
 
 app = FastAPI(

@@ -457,3 +457,153 @@ async def cross_app_status(_: User = Depends(get_current_user)):
         "relay_reachable": reachable,
         "device_token_available": bool(token),
     }
+
+
+# ── Background Relay Polling ──────────────────────────────────────────────────
+
+async def poll_relay_background():
+    """Background task that polls the sync server relay every 30 seconds for new messages."""
+    import asyncio
+    import httpx
+
+    logger.info("[cross_app] Background relay polling started (every 30s)")
+    while True:
+        try:
+            await asyncio.sleep(30)
+            token = _get_device_token()
+            if not token:
+                continue
+
+            sync_url = "https://api.angelwink.app"
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"{sync_url}/api/cross-app/pending",
+                    params={"target_app": "angelclaims"},
+                    headers={"X-Device-Token": token},
+                )
+                if resp.status_code != 200:
+                    continue
+                messages = resp.json()
+                if not isinstance(messages, list):
+                    messages = messages.get("messages", [])
+
+                for msg in messages:
+                    msg_type = msg.get("message_type", "")
+                    payload = msg.get("payload", {})
+                    msg_id = msg.get("id")
+
+                    try:
+                        if msg_type == "claim_request":
+                            await _process_claim_request(payload)
+                        elif msg_type == "dx_approval_response":
+                            await _process_approval_response(payload)
+                        else:
+                            logger.info("[cross_app] Unknown message type: %s", msg_type)
+
+                        # Acknowledge
+                        if msg_id:
+                            await client.post(
+                                f"{sync_url}/api/cross-app/{msg_id}/ack",
+                                headers={"X-Device-Token": token},
+                            )
+                    except Exception as e:
+                        logger.warning("[cross_app] Error processing message %s: %s", msg_id, e)
+
+                if messages:
+                    logger.info("[cross_app] Processed %d relay messages", len(messages))
+
+        except asyncio.CancelledError:
+            logger.info("[cross_app] Background polling stopped")
+            break
+        except Exception as e:
+            logger.warning("[cross_app] Background poll error: %s", e)
+            await asyncio.sleep(10)
+
+
+async def _process_claim_request(payload: dict):
+    """Process an incoming claim_request from the relay."""
+    from database import async_session
+    from models import Claim, Patient, Payer
+    from sqlalchemy import select
+    import random, string
+
+    async with async_session() as db:
+        # Dedup by invoice number
+        inv_num = payload.get("invoice_number", "")
+        external_ref = f"wink_inv_{inv_num}"
+        existing = await db.execute(
+            select(Claim).where(Claim.source == "wink", Claim.external_ref == external_ref)
+        )
+        if existing.scalar_one_or_none():
+            logger.info("[cross_app] Claim already exists for invoice %s, skipping", inv_num)
+            return
+
+        # Find or create patient
+        patient_data = payload.get("patient", {})
+        patient_name = patient_data.get("name", "Unknown")
+        record_number = patient_data.get("record_number")
+        
+        patient = None
+        if record_number:
+            result = await db.execute(select(Patient).where(Patient.record_number == record_number))
+            patient = result.scalar_one_or_none()
+        
+        if not patient:
+            # Search by name
+            name_parts = patient_name.split()
+            if len(name_parts) >= 2:
+                result = await db.execute(
+                    select(Patient).where(
+                        Patient.first_name.ilike(name_parts[0]),
+                        Patient.last_name.ilike(name_parts[-1])
+                    )
+                )
+                patient = result.scalar_one_or_none()
+
+        if not patient:
+            patient = Patient(
+                first_name=name_parts[0] if name_parts else patient_name,
+                last_name=name_parts[-1] if len(name_parts) > 1 else "",
+                record_number=record_number or "",
+                dob=patient_data.get("dob"),
+                source="wink",
+            )
+            db.add(patient)
+            await db.flush()
+
+        # Create claim
+        from datetime import date
+        claim_num = f"WK-{''.join(random.choices(string.digits, k=6))}"
+        try:
+            svc_date = date.fromisoformat(payload.get("date", "")[:10])
+        except (ValueError, TypeError):
+            svc_date = date.today()
+
+        # Find payer by name
+        insurance_name = payload.get("insurance", "")
+        payer = None
+        if insurance_name:
+            result = await db.execute(select(Payer).where(Payer.name.ilike(f"%{insurance_name}%")))
+            payer = result.scalar_one_or_none()
+
+        claim = Claim(
+            claim_number=claim_num,
+            patient_id=patient.id,
+            payer_id=payer.id if payer else None,
+            service_date_from=svc_date,
+            service_date_to=svc_date,
+            source="wink",
+            status="draft",
+            external_ref=external_ref,
+            place_of_service=payload.get("place_of_service", "11"),
+            diagnosis_codes=payload.get("diagnosis_codes", []),
+        )
+        db.add(claim)
+        await db.commit()
+        logger.info("[cross_app] Created claim %s for invoice %s (patient: %s)", claim_num, inv_num, patient_name)
+
+
+async def _process_approval_response(payload: dict):
+    """Process a DX approval response from a doctor in AngelWink."""
+    logger.info("[cross_app] DX approval response: %s", payload)
+    # TODO: Update claim DX codes and notify Ruth

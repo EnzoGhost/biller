@@ -61,7 +61,8 @@ export default function ProviderSwitcher({ collapsed }: { collapsed: boolean }) 
     }
   };
 
-  if (providers.length === 0 || collapsed) return null;
+  if (collapsed) return null;
+  // Show even with 0 or 1 provider — for context and when API is slow to load
 
   return (
     <div ref={ref} className="relative px-2 py-2 border-b border-slate-700">
