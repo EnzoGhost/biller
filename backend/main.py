@@ -22,6 +22,7 @@ from routers import scanner, ai_scanner
 from routers import portals
 from routers import missing_claims
 from routers import organizations
+from routers import cross_app
 
 
 @asynccontextmanager
@@ -79,6 +80,7 @@ app.include_router(missing_claims.router, prefix="/api")
 app.include_router(eligibility.router, prefix="/api")
 app.include_router(admin_router.router, prefix="/api")
 app.include_router(organizations.router, prefix="/api")
+app.include_router(cross_app.router, prefix="/api")
 
 
 @app.get("/health")
