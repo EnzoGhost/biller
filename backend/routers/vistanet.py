@@ -329,15 +329,29 @@ def extract_patient_from_row(row) -> Optional[dict]:
 
     # ── Service Date ──
     service_date = None
-    svc_match = re.search(r"SERVICIOS OPTOMETRICOS:\s*\(([^)]+)\)", col3_text)
+    svc_match = re.search(r"SERVICIOS OPTOMETRICOS:\s*\(([^)]+)\)", col3_text, re.IGNORECASE)
     if svc_match:
         service_date = parse_spanish_date(svc_match.group(1))
 
-    # Fallback: materials date
+    # Fallback: materials date (try multiple spellings — VistaNet may use accented or unaccented)
     if not service_date:
-        mat_date_match = re.search(r"CODIGOS DE MATERIALES:\s*\(([^)]+)\)", col3_text)
+        mat_date_match = re.search(
+            r"C[OÓ]DIGOS DE MATERIALES:\s*\(([^)]+)\)",
+            col3_text,
+            re.IGNORECASE,
+        )
         if mat_date_match:
             service_date = parse_spanish_date(mat_date_match.group(1))
+
+    # Final fallback: any date-like pattern in the form Month/DD/YYYY in col3
+    if not service_date:
+        any_date_match = re.search(
+            r"(?:Enero|Febrero|Marzo|Abril|Mayo|Junio|Julio|Agosto|Septiembre|Octubre|Noviembre|Diciembre)/\d+/\d{4}",
+            col3_text,
+            re.IGNORECASE,
+        )
+        if any_date_match:
+            service_date = parse_spanish_date(any_date_match.group(0))
 
     # ── Diagnoses ──
     diagnoses = []
@@ -361,7 +375,7 @@ def extract_patient_from_row(row) -> Optional[dict]:
 
     # ── Procedures (CPT) ──
     procedures = []
-    proc_match = re.search(r"PROCEDIMIENTOS:(.*?)(?:CODIGOS DE MATERIALES|<hr|$)", col3_html, re.DOTALL | re.IGNORECASE)
+    proc_match = re.search(r"PROCEDIMIENTOS:(.*?)(?:C[O\u00d3]DIGOS DE MATERIALES|<hr|$)", col3_html, re.DOTALL | re.IGNORECASE)
     if proc_match:
         proc_block = proc_match.group(1)
         proc_lines = re.findall(
@@ -389,7 +403,7 @@ def extract_patient_from_row(row) -> Optional[dict]:
 
     # ── Materials (HCPCS V-codes) ──
     materials = []
-    mat_match = re.search(r"CODIGOS DE MATERIALES:(.*?)(?:</div>|<hr|$)", col3_html, re.DOTALL | re.IGNORECASE)
+    mat_match = re.search(r"C[O\u00d3]DIGOS DE MATERIALES:(.*?)(?:</div>|<hr|$)", col3_html, re.DOTALL | re.IGNORECASE)
     if mat_match:
         mat_block = mat_match.group(1)
         mat_lines = re.findall(

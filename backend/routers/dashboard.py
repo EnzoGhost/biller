@@ -28,7 +28,7 @@ async def get_work_queue(
         if order_desc:
             q = q.order_by(Claim.updated_at.desc())
         else:
-            q = q.order_by(Claim.service_date_from.desc().nullslast(), Claim.created_at.desc())
+            q = q.order_by(Claim.service_date_from.asc().nullsfirst(), Claim.created_at.asc())
         q = q.limit(limit)
         result = await db.execute(q)
         claims = result.scalars().all()

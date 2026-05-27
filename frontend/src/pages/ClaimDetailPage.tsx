@@ -119,6 +119,12 @@ interface Attachment {
   url: string;
 }
 
+interface InsuranceInfo {
+  planName?: string;
+  memberNumber?: string;
+  groupNumber?: string;
+}
+
 function PatientDocuments({
   claimId,
   showDocs,
@@ -127,6 +133,7 @@ function PatientDocuments({
   setFullSizeImg,
   source,
   winkPatientId,
+  insuranceInfo,
 }: {
   claimId: number;
   showDocs: boolean;
@@ -135,6 +142,7 @@ function PatientDocuments({
   setFullSizeImg: (v: string | null) => void;
   source?: string;
   winkPatientId?: string;
+  insuranceInfo?: InsuranceInfo;
 }) {
   const { t } = useTranslation();
   const DOC_TYPE_LABELS: Record<string, string> = {
@@ -218,6 +226,26 @@ function PatientDocuments({
                   <p className="text-xs text-slate-500 mt-1 font-medium">
                     {DOC_TYPE_LABELS[att.attachment_type] ?? att.attachment_type}
                   </p>
+                  {/* Insurance info below the insurance card */}
+                  {att.attachment_type === 'insurance_card' && insuranceInfo && (
+                    <div className="mt-1.5 text-left bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-2 space-y-0.5">
+                      {insuranceInfo.planName && (
+                        <p className="text-xs text-slate-700 font-medium leading-snug">{insuranceInfo.planName}</p>
+                      )}
+                      {insuranceInfo.memberNumber && (
+                        <p className="text-xs text-slate-500">
+                          <span className="font-medium">Núm. Contrato:</span>{' '}
+                          <span className="font-mono">{insuranceInfo.memberNumber}</span>
+                        </p>
+                      )}
+                      {insuranceInfo.groupNumber && (
+                        <p className="text-xs text-slate-500">
+                          <span className="font-medium">Grupo:</span>{' '}
+                          <span className="font-mono">{insuranceInfo.groupNumber}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1565,6 +1593,14 @@ function ClaimDetailPageInner() {
             setFullSizeImg={setFullSizeImg}
             source={claim.patient?.wink_patient_id ? 'wink' : claim.source}
             winkPatientId={claim.patient?.wink_patient_id || claim.patient?.mrn}
+            insuranceInfo={(() => {
+              const ins = claim.patient?.insurances?.find((i: any) => i.payer_id === claim.payer_id) ?? claim.patient?.insurances?.[0];
+              return {
+                planName: claim.payer?.name,
+                memberNumber: ins?.member_id,
+                groupNumber: ins?.group_number,
+              };
+            })()}
           />
         </ErrorBoundary>
       )}
