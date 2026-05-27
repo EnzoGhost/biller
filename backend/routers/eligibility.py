@@ -293,7 +293,8 @@ async def check_eligibility_direct(req: DirectEligibilityRequest):
         raise HTTPException(status_code=500, detail=f"Failed to generate 270 EDI: {exc}")
 
     # ── 2. Build SecureTrack client with inline creds ─────────────────────────
-    env = req.inmediata_env.lower() if req.inmediata_env else "uat"
+    # Use the same env for both generate_270 and SecureTrackClient (default "prod" when not specified)
+    env = req.inmediata_env.lower() if req.inmediata_env else "prod"
     client = SecureTrackClient(
         username=req.inmediata_username,
         password=req.inmediata_password,
