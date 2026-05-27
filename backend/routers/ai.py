@@ -629,8 +629,12 @@ async def extract_insurance_from_card(
     # Get image bytes
     if body.image_url:
         import httpx
+        url = body.image_url
+        # Fix relative URLs — prepend server base
+        if url.startswith('/'):
+            url = f"http://127.0.0.1:8100{url}"
         async with httpx.AsyncClient(timeout=20) as http:
-            r = await http.get(body.image_url)
+            r = await http.get(url)
             img_bytes = r.content
             mime = r.headers.get("content-type", "image/jpeg").split(";")[0].strip()
     else:

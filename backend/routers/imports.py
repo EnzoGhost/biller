@@ -849,12 +849,17 @@ async def import_angelwink_invoices(
     from datetime import datetime
     from routers.fee_schedule import get_fee_amount as _get_fee
 
-    # Use the paired clinic ID from the frontend; fall back to provider_settings, then clinic_settings, then env var
+    # Use the paired clinic ID from the frontend; fall back to provider_settings, then clinic_settings, then env var.
+    # IMPORTANT: Only use stored clinic_id if the pairing key is still set (not disconnected).
     if not clinic_id:
         try:
             from models import ProviderSettings
             ps_result = await db.execute(
-                select(ProviderSettings).where(ProviderSettings.provider_id == provider_id).limit(1)
+                select(ProviderSettings).where(
+                    ProviderSettings.provider_id == provider_id,
+                    ProviderSettings.angelwink_clinic_id.isnot(None),
+                    ProviderSettings.angelwink_pairing_key.isnot(None),  # Must still be paired
+                ).limit(1)
             )
             ps = ps_result.scalar_one_or_none()
             if ps and ps.angelwink_clinic_id:
@@ -863,9 +868,15 @@ async def import_angelwink_invoices(
             pass
     if not clinic_id:
         try:
-            _settings = await db.execute(text("SELECT angelwink_clinic_id FROM clinic_settings WHERE id = 1"))
-            _row = _settings.fetchone()
-            clinic_id = _row[0] if _row and _row[0] else None
+            # Only use clinic_settings if provider_settings confirms pairing is active
+            from models import ProviderSettings
+            ps_check = await db.execute(
+                select(ProviderSettings).where(ProviderSettings.angelwink_pairing_key.isnot(None)).limit(1)
+            )
+            if ps_check.scalar_one_or_none():
+                _settings = await db.execute(text("SELECT angelwink_clinic_id FROM clinic_settings WHERE id = 1"))
+                _row = _settings.fetchone()
+                clinic_id = _row[0] if _row and _row[0] else None
         except Exception:
             pass
     if not clinic_id:
