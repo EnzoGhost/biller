@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Upload, FileText, Download, CheckCircle, XCircle, AlertCircle, RefreshCw, ClipboardList, ChevronRight } from 'lucide-react';
 import api from '../lib/api';
@@ -122,12 +122,29 @@ export default function ImportPage() {
   const [csvError, setCsvError] = useState<string | null>(null);
 
   // AngelWink connection state
-  const [winkConnected, setWinkConnected] = useState<string | null>(() => {
-    return localStorage.getItem('angelwink_clinic_name');
-  });
-  const [winkClinicId, setWinkClinicId] = useState<string | null>(() => {
-    return localStorage.getItem('angelwink_clinic_id');
-  });
+  const [winkConnected, setWinkConnected] = useState<string | null>(null);
+  const [winkClinicId, setWinkClinicId] = useState<string | null>(null);
+
+  // Check ACTUAL pairing status from server on mount (don't trust localStorage)
+  useEffect(() => {
+    api.get('/clinic/angelwink/status').then(({ data }) => {
+      if (data.paired && data.clinic_id) {
+        setWinkConnected(data.clinic_name || localStorage.getItem('angelwink_clinic_name') || 'AngelWink Clinic');
+        setWinkClinicId(data.clinic_id);
+        localStorage.setItem('angelwink_clinic_id', data.clinic_id);
+      } else {
+        // Server says not paired — clear stale localStorage
+        setWinkConnected(null);
+        setWinkClinicId(null);
+        localStorage.removeItem('angelwink_clinic_id');
+        localStorage.removeItem('angelwink_clinic_name');
+      }
+    }).catch(() => {
+      // Can't reach server — use localStorage as fallback
+      setWinkConnected(localStorage.getItem('angelwink_clinic_name'));
+      setWinkClinicId(localStorage.getItem('angelwink_clinic_id'));
+    });
+  }, []);
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [joinVerifying, setJoinVerifying] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);

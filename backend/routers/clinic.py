@@ -473,13 +473,28 @@ async def verify_join_code(
 async def get_angelwink_status(db: AsyncSession = Depends(get_db)):
     """Check if an AngelWink clinic is paired. Public endpoint (no auth required)."""
     from models import ProviderSettings
+    from sqlalchemy import text
     result = await db.execute(
-        select(ProviderSettings).where(ProviderSettings.angelwink_clinic_id.isnot(None)).limit(1)
+        select(ProviderSettings).where(
+            ProviderSettings.angelwink_clinic_id.isnot(None),
+            ProviderSettings.angelwink_pairing_key.isnot(None),
+        ).limit(1)
     )
     ps = result.scalar_one_or_none()
     if ps:
-        return {"paired": True, "clinic_id": ps.angelwink_clinic_id}
-    return {"paired": False}
+        # Get clinic name
+        clinic_name = None
+        try:
+            org_result = await db.execute(text(
+                "SELECT o.name FROM organizations o "
+                "JOIN providers p ON p.organization_id = o.id "
+                "WHERE p.id = :pid LIMIT 1"
+            ), {"pid": ps.provider_id})
+            org_row = org_result.fetchone()
+            if org_row: clinic_name = org_row[0]
+        except Exception: pass
+        return {"paired": True, "clinic_id": ps.angelwink_clinic_id, "clinic_name": clinic_name}
+    return {"paired": False, "clinic_id": None, "clinic_name": None}
 
 
 @router.post("/angelwink/disconnect")
