@@ -522,12 +522,12 @@ async def poll_relay_background():
 
 async def _process_claim_request(payload: dict):
     """Process an incoming claim_request from the relay."""
-    from database import async_session
+    from database import AsyncSessionLocal
     from models import Claim, Patient, Payer
     from sqlalchemy import select
     import random, string
 
-    async with async_session() as db:
+    async with AsyncSessionLocal() as db:
         # Dedup by invoice number
         inv_num = payload.get("invoice_number", "")
         external_ref = f"wink_inv_{inv_num}"
@@ -545,7 +545,7 @@ async def _process_claim_request(payload: dict):
         
         patient = None
         if record_number:
-            result = await db.execute(select(Patient).where(Patient.record_number == record_number))
+            result = await db.execute(select(Patient).where(Patient.wink_patient_id == record_number))
             patient = result.scalar_one_or_none()
         
         if not patient:
@@ -564,9 +564,8 @@ async def _process_claim_request(payload: dict):
             patient = Patient(
                 first_name=name_parts[0] if name_parts else patient_name,
                 last_name=name_parts[-1] if len(name_parts) > 1 else "",
-                record_number=record_number or "",
-                dob=patient_data.get("dob"),
-                source="wink",
+                wink_patient_id=record_number,
+                dob=patient_data.get("dob") or "1900-01-01",
             )
             db.add(patient)
             await db.flush()
@@ -592,7 +591,6 @@ async def _process_claim_request(payload: dict):
             payer_id=payer.id if payer else None,
             service_date_from=svc_date,
             service_date_to=svc_date,
-            source="wink",
             status="draft",
             external_ref=external_ref,
             place_of_service=payload.get("place_of_service", "11"),
