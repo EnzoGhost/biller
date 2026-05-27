@@ -13,7 +13,7 @@ def run_startup_migration():
     if ":///" in db_url:
         db_path = db_url.split(":///")[-1]
     else:
-        db_path = "biller.db"
+        db_path = "angelclaims.db"
     
     if db_path.startswith("./"):
         db_path = db_path[2:]

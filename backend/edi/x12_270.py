@@ -99,6 +99,8 @@ def generate_270(
     service_type_codes: list[str] | None = None,
     # Timestamps
     inquiry_date: date | None = None,
+    # Environment: "prod" or "uat"/"test" (controls ISA15 and version)
+    environment: str = "prod",
 ) -> str:
     """
     Generate a HIPAA 5010 X12 270 Eligibility Benefit Inquiry.
@@ -123,6 +125,13 @@ def generate_270(
     sub_id_clean   = isa_sender_id[:15].ljust(15)
     recv_id_clean  = _clean(receiver_id)[:15].ljust(15)
 
+    # 5010 for production, 4010 for legacy UAT
+    is_prod = environment.lower() in ("prod", "production", "p")
+    isa_version   = "00501" if is_prod else "00401"
+    gs_version    = "005010X279A1" if is_prod else "004010X092A1"
+    isa_rep_sep   = "^" if is_prod else "U"
+    isa_usage     = "P" if is_prod else "T"
+
     segments: list[str] = []
 
     # ISA — Interchange Control Header
@@ -130,33 +139,36 @@ def generate_270(
         "ISA",
         "00", " " * 10,          # auth info qualifier, auth info
         "00", " " * 10,          # security qualifier, security info
-        isa_sender_qualifier, sub_id_clean,  # sender qualifier + ID (Tax ID or submitter)
+        isa_sender_qualifier, sub_id_clean,  # sender qualifier + ID
         "ZZ", recv_id_clean,     # receiver qualifier + ID
         date_str[2:],            # date YYMMDD
         time_str,                # time HHMM
-        "U",                     # repetition separator (U for 4010)
-        "00401",                 # version (4010 — Inmediata UAT expects this)
+        isa_rep_sep,             # repetition separator (^ for 5010, U for 4010)
+        isa_version,             # ISA version (00501 for 5010, 00401 for 4010)
         isa_ctrl,                # interchange control number
         "0",                     # acknowledgment requested
-        "T",                     # usage: T=test, P=production
+        isa_usage,               # usage: P=production, T=test
         SUB_SEP,                 # sub-element separator
     ))
 
     # GS — Functional Group Header
     segments.append(_seg(
         "GS",
-        "HS",                    # functional ID: HS = 270
+        "HS",                    # functional ID: HS = 270/271
         _clean(submitter_id)[:15],  # GS02: submitter ID
         _clean(receiver_id)[:15],
         date_str,
         time_str,
         gs_ctrl,
         "X",                     # responsible agency: X = ASC X12
-        "004010X092A1",
+        gs_version,              # 005010X279A1 for 5010
     ))
 
-    # ST — Transaction Set Header
-    segments.append(_seg("ST", "270", st_ctrl))
+    # ST — Transaction Set Header (include version for 5010)
+    if is_prod:
+        segments.append(_seg("ST", "270", st_ctrl, "005010X279A1"))
+    else:
+        segments.append(_seg("ST", "270", st_ctrl))
 
     # BHT — Beginning of Hierarchical Transaction
     segments.append(_seg(

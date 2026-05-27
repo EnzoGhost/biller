@@ -9,7 +9,7 @@ import sys
 import os
 
 # Resolve DB path — same logic as config.py default
-DB_PATH = os.environ.get("BILLER_DB_PATH", os.path.join(os.path.dirname(__file__), "..", "biller.db"))
+DB_PATH = os.environ.get("BILLER_DB_PATH", os.path.join(os.path.dirname(__file__), "..", "angelclaims.db"))
 DB_PATH = os.path.abspath(DB_PATH)
 
 NEW_COLUMNS = [

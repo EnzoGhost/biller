@@ -442,9 +442,55 @@ def parse_271(x12_string: str) -> dict[str, Any]:
             reject_code = _safe(seg, 1)
             reject_reason = _safe(seg, 3)
             reject_follow = _safe(seg, 4)
-            result["errors"].append(
-                f"AAA rejection: code={reject_code} reason={reject_reason} follow={reject_follow}"
-            )
+            # Human-readable AAA reason codes (X12 270/271)
+            aaa_reasons = {
+                "04": "Authorized Quantity Exceeded",
+                "15": "Required Application Data Missing",
+                "33": "Input Errors",
+                "41": "Authorization/Access Restrictions",
+                "42": "Unable to Respond at Current Time",
+                "43": "Invalid/Missing Provider Identification",
+                "44": "Invalid/Missing Provider Name",
+                "45": "Invalid/Missing Provider Specialty",
+                "46": "Invalid/Missing Provider Phone Number",
+                "47": "Invalid/Missing Provider State",
+                "48": "Invalid/Missing Referring Provider ID",
+                "51": "Provider Not on File",
+                "52": "Service Dates Not Within Provider Plan Enrollment",
+                "56": "Provider Not Primary Care Physician",
+                "57": "Provider Ineligible for Inquiries",
+                "58": "Provider Not Authorized for Inquiries",
+                "60": "Date of Birth Follows Date(s) of Service",
+                "61": "Date of Death Precedes Date(s) of Service",
+                "62": "Date of Service Not Within Allowable Inquiry Period",
+                "63": "Date of Service in Future",
+                "71": "Patient Birth Date Does Not Match That for the Patient on the Database",
+                "72": "Invalid/Missing Subscriber/Insured ID",
+                "73": "Invalid/Missing Subscriber/Insured Name",
+                "74": "Invalid/Missing Subscriber/Insured Gender Code",
+                "75": "Subscriber/Insured Not Found",
+                "76": "Duplicate Subscriber/Insured ID Number",
+                "77": "Subscriber Found, Patient Not Found",
+                "78": "Subscriber/Insured Not in Group/Plan Identified",
+                "79": "Invalid Participant Identification",
+                "T4": "Payer Name or Payer Identifier Missing",
+            }
+            aaa_followups = {
+                "C": "Please Correct and Resubmit",
+                "N": "Resubmission Not Allowed",
+                "P": "Please Resubmit Original Transaction",
+                "R": "Resubmission Allowed",
+                "S": "Do Not Resubmit",
+                "W": "Please Wait 30 Days and Resubmit",
+                "X": "Please Wait 10 Days and Resubmit",
+                "Y": "Do Not Resubmit. Advise Patient to Call Plan.",
+            }
+            reason_text = aaa_reasons.get(reject_reason, reject_reason or "Unknown")
+            follow_text = aaa_followups.get(reject_follow, reject_follow or "")
+            error_msg = f"{reason_text} (AAA code {reject_reason})"
+            if follow_text:
+                error_msg += f". Action: {follow_text}"
+            result["errors"].append(error_msg)
             if result["status"] == "unknown":
                 result["status"] = "error"
 

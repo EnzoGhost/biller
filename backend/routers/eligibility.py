@@ -157,6 +157,7 @@ async def check_eligibility(
     # ── 3. Build 270 ──────────────────────────────────────────────────────────
     from routers.inmediata import _runtime_config
     submitter_id = _runtime_config.get("submitter_id") or settings.INMEDIATA_SUBMITTER_ID or settings.STEDI_ISA_SENDER_ID or "ANCLMS"
+    ws_env = _runtime_config.get("ws_env", "uat")
 
     # Get provider NPI (use first active provider)
     from models import Provider as ProviderModel
@@ -181,6 +182,7 @@ async def check_eligibility(
             provider_tax_id=provider.ein if provider and provider.ein else "",
             service_type_codes=req.service_type_codes,
             inquiry_date=req.as_of_date or date.today(),
+            environment=ws_env,
         )
     except Exception as exc:
         logger.exception("Failed to generate 270 for patient %d", req.patient_id)
@@ -201,13 +203,20 @@ async def check_eligibility(
     parsed: dict[str, Any] = {}
     status = "error"
 
-    if rt_result.success and rt_result.response:
+    # Parse 271 response even when error_count > 0 — Inmediata returns valid
+    # 271 with AAA rejection codes alongside error_count=1 / message="Unable to Process"
+    if rt_result.response:
         try:
             parsed = parse_271_summary(rt_result.response)
             status = parsed.get("status", "unknown")
+            # If our parser found errors (AAA codes), include Inmediata's message for context
+            if not rt_result.success and rt_result.message and status == "error":
+                parsed.setdefault("inmediata_message", rt_result.message)
         except Exception as exc:
             logger.warning("271 parse error for patient %d: %s", req.patient_id, exc)
             parsed = {"parse_error": str(exc)}
+            if rt_result.message:
+                parsed["inmediata_message"] = rt_result.message
             status = "unknown"
     else:
         error_msg = rt_result.message or "No response from Inmediata"
@@ -275,6 +284,7 @@ async def check_eligibility_direct(req: DirectEligibilityRequest):
             provider_tax_id=req.provider_tax_id,
             service_type_codes=req.service_type_codes,
             inquiry_date=_date.today(),
+            environment=req.inmediata_env or "prod",
         )
     except Exception as exc:
         logger.exception("check-direct: failed to generate 270")
@@ -300,13 +310,18 @@ async def check_eligibility_direct(req: DirectEligibilityRequest):
     parsed: dict[str, Any] = {}
     status = "error"
 
-    if rt_result.success and rt_result.response:
+    # Parse 271 even when error_count > 0 (Inmediata returns valid 271 with AAA codes)
+    if rt_result.response:
         try:
             parsed = parse_271_summary(rt_result.response)
             status = parsed.get("status", "unknown")
+            if not rt_result.success and rt_result.message and status == "error":
+                parsed.setdefault("inmediata_message", rt_result.message)
         except Exception as exc:
             logger.warning("check-direct: 271 parse error: %s", exc)
             parsed = {"parse_error": str(exc), "raw_response": rt_result.response}
+            if rt_result.message:
+                parsed["inmediata_message"] = rt_result.message
             status = "unknown"
     else:
         error_msg = rt_result.message or "No response from Inmediata"

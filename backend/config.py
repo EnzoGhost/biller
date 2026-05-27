@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     PORT: int = 8100
 
-    DATABASE_URL: str = "sqlite+aiosqlite:///./biller.db"
+    DATABASE_URL: str = "sqlite+aiosqlite:///./angelclaims.db"
 
     STEDI_API_KEY: str = "test_7ONIdmf.E4zgLsNHAdLr3CN3poSOZWLt"
     STEDI_ISA_SENDER_ID: str = ""
@@ -83,7 +83,7 @@ def _get_encryption_key() -> bytes:
     if "///" in db_url:
         db_path = db_url.split("///", 1)[1]
     else:
-        db_path = "./biller.db"
+        db_path = "./angelclaims.db"
     key_file = Path(db_path).resolve().parent / ".encryption_key"
 
     if key_file.exists():
