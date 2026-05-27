@@ -604,6 +604,12 @@ async def test_inmediata_connection(
         return {"success": False, "message": f"Connection test failed: {error_msg}"}
 
 
+@router.post("/test-ws-connection")
+async def test_ws_connection_alias(_: User = Depends(get_current_user)):
+    """Alias for test-connection (legacy frontend compatibility)."""
+    return await test_inmediata_connection(_)
+
+
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
 def _parse_date(date_str: str | None) -> date | None:

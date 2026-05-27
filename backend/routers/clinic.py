@@ -469,6 +469,19 @@ async def verify_join_code(
     }
 
 
+@router.get("/angelwink/status")
+async def get_angelwink_status(db: AsyncSession = Depends(get_db)):
+    """Check if an AngelWink clinic is paired. Public endpoint (no auth required)."""
+    from models import ProviderSettings
+    result = await db.execute(
+        select(ProviderSettings).where(ProviderSettings.angelwink_clinic_id.isnot(None)).limit(1)
+    )
+    ps = result.scalar_one_or_none()
+    if ps:
+        return {"paired": True, "clinic_id": ps.angelwink_clinic_id}
+    return {"paired": False}
+
+
 @router.post("/angelwink/disconnect")
 async def disconnect_angelwink(
     request: Request,

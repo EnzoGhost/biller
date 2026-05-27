@@ -444,7 +444,7 @@ export default function SettingsPage() {
         ws_password: inmWsPassword || undefined,
         ws_env: inmWsEnv,
       });
-      const res = await api.post('/inmediata/test-ws-connection');
+      const res = await api.post('/inmediata/test-connection');
       setInmTestResult(res.data);
     } catch (err: any) {
       setInmTestResult({ success: false, message: err?.response?.data?.detail || 'Connection failed' });
@@ -921,9 +921,7 @@ export default function SettingsPage() {
                         onClick={() => setInmWsEnv(env)}
                         className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
                           inmWsEnv === env
-                            ? env === 'prod'
-                              ? 'bg-red-500 text-white border-red-600'
-                              : 'bg-sky-500 text-white border-sky-600'
+                            ? 'bg-sky-500 text-white border-sky-600'
                             : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                         }`}
                       >
@@ -931,11 +929,6 @@ export default function SettingsPage() {
                       </button>
                     ))}
                   </div>
-                  {inmWsEnv === 'prod' && (
-                    <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-2 text-xs text-red-700">
-                      ⚠️ Production — claims will be submitted to Inmediata for real processing.
-                    </div>
-                  )}
                 </div>
 
                 {/* Endpoint URL (read-only) */}
@@ -973,7 +966,7 @@ export default function SettingsPage() {
                       value={inmWsPassword}
                       onChange={e => setInmWsPassword(e.target.value)}
                       className={inputClass}
-                      placeholder={inmWsConfigured ? '•••••••• (saved — enter new to change)' : 'password'}
+                      placeholder={inmWsConfigured ? '••••••••' : ''}
                       autoComplete="new-password"
                     />
                     <button
