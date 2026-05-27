@@ -1516,10 +1516,11 @@ function ClaimDetailPageInner() {
                       </button>
                     )}
                     {eligibilityResult && (() => {
-                      const rp = eligibilityResult.response_parsed || {};
+                      const rp = eligibilityResult.response_parsed || {} as Record<string, unknown>;
                       const isActive = eligibilityResult.status === 'active';
                       const isInactive = eligibilityResult.status === 'inactive';
-                      const msg = rp.reject_reason || rp.error || rp.inmediata_message || '';
+                      const errors = Array.isArray(rp.errors) ? rp.errors : [];
+                      const msg = errors.length > 0 ? errors.join('; ') : (rp.reject_reason || rp.error || rp.inmediata_message || '') as string;
                       return (
                         <div className={`mt-2 p-2.5 rounded-lg text-xs border ${
                           isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -1529,10 +1530,18 @@ function ClaimDetailPageInner() {
                           <p className="font-medium">
                             {isActive ? '✓ Eligible' : isInactive ? '✗ Inactive / Not Eligible' : `⚠ ${eligibilityResult.status}`}
                           </p>
-                          {msg && <p className="mt-0.5 text-xs opacity-80">{msg}</p>}
-                          {rp.plan_name && <p className="mt-1">Plan: {rp.plan_name}</p>}
-                          {rp.copay && <p>Copay: ${rp.copay}</p>}
-                          {rp.plan_begin_date && <p>Coverage: {rp.plan_begin_date} — {rp.plan_end_date || 'present'}</p>}
+                          {msg && <p className="mt-0.5 text-xs opacity-80">{String(msg)}</p>}
+                          {rp.plan_name && <p className="mt-1">Plan: {String(rp.plan_name)}</p>}
+                          {rp.copay && <p>Copay: ${String(rp.copay)}</p>}
+                          {rp.plan_begin_date && <p>Coverage: {String(rp.plan_begin_date)} — {String(rp.plan_end_date) || 'present'}</p>}
+                          {eligibilityResult.response_raw && (
+                            <details className="mt-2">
+                              <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">View Raw X12</summary>
+                              <pre className="mt-1 bg-slate-900 text-emerald-400 text-[10px] p-2 rounded overflow-x-auto whitespace-pre-wrap break-all">
+                                {eligibilityResult.response_raw.split('~').join('~\n')}
+                              </pre>
+                            </details>
+                          )}
                         </div>
                       );
                     })()}

@@ -38,6 +38,7 @@ interface EligibilityCheckResponse {
   member_id?: string;
   status: string;
   response_parsed?: Record<string, unknown>;
+  response_raw?: string;
   checked_at: string;
 }
 
@@ -654,11 +655,24 @@ export default function EligibilityPage() {
               {showRaw ? 'Hide' : 'Show'} Raw X12 271 Response
             </button>
             {showRaw && (
-              <pre className="mt-2 bg-slate-900 text-emerald-400 text-xs p-4 rounded-lg overflow-x-auto whitespace-pre-wrap break-all">
-                {typeof result.response_parsed === 'object'
-                  ? JSON.stringify(result.response_parsed, null, 2)
-                  : String(result.response_parsed ?? '')}
-              </pre>
+              <div className="mt-2 space-y-2">
+                {result.response_raw && (
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 mb-1">Raw X12 271</p>
+                    <pre className="bg-slate-900 text-emerald-400 text-xs p-4 rounded-lg overflow-x-auto whitespace-pre-wrap break-all">
+                      {result.response_raw.split('~').join('~\n')}
+                    </pre>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 mb-1">Parsed Response</p>
+                  <pre className="bg-slate-900 text-sky-300 text-xs p-4 rounded-lg overflow-x-auto whitespace-pre-wrap break-all">
+                    {typeof result.response_parsed === 'object'
+                      ? JSON.stringify(result.response_parsed, null, 2)
+                      : String(result.response_parsed ?? '')}
+                  </pre>
+                </div>
+              </div>
             )}
           </div>
         </div>

@@ -233,6 +233,10 @@ def generate_270(
             _clean(submitter_id)[:10],
         ))
 
+    # REF — Provider Tax ID (required by many payers for eligibility)
+    if provider_tax_id:
+        segments.append(_seg("REF", "EI", _clean(provider_tax_id)))
+
     # ──────────────────────────────────────────────────────
     # Loop 2000C — Subscriber Level (HL 3)
     # ──────────────────────────────────────────────────────

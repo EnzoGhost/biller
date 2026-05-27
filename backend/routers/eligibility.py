@@ -77,6 +77,7 @@ class EligibilityCheckResponse(BaseModel):
     member_id: Optional[str] = None
     status: str
     response_parsed: Optional[dict] = None
+    response_raw: Optional[str] = None
     checked_at: str
 
     class Config:
@@ -106,6 +107,7 @@ def _check_to_response(check: EligibilityCheck, patient: Patient | None = None) 
         member_id=check.member_id,
         status=check.status or "unknown",
         response_parsed=check.response_parsed,
+        response_raw=check.response_raw if hasattr(check, 'response_raw') else None,
         checked_at=check.checked_at.isoformat() if check.checked_at else "",
     )
 
