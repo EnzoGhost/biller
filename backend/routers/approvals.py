@@ -96,9 +96,9 @@ async def create_approval(
     try:
         import os as _os
         ANGELWINK_CLINIC_ID = _os.environ.get("ANGELWINK_CLINIC_ID", "fbfe9d71-295e-45cb-af29-5ed214460f37")
-        # Get patient name + wink_patient_id for Wink-side display
+        # Get patient name + angelwink_patient_id for Wink-side display
         patient_name = None
-        wink_patient_id = None
+        angelwink_patient_id = None
         if claim.patient_id:
             from sqlalchemy import select as sa_select
             from models import Patient
@@ -106,13 +106,13 @@ async def create_approval(
             patient = p_result.scalar_one_or_none()
             if patient:
                 patient_name = f"{patient.first_name} {patient.last_name}"
-                wink_patient_id = patient.wink_patient_id
+                angelwink_patient_id = patient.angelwink_patient_id
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
                 "http://159.65.235.231:3100/api/sync/approval-bridge",
                 json={
                     "clinic_id": ANGELWINK_CLINIC_ID,
-                        "patient_id": wink_patient_id or str(approval.patient_id) if approval.patient_id else None,
+                        "patient_id": angelwink_patient_id or str(approval.patient_id) if approval.patient_id else None,
                         "patient_name": patient_name,
                         "claim_id": approval.claim_id,
                         "request_type": approval.request_type,

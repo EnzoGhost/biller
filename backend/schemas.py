@@ -149,7 +149,7 @@ class PatientInsuranceCreate(BaseModel):
 class PatientOut(BaseModel):
     id: int
     mrn: Optional[str]
-    wink_patient_id: Optional[str]
+    angelwink_patient_id: Optional[str]
     first_name: str
     last_name: str
     dob: date

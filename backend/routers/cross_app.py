@@ -144,13 +144,13 @@ async def _process_claim_request(payload: dict, db: AsyncSession) -> Optional[in
         patient = None
         if patient_id_wink:
             res = await db.execute(
-                select(Patient).where(Patient.wink_patient_id == patient_id_wink)
+                select(Patient).where(Patient.angelwink_patient_id == patient_id_wink)
             )
             patient = res.scalar_one_or_none()
 
         if not patient:
             patient = Patient(
-                wink_patient_id=patient_id_wink or None,
+                angelwink_patient_id=patient_id_wink or None,
                 first_name=first_name,
                 last_name=last_name,
                 dob=_date(1970, 1, 1),
@@ -545,7 +545,7 @@ async def _process_claim_request(payload: dict):
         
         patient = None
         if record_number:
-            result = await db.execute(select(Patient).where(Patient.wink_patient_id == record_number))
+            result = await db.execute(select(Patient).where(Patient.angelwink_patient_id == record_number))
             patient = result.scalar_one_or_none()
         
         if not patient:
@@ -564,7 +564,7 @@ async def _process_claim_request(payload: dict):
             patient = Patient(
                 first_name=name_parts[0] if name_parts else patient_name,
                 last_name=name_parts[-1] if len(name_parts) > 1 else "",
-                wink_patient_id=record_number,
+                angelwink_patient_id=record_number,
                 dob=patient_data.get("dob") or "1900-01-01",
             )
             db.add(patient)

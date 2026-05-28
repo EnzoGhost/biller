@@ -59,7 +59,7 @@ class WinkEncounterPayload(BaseModel):
     patient_city: Optional[str] = None
     patient_state: Optional[str] = "PR"
     patient_zip: Optional[str] = None
-    wink_patient_id: Optional[str] = None
+    angelwink_patient_id: Optional[str] = None
     # Exam / Encounter
     encounter_date: str  # ISO date string
     place_of_service: str = "11"
@@ -117,10 +117,10 @@ async def receive_angelwink_encounter(
     # ── 2. Find or create patient ─────────────────────────────────────────────────
     patient = None
 
-    # Try by wink_patient_id first
-    if payload.wink_patient_id:
+    # Try by angelwink_patient_id first
+    if payload.angelwink_patient_id:
         res = await db.execute(
-            select(Patient).where(Patient.wink_patient_id == payload.wink_patient_id)
+            select(Patient).where(Patient.angelwink_patient_id == payload.angelwink_patient_id)
         )
         patient = res.scalar_one_or_none()
 
@@ -139,7 +139,7 @@ async def receive_angelwink_encounter(
         gender_str = (payload.patient_gender or "").lower()
         gender = Gender.M if gender_str == "male" else (Gender.F if gender_str == "female" else Gender.U)
         patient = Patient(
-            wink_patient_id=payload.wink_patient_id,
+            angelwink_patient_id=payload.angelwink_patient_id,
             first_name=payload.patient_first_name,
             last_name=payload.patient_last_name,
             dob=dob,
@@ -378,7 +378,7 @@ async def import_from_angelwink(
 ):
     """
     Pull patients from AngelWink's iris.db SQLite database.
-    Maps AngelWink patient schema to Biller patients, skips duplicates by wink_patient_id.
+    Maps AngelWink patient schema to Biller patients, skips duplicates by angelwink_patient_id.
     Also imports patient insurance data when available.
     """
     imported = 0
@@ -431,7 +431,7 @@ async def import_from_angelwink(
         for wp in angelwink_patients:
             # Skip if already imported
             existing = await db.execute(
-                select(Patient).where(Patient.wink_patient_id == str(wp["id"]))
+                select(Patient).where(Patient.angelwink_patient_id == str(wp["id"]))
             )
             if existing.scalar_one_or_none():
                 skipped += 1
@@ -451,7 +451,7 @@ async def import_from_angelwink(
                 gender = Gender.M if gender_str == "male" else (Gender.F if gender_str == "female" else Gender.U)
 
                 patient = Patient(
-                    wink_patient_id=str(wp["id"]),
+                    angelwink_patient_id=str(wp["id"]),
                     mrn=wp["record_number"],
                     first_name=wp["first_name"] or "",
                     last_name=wp["last_name"] or "",
@@ -554,9 +554,9 @@ async def import_angelwink_encounters(
                 skipped += 1
                 continue
 
-            # Find matching biller patient by wink_patient_id
+            # Find matching biller patient by angelwink_patient_id
             patient_result = await db.execute(
-                select(Patient).where(Patient.wink_patient_id == str(enc["patient_id"]))
+                select(Patient).where(Patient.angelwink_patient_id == str(enc["patient_id"]))
             )
             patient = patient_result.scalar_one_or_none()
             if not patient:
@@ -974,12 +974,12 @@ async def import_angelwink_invoices(
             # Find or create patient in AngelClaims
             wink_patient_id = str(inv["patient_id"])
             record_number = inv.get("record_number") or ""
-            # Try multiple lookup strategies: wink_patient_id (with/without leading zeros) + MRN
+            # Try multiple lookup strategies: angelwink_patient_id (with/without leading zeros) + MRN
             patient = None
-            # Sequential lookups: exact wink_id, zero-padded, then by MRN
+            # Sequential lookups: exact angelwink_id, zero-padded, then by MRN
             for col, val in [
-                (Patient.wink_patient_id, wink_patient_id),
-                (Patient.wink_patient_id, wink_patient_id.zfill(7)),
+                (Patient.angelwink_patient_id, wink_patient_id),
+                (Patient.angelwink_patient_id, wink_patient_id.zfill(7)),
                 (Patient.mrn, record_number),
                 (Patient.mrn, wink_patient_id.zfill(7)),
             ]:
@@ -988,8 +988,8 @@ async def import_angelwink_invoices(
                 result = await db.execute(select(Patient).where(col == val).limit(1))
                 patient = result.scalars().first()
                 if patient:
-                    if patient.wink_patient_id != wink_patient_id:
-                        patient.wink_patient_id = wink_patient_id
+                    if patient.angelwink_patient_id != wink_patient_id:
+                        patient.angelwink_patient_id = wink_patient_id
                     # Always update last name with combined last_name + last_name_2
                     ln1 = inv.get("last_name") or ""
                     ln2 = inv.get("last_name_2") or ""
@@ -1015,7 +1015,7 @@ async def import_angelwink_invoices(
                 combined_last_name = (last_name_1 + (" " + last_name_2 if last_name_2 else "")).strip()
 
                 patient = Patient(
-                    wink_patient_id=wink_patient_id,
+                    angelwink_patient_id=wink_patient_id,
                     mrn=inv["record_number"],
                     first_name=inv["first_name"] or "",
                     last_name=combined_last_name,
@@ -1566,7 +1566,7 @@ async def import_invoice(
     patient = None
     if payload.patient.id:
         res = await db.execute(
-            select(Patient).where(Patient.wink_patient_id == str(payload.patient.id))
+            select(Patient).where(Patient.angelwink_patient_id == str(payload.patient.id))
         )
         patient = res.scalar_one_or_none()
 
@@ -1588,7 +1588,7 @@ async def import_invoice(
         first = name_parts[0] if name_parts else payload.patient.name
         last = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
         patient = Patient(
-            wink_patient_id=str(payload.patient.id) if payload.patient.id else None,
+            angelwink_patient_id=str(payload.patient.id) if payload.patient.id else None,
             first_name=first,
             last_name=last,
             dob=date(1970, 1, 1),

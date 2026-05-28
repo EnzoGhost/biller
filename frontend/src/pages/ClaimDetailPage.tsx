@@ -1582,8 +1582,8 @@ function ClaimDetailPageInner() {
       </div>
 
       {/* Patient Documents (Insurance Card, License, Signature) */}
-      {/* Show patient documents for any claim with a wink patient ID or vistanet source */}
-      {(claim.source === 'vistanet' || claim.source === 'wink' || claim.patient?.wink_patient_id) && (
+      {/* Show patient documents for any claim with an angelwink patient ID or vistanet source */}
+      {(claim.source === 'vistanet' || claim.source === 'wink' || claim.patient?.angelwink_patient_id) && (
         <ErrorBoundary fallback={<div className="p-4 text-red-500 text-sm">Error loading patient documents</div>}>
           <PatientDocuments
             claimId={claim.id}
@@ -1591,8 +1591,8 @@ function ClaimDetailPageInner() {
             setShowDocs={setShowDocs}
             fullSizeImg={fullSizeImg}
             setFullSizeImg={setFullSizeImg}
-            source={claim.patient?.wink_patient_id ? 'wink' : claim.source}
-            winkPatientId={claim.patient?.wink_patient_id || claim.patient?.mrn}
+            source={claim.patient?.angelwink_patient_id ? 'wink' : claim.source}
+            winkPatientId={claim.patient?.angelwink_patient_id || claim.patient?.mrn}
             insuranceInfo={(() => {
               const ins = claim.patient?.insurances?.find((i: any) => i.payer_id === claim.payer_id) ?? claim.patient?.insurances?.[0];
               return {

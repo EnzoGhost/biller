@@ -71,7 +71,7 @@ export interface PatientInsurance {
 export interface Patient {
   id: number;
   mrn?: string;
-  wink_patient_id?: string;
+  angelwink_patient_id?: string;
   first_name: string;
   last_name: string;
   dob: string;

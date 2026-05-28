@@ -608,10 +608,10 @@ async def find_or_create_patient(
     """Find existing patient by record number or create a new one."""
     from sqlalchemy.orm import selectinload as _sil
 
-    # Try to find by wink_patient_id (VistaNet record)
+    # Try to find by angelwink_patient_id (VistaNet record)
     result = await db.execute(
         select(Patient).options(_sil(Patient.insurances))
-        .where(Patient.wink_patient_id == parsed["record_id"]).limit(1)
+        .where(Patient.angelwink_patient_id == parsed["record_id"]).limit(1)
     )
     patient = result.scalars().first()
     if patient:
@@ -720,7 +720,7 @@ async def find_or_create_patient(
         address_line1 = address_clean
 
     patient = Patient(
-        wink_patient_id=parsed["record_id"],
+        angelwink_patient_id=parsed["record_id"],
         mrn=parsed["record_num"],
         first_name=first_name,
         last_name=last_name,

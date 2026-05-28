@@ -4,6 +4,11 @@ import { AnimatePresence, motion } from 'framer-motion';
 import api from '../../lib/api';
 import { useAuthStore } from '../../hooks/useAuth';
 
+function makeUserProvider(user: { id?: number; email?: string; name?: string } | null): ProviderOption | null {
+  if (!user) return null;
+  return { id: user.id ?? 0, name: user.name ?? user.email ?? 'Me', npi: '' };
+}
+
 interface ProviderOption {
   id: number;
   name?: string;
@@ -23,6 +28,8 @@ export default function ProviderSwitcher({ collapsed }: { collapsed: boolean }) 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
+  const { user } = useAuthStore();
+
   useEffect(() => {
     api.get('/providers').then((res: { data: { items?: ProviderOption[] } | ProviderOption[] }) => {
       const data = res.data as { items?: ProviderOption[] } | ProviderOption[];
@@ -32,8 +39,12 @@ export default function ProviderSwitcher({ collapsed }: { collapsed: boolean }) 
       const savedId = localStorage.getItem('angelclaims_active_provider');
       const saved = list.find(p => String(p.id) === savedId);
       setCurrent(saved || list[0] || null);
-    }).catch(() => {});
-  }, []);
+    }).catch(() => {
+      // API failed — show current user info as fallback so switcher still renders
+      const fallback = makeUserProvider(user as { id?: number; email?: string; name?: string } | null);
+      if (fallback) setCurrent(fallback);
+    });
+  }, [user]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {

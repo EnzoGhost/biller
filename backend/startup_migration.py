@@ -36,6 +36,7 @@ def run_startup_migration():
         ],
         "patients": [
             ("provider_id", "ALTER TABLE patients ADD COLUMN provider_id INTEGER"),
+            ("angelwink_patient_id", "ALTER TABLE patients ADD COLUMN angelwink_patient_id VARCHAR(50)"),
         ],
         "fee_schedule": [
             ("provider_id", "ALTER TABLE fee_schedule ADD COLUMN provider_id INTEGER"),
@@ -69,6 +70,20 @@ def run_startup_migration():
                 except Exception as e:
                     print(f"[startup_migration] Warning: {e}")
     
+    # ── Rename wink_patient_id → angelwink_patient_id in patients table ──────
+    try:
+        patient_cols = [c[1] for c in conn.execute("PRAGMA table_info(patients)").fetchall()]
+        if "wink_patient_id" in patient_cols and "angelwink_patient_id" not in patient_cols:
+            # SQLite doesn't support RENAME COLUMN before 3.25.0, use workaround
+            conn.execute("ALTER TABLE patients ADD COLUMN angelwink_patient_id VARCHAR(50)")
+            conn.execute("UPDATE patients SET angelwink_patient_id = wink_patient_id WHERE wink_patient_id IS NOT NULL")
+            print("[startup_migration] Migrated wink_patient_id → angelwink_patient_id in patients")
+        elif "wink_patient_id" in patient_cols and "angelwink_patient_id" in patient_cols:
+            # Both exist — copy any remaining data then we're done (old column stays harmlessly)
+            conn.execute("UPDATE patients SET angelwink_patient_id = wink_patient_id WHERE angelwink_patient_id IS NULL AND wink_patient_id IS NOT NULL")
+    except Exception as e:
+        print(f"[startup_migration] Warning: wink_patient_id rename: {e}")
+
     conn.commit()
     conn.close()
     print("[startup_migration] Complete")

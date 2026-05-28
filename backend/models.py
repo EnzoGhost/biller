@@ -270,7 +270,7 @@ class Patient(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     provider_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("providers.id"), nullable=True, index=True)
     # External IDs
-    wink_patient_id: Mapped[str] = mapped_column(String(50), nullable=True, index=True)
+    angelwink_patient_id: Mapped[str] = mapped_column(String(50), nullable=True, index=True)
     mrn: Mapped[str] = mapped_column(String(50), index=True, nullable=True)  # unique per-provider, not globally
     # Demographics
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
