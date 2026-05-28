@@ -561,11 +561,17 @@ async def _process_claim_request(payload: dict):
                 patient = result.scalar_one_or_none()
 
         if not patient:
+            from datetime import date as _date
+            name_parts = patient_name.split()
+            try:
+                patient_dob = _date.fromisoformat(patient_data.get('dob', '1900-01-01')[:10])
+            except (ValueError, TypeError):
+                patient_dob = _date(1900, 1, 1)
             patient = Patient(
                 first_name=name_parts[0] if name_parts else patient_name,
                 last_name=name_parts[-1] if len(name_parts) > 1 else "",
                 angelwink_patient_id=record_number,
-                dob=patient_data.get("dob") or "1900-01-01",
+                dob=patient_dob,
             )
             db.add(patient)
             await db.flush()
