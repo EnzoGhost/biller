@@ -21,10 +21,7 @@ from sqlalchemy import select, text
 from pydantic import BaseModel
 
 from database import get_db
-from models import (
-    ApprovalRequest, Claim, ClaimStatus, Patient, Provider,
-    Payer, ServiceLine, PatientInsurance, Gender
-)
+from models import ApprovalRequest, Claim, Patient
 from auth import get_current_user
 from models import User
 
@@ -126,129 +123,70 @@ class PollResult(BaseModel):
 
 async def _process_claim_request(payload: dict, db: AsyncSession) -> Optional[int]:
     """
-    Convert a claim_request message from AngelWink into a DRAFT claim.
-    Mirrors the logic from /api/import/wink/encounter.
+    Convert a claim_request relay message from AngelWink into a DRAFT claim.
+
+    New simplified flow: payload only needs {invoice_number, patient_id, clinic_id}.
+    Delegates to _import_single_invoice (same code path as batch import) so that
+    relay-created claims are identical to manually imported ones.
     """
-    import random, string as _string
-    from datetime import date as _date
-
     try:
-        # ── Patient ──────────────────────────────────────────────────────────
-        patient_data = payload.get("patient", {})
-        patient_id_wink = str(patient_data.get("id", ""))
-        patient_name = patient_data.get("name", "")
-        name_parts = patient_name.strip().split(" ", 2)
-        first_name = name_parts[0] if len(name_parts) > 0 else "Unknown"
-        last_name = name_parts[1] if len(name_parts) > 1 else "Unknown"
+        # Extract the minimal fields from the simplified relay payload
+        invoice_number = payload.get("invoice_number") or payload.get("invoice_id")
+        if not invoice_number:
+            logger.warning("[cross_app] claim_request missing invoice_number — skipping")
+            return None
 
-        patient = None
-        if patient_id_wink:
-            res = await db.execute(
-                select(Patient).where(Patient.angelwink_patient_id == patient_id_wink)
-            )
-            patient = res.scalar_one_or_none()
-
-        if not patient:
-            patient = Patient(
-                angelwink_patient_id=patient_id_wink or None,
-                first_name=first_name,
-                last_name=last_name,
-                dob=_date(1970, 1, 1),
-            )
-            db.add(patient)
-            await db.flush()
-
-        # ── Service date ─────────────────────────────────────────────────────
-        raw_date = payload.get("date", "")
+        # invoice_number is the numeric invoice ID on the sync server
         try:
-            svc_date = _date.fromisoformat(raw_date[:10])
+            invoice_id = int(invoice_number)
         except (ValueError, TypeError):
-            svc_date = _date.today()
+            logger.warning("[cross_app] claim_request invoice_number not numeric: %s", invoice_number)
+            return None
 
-        # ── Provider (use first active) ───────────────────────────────────────
-        prov_res = await db.execute(
-            select(Provider).where(Provider.is_active == True).limit(1)
-        )
-        provider = prov_res.scalar_one_or_none()
-        provider_id = provider.id if provider else 1
+        clinic_id = str(payload.get("clinic_id") or "")
 
-        # ── Payer ─────────────────────────────────────────────────────────────
-        payer_id: Optional[int] = None
-        ins_name = payload.get("insurance")
-        if ins_name:
-            payer_res = await db.execute(
-                select(Payer).where(
-                    Payer.name.ilike(f"%{ins_name}%"),
-                    Payer.is_active == True,
-                ).limit(1)
+        # Get provider_id and default_payer_id from org settings
+        provider_id = 1
+        default_payer_id = 1
+        try:
+            from models import ProviderSettings
+            ps_res = await db.execute(
+                select(ProviderSettings).where(ProviderSettings.angelwink_pairing_key.isnot(None)).limit(1)
             )
-            p = payer_res.scalar_one_or_none()
-            if p:
-                payer_id = p.id
+            ps = ps_res.scalar_one_or_none()
+            if ps:
+                provider_id = ps.provider_id or 1
+                if not clinic_id and ps.angelwink_clinic_id:
+                    clinic_id = ps.angelwink_clinic_id
+        except Exception as e:
+            logger.warning("[cross_app] Could not read ProviderSettings: %s", e)
 
-        # ── Diagnoses ─────────────────────────────────────────────────────────
-        dx_codes = payload.get("diagnosis_codes", [])
-        if isinstance(dx_codes, str):
-            try:
-                dx_codes = json.loads(dx_codes)
-            except Exception:
-                dx_codes = []
+        if not clinic_id:
+            # Fall back to env var
+            import os
+            clinic_id = os.environ.get("ANGELWINK_CLINIC_ID", "")
 
-        # ── Claim ─────────────────────────────────────────────────────────────
-        ts = datetime.utcnow().strftime("%Y%m%d")
-        suffix = "".join(random.choices(_string.ascii_uppercase + _string.digits, k=6))
-        total_billed = float(payload.get("total", 0.0))
+        if not clinic_id:
+            logger.warning("[cross_app] No clinic_id available for claim_request (invoice %s)", invoice_id)
+            return None
 
-        external_ref = f"wink_inv_{payload.get('invoice_number', '')}" if payload.get("invoice_number") else None
-
-        # Duplicate check
-        if external_ref:
-            dup_res = await db.execute(
-                select(Claim).where(Claim.external_ref == external_ref)
-            )
-            dup = dup_res.scalar_one_or_none()
-            if dup:
-                logger.info("[cross_app] Duplicate claim_request for %s — skipping", external_ref)
-                return dup.id
-
-        claim = Claim(
-            claim_number=f"CLM-{ts}-{suffix}",
-            patient_id=patient.id,
+        # Use the existing import infrastructure — same logic as batch import
+        from routers.imports import _import_single_invoice
+        claim_id = await _import_single_invoice(
+            invoice_id=invoice_id,
+            clinic_id=clinic_id,
             provider_id=provider_id,
-            payer_id=payer_id or 1,
-            service_date_from=svc_date,
-            service_date_to=svc_date,
-            diagnosis_codes=dx_codes,
-            total_billed=total_billed,
-            prior_auth_number=payload.get("prior_auth"),
-            status=ClaimStatus.DRAFT,
-            source="wink_relay",
-            external_ref=external_ref,
+            default_payer_id=default_payer_id,
+            db=db,
         )
-        db.add(claim)
-        await db.flush()
 
-        # ── Service lines ─────────────────────────────────────────────────────
-        cpt_codes = payload.get("cpt_codes", [])
-        for i, cpt in enumerate(cpt_codes):
-            if not cpt.get("code"):
-                continue
-            mods = cpt.get("modifiers", [])
-            sl = ServiceLine(
-                claim_id=claim.id,
-                cpt_code=cpt["code"],
-                description=cpt.get("description"),
-                units=1,
-                amount=0.0,
-                modifiers=mods,
-                diagnosis_pointers=[0] if dx_codes else [],
-                line_order=i + 1,
-            )
-            db.add(sl)
+        if claim_id:
+            logger.info("[cross_app] Imported invoice %s as claim_id=%s (clinic=%s)",
+                        invoice_id, claim_id, clinic_id)
+        else:
+            logger.info("[cross_app] Invoice %s already imported or not found", invoice_id)
 
-        await db.commit()
-        logger.info("[cross_app] Created DRAFT claim %s from relay claim_request", claim.claim_number)
-        return claim.id
+        return claim_id
 
     except Exception as e:
         await db.rollback()
@@ -299,7 +237,6 @@ async def _process_dx_approval_response(payload: dict, db: AsyncSession) -> None
         await db.commit()
 
         # Log a notification for Ruth via audit_log (visible in dashboard)
-        # Patient display name
         patient_name = f"Patient #{approval.patient_id}" if approval.patient_id else "unknown patient"
         codes_str = ", ".join(approved_codes) if approved_codes else "no codes"
 
@@ -462,9 +399,11 @@ async def cross_app_status(_: User = Depends(get_current_user)):
 # ── Background Relay Polling ──────────────────────────────────────────────────
 
 async def poll_relay_background():
-    """Background task that polls the sync server relay every 30 seconds for new messages."""
+    """Background task that polls the sync server relay every 30 seconds for new messages.
+    Uses a proper DB session and the canonical _run_poll function — no duplicate logic.
+    """
     import asyncio
-    import httpx
+    from database import AsyncSessionLocal
 
     logger.info("[cross_app] Background relay polling started (every 30s)")
     while True:
@@ -474,47 +413,11 @@ async def poll_relay_background():
             if not token:
                 continue
 
-            sync_url = "https://api.angelwink.app"
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(
-                    f"{sync_url}/api/cross-app/pending",
-                    params={"target_app": "angelclaims"},
-                    headers={"X-Device-Token": token},
-                )
-                if resp.status_code != 200:
-                    continue
-                messages = resp.json()
-                if not isinstance(messages, list):
-                    messages = messages.get("messages", [])
-
-                for msg in messages:
-                    msg_type = msg.get("message_type", "")
-                    payload = msg.get("payload", {})
-                    msg_id = msg.get("id")
-
-                    try:
-                        if msg_type == "claim_request":
-                            await _process_claim_request(payload)
-                        elif msg_type == "dx_approval_response":
-                            await _process_approval_response(payload)
-                        else:
-                            logger.info("[cross_app] Unknown message type: %s", msg_type)
-                    except Exception as e:
-                        logger.warning("[cross_app] Error processing message %s: %s", msg_id, e)
-                    finally:
-                        # ALWAYS acknowledge — even on error or dedup skip
-                        # to prevent infinite re-delivery of the same message
-                        if msg_id:
-                            try:
-                                await client.post(
-                                    f"{sync_url}/api/cross-app/{msg_id}/ack",
-                                    headers={"X-Device-Token": token},
-                                )
-                            except Exception:
-                                pass  # best effort ack
-
-                if messages:
-                    logger.info("[cross_app] Processed %d relay messages", len(messages))
+            async with AsyncSessionLocal() as db:
+                result = await _run_poll(db)
+                if result.processed > 0 or result.errors:
+                    logger.info("[cross_app] Background poll: processed=%d errors=%d",
+                              result.processed, len(result.errors))
 
         except asyncio.CancelledError:
             logger.info("[cross_app] Background polling stopped")
@@ -522,103 +425,3 @@ async def poll_relay_background():
         except Exception as e:
             logger.warning("[cross_app] Background poll error: %s", e)
             await asyncio.sleep(10)
-
-
-async def _process_claim_request(payload: dict):
-    """Process an incoming claim_request from the relay."""
-    from database import AsyncSessionLocal
-    from models import Claim, Patient, Payer
-    from sqlalchemy import select
-    import random, string
-
-    async with AsyncSessionLocal() as db:
-        # Dedup by invoice number
-        inv_num = payload.get("invoice_number", "")
-        external_ref = f"wink_inv_{inv_num}"
-        existing = await db.execute(
-            select(Claim).where(Claim.source == "wink", Claim.external_ref == external_ref)
-        )
-        if existing.scalar_one_or_none():
-            logger.info("[cross_app] Claim already exists for invoice %s, skipping", inv_num)
-            return
-
-        # Find or create patient
-        patient_data = payload.get("patient", {})
-        patient_name = patient_data.get("name", "Unknown")
-        record_number = patient_data.get("record_number")
-        
-        patient = None
-        if record_number:
-            result = await db.execute(select(Patient).where(Patient.angelwink_patient_id == record_number))
-            patient = result.scalar_one_or_none()
-        
-        if not patient:
-            # Search by name
-            name_parts = patient_name.split()
-            if len(name_parts) >= 2:
-                result = await db.execute(
-                    select(Patient).where(
-                        Patient.first_name.ilike(name_parts[0]),
-                        Patient.last_name.ilike(name_parts[-1])
-                    )
-                )
-                patient = result.scalar_one_or_none()
-
-        if not patient:
-            from datetime import date as _date
-            name_parts = patient_name.split()
-            try:
-                patient_dob = _date.fromisoformat(patient_data.get('dob', '1900-01-01')[:10])
-            except (ValueError, TypeError):
-                patient_dob = _date(1900, 1, 1)
-            patient = Patient(
-                first_name=name_parts[0] if name_parts else patient_name,
-                last_name=name_parts[-1] if len(name_parts) > 1 else "",
-                angelwink_patient_id=record_number,
-                dob=patient_dob,
-            )
-            db.add(patient)
-            await db.flush()
-
-        # Create claim
-        from datetime import date
-        claim_num = f"WK-{''.join(random.choices(string.digits, k=6))}"
-        try:
-            svc_date = date.fromisoformat(payload.get("date", "")[:10])
-        except (ValueError, TypeError):
-            svc_date = date.today()
-
-        # Find payer by name
-        insurance_name = payload.get("insurance", "")
-        payer = None
-        if insurance_name:
-            result = await db.execute(select(Payer).where(Payer.name.ilike(f"%{insurance_name}%")))
-            payer = result.scalar_one_or_none()
-
-        # Get default provider (first active)
-        from models import Provider as ProviderModel
-        provider_result = await db.execute(select(ProviderModel).where(ProviderModel.is_active == True).limit(1))
-        default_provider = provider_result.scalar_one_or_none()
-
-        claim = Claim(
-            claim_number=claim_num,
-            patient_id=patient.id,
-            provider_id=default_provider.id if default_provider else 1,
-            payer_id=payer.id if payer else None,
-            service_date_from=svc_date,
-            service_date_to=svc_date,
-            source="wink",
-            status="draft",
-            external_ref=external_ref,
-            place_of_service=payload.get("place_of_service", "11"),
-            diagnosis_codes=payload.get("diagnosis_codes", []),
-        )
-        db.add(claim)
-        await db.commit()
-        logger.info("[cross_app] Created claim %s for invoice %s (patient: %s)", claim_num, inv_num, patient_name)
-
-
-async def _process_approval_response(payload: dict):
-    """Process a DX approval response from a doctor in AngelWink."""
-    logger.info("[cross_app] DX approval response: %s", payload)
-    # TODO: Update claim DX codes and notify Ruth
