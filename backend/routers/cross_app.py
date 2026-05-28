@@ -499,15 +499,19 @@ async def poll_relay_background():
                             await _process_approval_response(payload)
                         else:
                             logger.info("[cross_app] Unknown message type: %s", msg_type)
-
-                        # Acknowledge
-                        if msg_id:
-                            await client.post(
-                                f"{sync_url}/api/cross-app/{msg_id}/ack",
-                                headers={"X-Device-Token": token},
-                            )
                     except Exception as e:
                         logger.warning("[cross_app] Error processing message %s: %s", msg_id, e)
+                    finally:
+                        # ALWAYS acknowledge — even on error or dedup skip
+                        # to prevent infinite re-delivery of the same message
+                        if msg_id:
+                            try:
+                                await client.post(
+                                    f"{sync_url}/api/cross-app/{msg_id}/ack",
+                                    headers={"X-Device-Token": token},
+                                )
+                            except Exception:
+                                pass  # best effort ack
 
                 if messages:
                     logger.info("[cross_app] Processed %d relay messages", len(messages))
