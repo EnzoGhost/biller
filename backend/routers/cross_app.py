@@ -591,12 +591,19 @@ async def _process_claim_request(payload: dict):
             result = await db.execute(select(Payer).where(Payer.name.ilike(f"%{insurance_name}%")))
             payer = result.scalar_one_or_none()
 
+        # Get default provider (first active)
+        from models import Provider as ProviderModel
+        provider_result = await db.execute(select(ProviderModel).where(ProviderModel.is_active == True).limit(1))
+        default_provider = provider_result.scalar_one_or_none()
+
         claim = Claim(
             claim_number=claim_num,
             patient_id=patient.id,
+            provider_id=default_provider.id if default_provider else 1,
             payer_id=payer.id if payer else None,
             service_date_from=svc_date,
             service_date_to=svc_date,
+            source="wink",
             status="draft",
             external_ref=external_ref,
             place_of_service=payload.get("place_of_service", "11"),
