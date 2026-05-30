@@ -43,7 +43,7 @@ class DirectEligibilityRequest(BaseModel):
     # Inmediata creds
     inmediata_username: str
     inmediata_password: str
-    inmediata_env: str = "uat"   # "uat" or "prod"
+    inmediata_env: str = "prod"   # "prod" or "prod"
     # Subscriber / patient
     subscriber_first_name: str
     subscriber_last_name: str
@@ -159,7 +159,7 @@ async def check_eligibility(
     # ── 3. Build 270 ──────────────────────────────────────────────────────────
     from routers.inmediata import _runtime_config
     submitter_id = _runtime_config.get("submitter_id") or settings.INMEDIATA_SUBMITTER_ID or settings.STEDI_ISA_SENDER_ID or "ANCLMS"
-    ws_env = _runtime_config.get("ws_env", "uat")
+    ws_env = _runtime_config.get("ws_env", "prod")
 
     # Get provider NPI (use first active provider)
     from models import Provider as ProviderModel
@@ -335,16 +335,28 @@ async def check_eligibility_direct(req: DirectEligibilityRequest):
     return {
         "status": status,
         "plan_name": parsed.get("plan_name"),
-        "plan_begin_date": parsed.get("plan_begin_date"),
-        "plan_end_date": parsed.get("plan_end_date"),
-        "group_name": parsed.get("group_name"),
-        "group_number": parsed.get("group_number"),
-        "copays": parsed.get("copays", []),
-        "deductibles": parsed.get("deductibles", []),
-        "benefits": parsed.get("benefits", []),
+        # New field names from parse_271_summary
+        "effective_date": parsed.get("effective_date"),
+        "term_date": parsed.get("term_date"),
+        "member_id": parsed.get("member_id"),
         "subscriber_name": parsed.get("subscriber_name"),
         "subscriber_id": parsed.get("subscriber_id"),
         "payer_name": parsed.get("payer_name"),
+        "copay": parsed.get("copay", []),
+        "deductible": parsed.get("deductible", []),
+        "coinsurance": parsed.get("coinsurance", []),
+        "out_of_pocket": parsed.get("out_of_pocket", []),
+        "covered_services": parsed.get("covered_services", []),
+        "non_covered": parsed.get("non_covered", []),
+        # Legacy field names (backward compat for old frontends)
+        "plan_begin_date": parsed.get("effective_date"),
+        "plan_end_date": parsed.get("term_date"),
+        "copays": parsed.get("copay", []),
+        "deductibles": parsed.get("deductible", []),
+        "benefits": parsed.get("benefits", []),
+        "group_name": parsed.get("group_name"),
+        "group_number": parsed.get("group_number"),
+        # Errors
         "error": parsed.get("error") or ('; '.join(parsed.get("errors", [])) if parsed.get("errors") else None),
         "errors": parsed.get("errors", []),
         "raw": parsed,

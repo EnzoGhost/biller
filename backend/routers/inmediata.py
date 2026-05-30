@@ -91,7 +91,7 @@ async def _persist_ws_config_to_db(db: AsyncSession):
         ), {
             "u": _runtime_config.get("ws_username", ""),
             "p": _runtime_config.get("ws_password", ""),
-            "e": _runtime_config.get("ws_env", "uat"),
+            "e": _runtime_config.get("ws_env", "prod"),
             "s": _runtime_config.get("submitter_id", ""),
         })
         await db.commit()
@@ -512,7 +512,7 @@ async def get_inmediata_config(
         "submitter_id":     _runtime_config.get("submitter_id", settings.INMEDIATA_SUBMITTER_ID or ""),
         "ws_username":      _runtime_config.get("ws_username", settings.INMEDIATA_WS_USERNAME or ""),
         "ws_has_password":  bool(_runtime_config.get("ws_password") or settings.INMEDIATA_WS_PASSWORD),
-        "ws_env":           _runtime_config.get("ws_env", settings.INMEDIATA_WS_ENV or "uat"),
+        "ws_env":           _runtime_config.get("ws_env", settings.INMEDIATA_WS_ENV or "prod"),
     }
 
 
@@ -583,7 +583,7 @@ async def test_inmediata_connection(
 
     username = _runtime_config.get("ws_username")
     password = _runtime_config.get("ws_password")
-    env = _runtime_config.get("ws_env", "uat")
+    env = _runtime_config.get("ws_env", "prod")
 
     if not username or not password:
         return {"success": False, "message": "Inmediata WS credentials not configured. Save credentials first."}

@@ -157,7 +157,7 @@ class SecureTrackClient:
         from routers.inmediata import _runtime_config
         self.username = username or _runtime_config.get("ws_username") or settings.INMEDIATA_WS_USERNAME
         self.password = password or _runtime_config.get("ws_password") or settings.INMEDIATA_WS_PASSWORD
-        self.env = (env or _runtime_config.get("ws_env") or settings.INMEDIATA_WS_ENV or "uat").lower()
+        self.env = (env or _runtime_config.get("ws_env") or settings.INMEDIATA_WS_ENV or "prod").lower()
         # Use caller-provided URL first, then env-based default
         self.endpoint = endpoint_url or ENDPOINTS.get(self.env, ENDPOINTS["uat"])
         self.timeout = timeout
