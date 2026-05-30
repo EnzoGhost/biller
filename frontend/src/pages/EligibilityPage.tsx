@@ -49,6 +49,7 @@ interface EligibilityCheckResponse {
   payer_name?: string;
   payer_id?: string;
   member_id?: string;
+  subscriber_name?: string;
   status: string;
   response_parsed?: Record<string, unknown>;
   response_raw?: string;
