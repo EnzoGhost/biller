@@ -8,6 +8,19 @@ import {
 import api from '../lib/api';
 import { formatDate } from '../lib/dates';
 import DateDropdown from '../components/ui/DateDropdown';
+
+/** Format YYYYMMDD or YYYY-MM-DD dates to human-readable (e.g., "March 1, 2026") */
+function formatEligDate(raw: string | null | undefined): string {
+  if (!raw) return 'Not listed';
+  // Handle YYYYMMDD
+  const m8 = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (m8) {
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    return `${months[parseInt(m8[2],10)-1]} ${parseInt(m8[3],10)}, ${m8[1]}`;
+  }
+  // Fall back to formatDate for YYYY-MM-DD
+  return formatDate(raw);
+}
 import type { Patient } from '../types';
 import ScannerModal from '../components/scanner/ScannerModal';
 
@@ -305,7 +318,7 @@ export default function EligibilityPage() {
         patient_id: selectedPatient.id,
         insurance_id: patientInsuranceId,
         payer_id_override: selectedPayer?.inmediata_payer_id ?? undefined,
-        service_type_codes: [serviceType],
+        service_type_codes: [serviceType, 'BV'],  // Include optometry/vision code
       });
       setResult(data);
       // Refresh history if open
@@ -557,9 +570,10 @@ export default function EligibilityPage() {
               <p className="font-bold text-base capitalize">
                 {isEligible ? '✓ Active / Eligible' : '✗ Inactive / Not Eligible'}
               </p>
-              {result.payer_name && (
+              {(result.subscriber_name || result.payer_name) && (
                 <p className="text-sm opacity-80">
-                  {result.payer_name} · Member: {result.member_id}
+                  {result.subscriber_name && <>{result.subscriber_name} · </>}
+                  {result.payer_name}{result.member_id && ` · Member: ${result.member_id}`}
                 </p>
               )}
             </div>
@@ -569,8 +583,8 @@ export default function EligibilityPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {[
               { label: 'Plan Name',       value: (parsed.plan_name as string) || '—' },
-              { label: 'Coverage Start',   value: (parsed.effective_date || parsed.plan_begin) ? formatDate((parsed.effective_date || parsed.plan_begin) as string) : '—' },
-              { label: 'Coverage End',     value: (parsed.term_date || parsed.plan_end) ? formatDate((parsed.term_date || parsed.plan_end) as string) : '—' },
+              { label: 'Coverage Start',   value: formatEligDate((parsed.effective_date || parsed.plan_begin) as string) },
+              { label: 'Coverage End',     value: formatEligDate((parsed.term_date || parsed.plan_end) as string) },
             ].map(({ label, value }) => (
               <div key={label} className="bg-slate-50 rounded-lg p-3">
                 <p className="text-xs text-slate-500 mb-1">{label}</p>
