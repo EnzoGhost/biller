@@ -173,7 +173,7 @@ async def check_eligibility(
             subscriber_first=insurance.subscriber_name.split()[0] if insurance.subscriber_name else patient.first_name,
             subscriber_dob=insurance.subscriber_dob or patient.dob,
             subscriber_gender=patient.gender.value if patient.gender else "",
-            member_id=insurance.member_id,
+            member_id=insurance.member_id.replace('-', '') if insurance.member_id else "",
             group_number=insurance.group_number or "",
             payer_id=payer_edi_id,
             payer_name=payer.name,

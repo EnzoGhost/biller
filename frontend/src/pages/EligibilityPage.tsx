@@ -62,10 +62,14 @@ interface BenefitItem {
   amount?: number;
   percent?: number;
   network?: string;
+  remaining?: number;
 }
 
 interface ParsedEligibility {
   status?: string;
+  subscriber_name?: string;
+  member_id?: string;
+  payer_name?: string;
   plan_name?: string;
   plan_begin?: string;
   plan_end?: string;
@@ -556,142 +560,135 @@ export default function EligibilityPage() {
       )}
 
       {/* Result */}
-      {result && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6 space-y-5">
-          {/* Status badge */}
-          <div
-            className={`flex items-center gap-3 p-4 rounded-lg ${
-              isEligible ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'
-            }`}
-          >
-            {isEligible
-              ? <CheckCircle className="w-6 h-6 text-emerald-600 shrink-0" />
-              : <XCircle className="w-6 h-6 text-red-500 shrink-0" />}
-            <div>
-              <p className="font-bold text-base capitalize">
-                {isEligible ? '✓ Active / Eligible' : '✗ Inactive / Not Eligible'}
-              </p>
-              {(result.subscriber_name || result.payer_name) && (
-                <p className="text-sm opacity-80">
-                  {result.subscriber_name && <>{result.subscriber_name} · </>}
-                  {result.payer_name}{result.member_id && ` · Member: ${result.member_id}`}
-                </p>
-              )}
+      {result && (() => {
+        const effectiveDate = parsed.effective_date || parsed.plan_begin || null;
+        const termDate = parsed.term_date || parsed.plan_end || null;
+        const copays = (Array.isArray(parsed.copay) && parsed.copay.length > 0 ? parsed.copay : []) as BenefitItem[];
+        const deductibles = (Array.isArray(parsed.deductible) && parsed.deductible.length > 0 ? parsed.deductible : []) as BenefitItem[];
+        const coinsurance = (Array.isArray(parsed.coinsurance) ? parsed.coinsurance : []) as BenefitItem[];
+        const outOfPocket = (Array.isArray(parsed.out_of_pocket) ? parsed.out_of_pocket : []) as BenefitItem[];
+        const hasPatientCosts = copays.length > 0 || deductibles.length > 0 || coinsurance.length > 0 || outOfPocket.length > 0;
+        const subscriberName = parsed.subscriber_name as string | undefined || result.subscriber_name;
+        const memberId = parsed.member_id as string | undefined || result.member_id;
+        const payerName = parsed.payer_name as string | undefined || result.payer_name;
+        const planName = parsed.plan_name as string | undefined;
+        return (
+          <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6 space-y-2.5">
+
+            {/* Status badge */}
+            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+              isEligible
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : result.status === 'inactive'
+                ? 'bg-red-50 text-red-700 border-red-100'
+                : 'bg-slate-50 text-slate-600 border-slate-200'
+            }`}>
+              {isEligible ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+              {isEligible ? 'Active Coverage' : result.status === 'inactive' ? 'Inactive' : 'Unknown'}
             </div>
-          </div>
 
-          {/* Plan details */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[
-              { label: 'Plan Name',       value: (parsed.plan_name as string) || '—' },
-              { label: 'Coverage Start',   value: formatEligDate((parsed.effective_date || parsed.plan_begin) as string) },
-              { label: 'Coverage End',     value: formatEligDate((parsed.term_date || parsed.plan_end) as string) },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-slate-50 rounded-lg p-3">
-                <p className="text-xs text-slate-500 mb-1">{label}</p>
-                <p className="text-sm font-semibold text-slate-800">{value}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Benefits breakdown */}
-          {(() => {
-            const renderBenefits = (title: string, items: BenefitItem[] | number | null | undefined, isMoney = true) => {
-              if (!items) return null;
-              if (typeof items === 'number') return (
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-xs text-slate-500 mb-1">{title}</p>
-                  <p className="text-sm font-semibold text-slate-800">{isMoney ? fmt(items) : pct(items)}</p>
-                </div>
-              );
-              if (!Array.isArray(items) || items.length === 0) return null;
-              return (
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-slate-500 mb-2">{title}</p>
-                  <div className="space-y-1">
-                    {items.slice(0, 8).map((b, i) => (
-                      <div key={i} className="flex justify-between text-xs">
-                        <span className="text-slate-600 truncate mr-2">{b.service_type || `Service ${b.service_code}`}</span>
-                        <span className="font-medium text-slate-800 whitespace-nowrap">
-                          {b.amount != null ? fmt(b.amount) : b.percent != null ? `${b.percent}%` : '—'}
-                          {b.network === 'Y' ? '' : b.network === 'N' ? ' (OON)' : ''}
-                        </span>
-                      </div>
-                    ))}
-                    {items.length > 8 && <p className="text-xs text-slate-400">+{items.length - 8} more</p>}
-                  </div>
-                </div>
-              );
-            };
-            return (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {renderBenefits('Copays', parsed.copay)}
-                {renderBenefits('Deductibles', parsed.deductible)}
-                {renderBenefits('Coinsurance', parsed.coinsurance, false)}
-                {renderBenefits('Out of Pocket', parsed.out_of_pocket)}
-              </div>
-            );
-          })()}
-
-          {/* Errors from 271 */}
-          {parsed.errors && parsed.errors.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <p className="text-xs font-semibold text-amber-700 mb-1">Payer Notes</p>
-              {parsed.errors.map((e, i) => <p key={i} className="text-xs text-amber-600">{String(e)}</p>)}
+            {/* Member info — compact */}
+            <div className="space-y-0.5">
+              {subscriberName && <p className="text-xs font-semibold text-slate-700">{subscriberName}</p>}
+              {memberId && <p className="text-xs text-slate-600">Member ID: <span className="font-mono font-semibold">{memberId}</span></p>}
+              {payerName && <p className="text-xs text-slate-600">Payer: {payerName}</p>}
+              {planName && <p className="text-xs text-slate-600">Plan: {planName}</p>}
             </div>
-          )}
 
-          {/* Covered services */}
-          {parsed.covered_services && parsed.covered_services.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                Covered Services
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {parsed.covered_services.map((s, i) => (
-                  <span
-                    key={i}
-                    className="text-xs bg-sky-50 text-sky-700 border border-sky-100 px-2 py-0.5 rounded-full"
-                  >
-                    {typeof s === 'object' ? JSON.stringify(s) : s}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Raw 271 toggle */}
-          <div>
-            <button
-              onClick={() => setShowRaw(v => !v)}
-              className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700"
-            >
-              {showRaw ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              {showRaw ? 'Hide' : 'Show'} Raw X12 271 Response
-            </button>
-            {showRaw && (
-              <div className="mt-2 space-y-2">
-                {result.response_raw && (
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 mb-1">Raw X12 271</p>
-                    <pre className="bg-slate-900 text-emerald-400 text-xs p-4 rounded-lg overflow-x-auto whitespace-pre-wrap break-all">
-                      {result.response_raw.split('~').join('~\n')}
-                    </pre>
-                  </div>
-                )}
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 mb-1">Parsed Response</p>
-                  <pre className="bg-slate-900 text-sky-300 text-xs p-4 rounded-lg overflow-x-auto whitespace-pre-wrap break-all">
-                    {typeof result.response_parsed === 'object'
-                      ? JSON.stringify(result.response_parsed, null, 2)
-                      : String(result.response_parsed ?? '')}
-                  </pre>
-                </div>
+            {/* Coverage dates */}
+            {(effectiveDate || termDate) && (
+              <div className="space-y-0.5">
+                {effectiveDate && <p className="text-xs text-slate-600">Effective: <span className="font-semibold">{formatEligDate(effectiveDate as string)}</span></p>}
+                <p className="text-xs text-slate-600">Expires: <span className="font-semibold">{formatEligDate(termDate as string)}</span></p>
               </div>
             )}
+
+            {/* Patient costs */}
+            {hasPatientCosts && (
+              <div className="space-y-0.5">
+                <p className="text-xs font-semibold text-slate-700">Patient Costs</p>
+                {copays.map((c, i) => (
+                  <p key={`cp-${i}`} className="text-xs text-slate-600">
+                    Copay: <span className="font-semibold">${c.amount != null ? (typeof c.amount === 'number' ? c.amount.toFixed(0) : c.amount) : '—'}</span>
+                    {c.service_type && c.service_type !== 'Other' ? ` (${c.service_type})` : ''}
+                  </p>
+                ))}
+                {deductibles.map((d, i) => (
+                  <p key={`dd-${i}`} className="text-xs text-slate-600">
+                    Deductible: <span className="font-semibold">${d.amount != null ? (typeof d.amount === 'number' ? d.amount.toFixed(0) : d.amount) : '—'}</span>
+                    {d.remaining != null ? ` ($${d.remaining} remaining)` : ''}
+                  </p>
+                ))}
+                {coinsurance.map((c, i) => (
+                  <p key={`ci-${i}`} className="text-xs text-slate-600">
+                    Coinsurance: <span className="font-semibold">{c.percent != null ? `${c.percent}%` : '—'}</span>
+                  </p>
+                ))}
+                {outOfPocket.map((o, i) => (
+                  <p key={`oop-${i}`} className="text-xs text-slate-600">
+                    Out-of-Pocket Max: <span className="font-semibold">${o.amount != null ? (typeof o.amount === 'number' ? o.amount.toFixed(0) : o.amount) : '—'}</span>
+                    {o.remaining != null ? ` ($${o.remaining} remaining)` : ''}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {/* Covered services */}
+            {parsed.covered_services && parsed.covered_services.length > 0 && (
+              <div className="space-y-0.5">
+                <p className="text-xs font-semibold text-slate-700">Covered</p>
+                {parsed.covered_services.map((svc, i) => (
+                  <p key={i} className="text-xs text-slate-600">{typeof svc === 'object' ? JSON.stringify(svc) : svc}</p>
+                ))}
+              </div>
+            )}
+
+            {/* Non-covered */}
+            {parsed.non_covered && parsed.non_covered.length > 0 && (
+              <div className="space-y-0.5">
+                <p className="text-xs font-semibold text-amber-700">Not Covered</p>
+                {parsed.non_covered.map((svc, i) => (
+                  <p key={i} className="text-xs text-amber-600">{svc}</p>
+                ))}
+              </div>
+            )}
+
+            {/* Errors */}
+            {parsed.errors && parsed.errors.length > 0 && (
+              <div className="text-xs text-red-600">
+                {parsed.errors.map((e, i) => <p key={i}>{String(e)}</p>)}
+              </div>
+            )}
+
+            {/* Raw response toggle */}
+            <div>
+              <button
+                onClick={() => setShowRaw(v => !v)}
+                className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                {showRaw ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
+                Raw X12 271 Response
+              </button>
+              {showRaw && (
+                <div className="mt-1 space-y-2">
+                  <pre className="text-[10px] bg-slate-900 text-slate-100 rounded-lg p-2 overflow-auto whitespace-pre-wrap">
+                    {JSON.stringify(parsed, null, 2)}
+                  </pre>
+                  {result.response_raw && (
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-500 mb-1">Raw X12 EDI</p>
+                      <pre className="text-[10px] bg-slate-900 text-emerald-400 rounded-lg p-2 overflow-auto whitespace-pre-wrap break-all">
+                        {result.response_raw.split('~').join('~\n')}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* History */}
       {selectedPatient && (
