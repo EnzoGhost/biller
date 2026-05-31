@@ -1575,11 +1575,11 @@ function ClaimDetailPageInner() {
                           <div className="mt-2 p-2.5 rounded-lg text-xs border bg-red-50 text-red-700 border-red-200">
                             <p className="font-medium">✗ Error</p>
                             {msg && <p className="mt-0.5 opacity-80">{String(msg)}</p>}
-                            {eligibilityResult.response_raw && (
+                            {eligibilityResult.response_parsed && (
                               <details className="mt-2">
-                                <summary className="cursor-pointer text-slate-500 hover:text-slate-700">View Raw X12</summary>
+                                <summary className="cursor-pointer text-slate-500 hover:text-slate-700">Raw X12 271 Response</summary>
                                 <pre className="mt-1 bg-slate-900 text-emerald-400 text-[10px] p-2 rounded overflow-x-auto whitespace-pre-wrap break-all">
-                                  {eligibilityResult.response_raw.split('~').join('~\n')}
+                                  {JSON.stringify(eligibilityResult.response_parsed, null, 2)}
                                 </pre>
                               </details>
                             )}
@@ -1673,11 +1673,11 @@ function ClaimDetailPageInner() {
                           {msg && <p className="text-xs text-amber-600">{String(msg)}</p>}
 
                           {/* Raw X12 response */}
-                          {eligibilityResult.response_raw && (
+                          {eligibilityResult.response_parsed && (
                             <details className="mt-2">
                               <summary className="cursor-pointer text-[11px] text-slate-400 hover:text-slate-600">Raw X12 271 Response</summary>
                               <pre className="mt-1 bg-slate-900 text-emerald-400 text-[10px] p-2 rounded overflow-x-auto whitespace-pre-wrap break-all">
-                                {eligibilityResult.response_raw.split('~').join('~\n')}
+                                {JSON.stringify(eligibilityResult.response_parsed, null, 2)}
                               </pre>
                             </details>
                           )}

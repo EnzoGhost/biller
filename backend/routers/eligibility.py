@@ -64,7 +64,7 @@ class EligibilityCheckRequest(BaseModel):
     patient_id: int
     insurance_id: Optional[int] = None          # PatientInsurance.id — use primary if omitted
     payer_id_override: Optional[str] = None     # override payer EDI ID
-    service_type_codes: list[str] = ["30"]      # default: health benefit plan coverage
+    service_type_codes: list[str] = ["AL", "BV"]  # AL=Other/General, BV=Optometry/Vision (match AngelWink)
     as_of_date: Optional[date] = None           # inquiry date, defaults to today
 
 
@@ -166,11 +166,30 @@ async def check_eligibility(
     provider_res = await db.execute(select(ProviderModel).where(ProviderModel.is_active == True).limit(1))
     provider = provider_res.scalar_one_or_none()
 
+    # Parse subscriber name — handle "LAST, FIRST" and "FIRST LAST" formats
+    sub_first = patient.first_name or ""
+    sub_last = patient.last_name or ""
+    if insurance.subscriber_name:
+        sn = insurance.subscriber_name.strip()
+        if "," in sn:
+            # "RIVERA ROSARIO, DENISE" → last="RIVERA ROSARIO", first="DENISE"
+            parts = sn.split(",", 1)
+            sub_last = parts[0].strip()
+            sub_first = parts[1].strip()
+        else:
+            # "DENISE RIVERA ROSARIO" → first=DENISE, last=RIVERA ROSARIO
+            parts = sn.strip().split()
+            if len(parts) >= 2:
+                sub_first = parts[0]
+                sub_last = " ".join(parts[1:])
+            elif len(parts) == 1:
+                sub_first = parts[0]
+
     try:
         x12_270 = generate_270(
             submitter_id=submitter_id,
-            subscriber_last=insurance.subscriber_name.split()[-1] if insurance.subscriber_name else patient.last_name,
-            subscriber_first=insurance.subscriber_name.split()[0] if insurance.subscriber_name else patient.first_name,
+            subscriber_last=sub_last,
+            subscriber_first=sub_first,
             subscriber_dob=insurance.subscriber_dob or patient.dob,
             subscriber_gender=patient.gender.value if patient.gender else "",
             member_id=insurance.member_id.replace('-', '') if insurance.member_id else "",
