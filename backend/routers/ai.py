@@ -11,6 +11,24 @@ import logging
 import re
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_subscriber_name(name: str | None) -> str | None:
+    """Normalize subscriber name to 'FIRST LAST' format.
+
+    Insurance cards often print names as 'LAST, FIRST' or 'LAST FIRST'.
+    We want consistent 'FIRST LAST' format matching AngelWink.
+    """
+    if not name:
+        return name
+    name = name.strip()
+    if "," in name:
+        # "RIVERA ROSARIO, DENISE" → "DENISE RIVERA ROSARIO"
+        parts = name.split(",", 1)
+        last_part = parts[0].strip()
+        first_part = parts[1].strip()
+        return f"{first_part} {last_part}"
+    return name
 from collections import Counter
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
@@ -694,7 +712,7 @@ Return only the JSON object, no explanation."""
         if extracted.get("group_number"):
             existing.group_number = extracted["group_number"]
         if extracted.get("subscriber_name"):
-            existing.subscriber_name = extracted["subscriber_name"]
+            existing.subscriber_name = _normalize_subscriber_name(extracted["subscriber_name"])
         if extracted.get("effective_date"):
             from datetime import date as _date
             try:
@@ -722,7 +740,7 @@ Return only the JSON object, no explanation."""
             payer_id=claim.payer_id,
             member_id=extracted.get("member_id") or "UNKNOWN",
             group_number=extracted.get("group_number"),
-            subscriber_name=extracted.get("subscriber_name"),
+            subscriber_name=_normalize_subscriber_name(extracted.get("subscriber_name")),
             subscriber_dob=sub_dob,
             effective_date=eff_date,
             is_primary=True,
