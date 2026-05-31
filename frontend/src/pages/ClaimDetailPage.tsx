@@ -1549,22 +1549,133 @@ function ClaimDetailPageInner() {
                       const isInactive = eligibilityResult.status === 'inactive';
                       const errors = Array.isArray(rp.errors) ? rp.errors : [];
                       const msg = errors.length > 0 ? errors.join('; ') : (rp.reject_reason || rp.error || rp.inmediata_message || '') as string;
+
+                      // Normalize field names (support both old and new)
+                      const effectiveDate = (rp.effective_date || rp.plan_begin_date || null) as string | null;
+                      const termDate = (rp.term_date || rp.plan_end_date || null) as string | null;
+                      const copays: any[] = Array.isArray(rp.copay) && rp.copay.length > 0 ? rp.copay : (Array.isArray(rp.copays) ? rp.copays : []);
+                      const deductibles: any[] = Array.isArray(rp.deductible) && rp.deductible.length > 0 ? rp.deductible : (Array.isArray(rp.deductibles) ? rp.deductibles : []);
+                      const coinsurance: any[] = Array.isArray(rp.coinsurance) ? rp.coinsurance : [];
+                      const outOfPocket: any[] = Array.isArray(rp.out_of_pocket) ? rp.out_of_pocket : [];
+                      const coveredServices: any[] = Array.isArray(rp.covered_services) ? rp.covered_services : [];
+                      const nonCovered: any[] = Array.isArray(rp.non_covered) ? rp.non_covered : [];
+                      const hasPatientCosts = copays.length > 0 || deductibles.length > 0 || coinsurance.length > 0 || outOfPocket.length > 0;
+
+                      const fmtEligDate = (raw: string | null | undefined): string => {
+                        if (!raw) return 'Not listed';
+                        const m = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+                        if (!m) return raw;
+                        const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                        return `${months[parseInt(m[2], 10) - 1] || m[2]} ${parseInt(m[3], 10)}, ${m[1]}`;
+                      };
+
+                      // Error state
+                      if (eligibilityResult.status === 'error' || (errors.length > 0 && !isActive)) {
+                        return (
+                          <div className="mt-2 p-2.5 rounded-lg text-xs border bg-red-50 text-red-700 border-red-200">
+                            <p className="font-medium">✗ Error</p>
+                            {msg && <p className="mt-0.5 opacity-80">{String(msg)}</p>}
+                            {eligibilityResult.response_raw && (
+                              <details className="mt-2">
+                                <summary className="cursor-pointer text-slate-500 hover:text-slate-700">View Raw X12</summary>
+                                <pre className="mt-1 bg-slate-900 text-emerald-400 text-[10px] p-2 rounded overflow-x-auto whitespace-pre-wrap break-all">
+                                  {eligibilityResult.response_raw.split('~').join('~\n')}
+                                </pre>
+                              </details>
+                            )}
+                          </div>
+                        );
+                      }
+
                       return (
-                        <div className={`mt-2 p-2.5 rounded-lg text-xs border ${
-                          isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : isInactive ? 'bg-red-50 text-red-700 border-red-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                        }`}>
-                          <p className="font-medium">
-                            {isActive ? '✓ Eligible' : isInactive ? '✗ Inactive / Not Eligible' : `⚠ ${eligibilityResult.status}`}
-                          </p>
-                          {msg && <p className="mt-0.5 text-xs opacity-80">{String(msg)}</p>}
-                          {rp.plan_name && <p className="mt-1">Plan: {String(rp.plan_name)}</p>}
-                          {rp.copay && <p>Copay: ${String(rp.copay)}</p>}
-                          {rp.plan_begin_date && <p>Coverage: {String(rp.plan_begin_date)} — {String(rp.plan_end_date) || 'present'}</p>}
+                        <div className="mt-3 pt-3 border-t border-slate-100 space-y-2.5">
+                          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Eligibility Result</span>
+
+                          {/* Status badge */}
+                          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+                            isActive
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : isInactive
+                              ? 'bg-red-50 text-red-700 border-red-100'
+                              : 'bg-slate-50 text-slate-600 border-slate-200'
+                          }`}>
+                            {isActive ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                            {isActive ? 'Active Coverage' : isInactive ? 'Inactive' : eligibilityResult.status}
+                          </div>
+
+                          {/* Member info */}
+                          <div className="space-y-0.5">
+                            {rp.subscriber_name && <p className="text-xs font-semibold text-slate-700">{String(rp.subscriber_name)}</p>}
+                            {(rp.member_id || rp.subscriber_id) && <p className="text-xs text-slate-600">Member ID: <span className="font-mono font-semibold">{String(rp.member_id || rp.subscriber_id)}</span></p>}
+                            {rp.payer_name && <p className="text-xs text-slate-600">Payer: {String(rp.payer_name)}</p>}
+                            {rp.plan_name && <p className="text-xs text-slate-600">Plan: {String(rp.plan_name)}</p>}
+                          </div>
+
+                          {/* Coverage dates */}
+                          {(effectiveDate || termDate) && (
+                            <div className="space-y-0.5">
+                              {effectiveDate && <p className="text-xs text-slate-600">Effective: <span className="font-semibold">{fmtEligDate(effectiveDate)}</span></p>}
+                              <p className="text-xs text-slate-600">Expires: <span className="font-semibold">{fmtEligDate(termDate)}</span></p>
+                            </div>
+                          )}
+
+                          {/* Patient costs */}
+                          {hasPatientCosts && (
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-semibold text-slate-700">Patient Costs</p>
+                              {copays.map((c: any, i: number) => (
+                                <p key={`cp-${i}`} className="text-xs text-slate-600">
+                                  Copay: <span className="font-semibold">${typeof c.amount === 'number' ? c.amount.toFixed(0) : c.amount ?? '—'}</span>
+                                  {c.service_type && c.service_type !== 'Other' ? ` (${c.service_type})` : ''}
+                                </p>
+                              ))}
+                              {deductibles.map((d: any, i: number) => (
+                                <p key={`dd-${i}`} className="text-xs text-slate-600">
+                                  Deductible: <span className="font-semibold">${typeof d.amount === 'number' ? d.amount.toFixed(0) : d.amount ?? '—'}</span>
+                                  {d.remaining != null ? ` ($${d.remaining} remaining)` : ''}
+                                </p>
+                              ))}
+                              {coinsurance.map((c: any, i: number) => (
+                                <p key={`ci-${i}`} className="text-xs text-slate-600">
+                                  Coinsurance: <span className="font-semibold">{c.percent != null ? `${c.percent}%` : '—'}</span>
+                                </p>
+                              ))}
+                              {outOfPocket.map((o: any, i: number) => (
+                                <p key={`oop-${i}`} className="text-xs text-slate-600">
+                                  Out-of-Pocket Max: <span className="font-semibold">${typeof o.amount === 'number' ? o.amount.toFixed(0) : o.amount ?? '—'}</span>
+                                  {o.remaining != null ? ` ($${o.remaining} remaining)` : ''}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Covered services */}
+                          {coveredServices.length > 0 && (
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-semibold text-slate-700">Covered</p>
+                              {coveredServices.map((svc: any, i: number) => (
+                                <p key={i} className="text-xs text-slate-600">{typeof svc === 'object' ? JSON.stringify(svc) : svc}</p>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Non-covered */}
+                          {nonCovered.length > 0 && (
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-semibold text-amber-700">Not Covered</p>
+                              {nonCovered.map((svc: any, i: number) => (
+                                <p key={i} className="text-xs text-amber-600">{typeof svc === 'object' ? JSON.stringify(svc) : svc}</p>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Errors/warnings */}
+                          {msg && <p className="text-xs text-amber-600">{String(msg)}</p>}
+
+                          {/* Raw X12 response */}
                           {eligibilityResult.response_raw && (
                             <details className="mt-2">
-                              <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">View Raw X12</summary>
+                              <summary className="cursor-pointer text-[11px] text-slate-400 hover:text-slate-600">Raw X12 271 Response</summary>
                               <pre className="mt-1 bg-slate-900 text-emerald-400 text-[10px] p-2 rounded overflow-x-auto whitespace-pre-wrap break-all">
                                 {eligibilityResult.response_raw.split('~').join('~\n')}
                               </pre>
