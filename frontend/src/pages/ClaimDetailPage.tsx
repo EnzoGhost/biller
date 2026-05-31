@@ -534,6 +534,7 @@ function ClaimDetailPageInner() {
   const [insuranceDropActive, setInsuranceDropActive] = useState(false);
   const [checkingEligibility, setCheckingEligibility] = useState(false);
   const [eligibilityResult, setEligibilityResult] = useState<any>(null);
+  const [eligibilityCheckedAt, setEligibilityCheckedAt] = useState<string | null>(null);
 
   // Inmediata response viewer state
   const [showInmediataResponses, setShowInmediataResponses] = useState(false);
@@ -616,6 +617,20 @@ function ClaimDetailPageInner() {
     queryFn: () => api.get(`/prior-auth/claims/${id}`).then(r => Array.isArray(r.data) ? r.data : []),
     enabled: !!id,
   });
+
+  // Auto-load last eligibility check result (persists across visits, like AngelWink)
+  useEffect(() => {
+    if (!claim?.patient_id) return;
+    api.get(`/eligibility/history/${claim.patient_id}?limit=1`)
+      .then(r => {
+        const checks = r.data?.checks ?? [];
+        if (checks.length > 0) {
+          setEligibilityResult(checks[0]);
+          setEligibilityCheckedAt(checks[0].checked_at);
+        }
+      })
+      .catch(() => {}); // best-effort
+  }, [claim?.patient_id]);
 
   // Approval requests
   const { data: approvalRequests, refetch: refetchApprovals } = useQuery<{
@@ -1529,6 +1544,7 @@ function ClaimDetailPageInner() {
                               insurance_id: ins.id,
                             });
                             setEligibilityResult(data);
+                            setEligibilityCheckedAt(data.checked_at || new Date().toISOString());
                             showToast(data.status === 'active' ? 'Eligible ✓' : `Status: ${data.status}`);
                           } catch (err: any) {
                             showToast(err.response?.data?.detail || 'Eligibility check failed', false);
@@ -1590,6 +1606,19 @@ function ClaimDetailPageInner() {
                       return (
                         <div className="mt-3 pt-3 border-t border-slate-100 space-y-2.5">
                           <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Eligibility Result</span>
+                          {eligibilityCheckedAt && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              Checked: {(() => {
+                                try {
+                                  const d = new Date(eligibilityCheckedAt);
+                                  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                                  let hours = d.getHours(); const mins = d.getMinutes();
+                                  const ampm = hours >= 12 ? 'PM' : 'AM'; hours = hours % 12 || 12;
+                                  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} at ${hours}:${mins.toString().padStart(2,'0')} ${ampm}`;
+                                } catch { return eligibilityCheckedAt; }
+                              })()}
+                            </p>
+                          )}
 
                           {/* Status badge */}
                           <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
