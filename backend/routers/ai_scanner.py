@@ -221,6 +221,8 @@ async def process_eligibility(body: ProcessRequest):
 
     prompt = (
         "Extract insurance information from this card image. "
+        "For subscriber_name, always return as FIRST_NAME LAST_NAME format "
+        "(given name first, family name last). Never return as LAST, FIRST format. "
         "Return JSON: "
         '{ "payer_name": "string", "plan_type": "string or null", '
         '"member_id": "string", "group_number": "string or null", '
@@ -240,6 +242,12 @@ async def process_eligibility(body: ProcessRequest):
         raw = response.choices[0].message.content or ""
         parsed = json.loads(_extract_json(raw))
         info = EligibilityInfo(**parsed)
+        # Normalize subscriber name to FIRST LAST format (in case AI still returns LAST, FIRST)
+        if info.subscriber_name and ',' in info.subscriber_name:
+            parts = info.subscriber_name.split(',', 1)
+            last_part = parts[0].strip()
+            first_part = parts[1].strip()
+            info.subscriber_name = f"{first_part} {last_part}"
         return EligibilityResponse(info=info, raw=raw)
 
     except json.JSONDecodeError as e:
