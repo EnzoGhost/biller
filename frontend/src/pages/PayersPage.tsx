@@ -44,7 +44,8 @@ export default function PayersPage() {
   const filtered = (data?.items ?? []).filter(p =>
     !search ||
     p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.payer_id.toLowerCase().includes(search.toLowerCase())
+    p.payer_id.toLowerCase().includes(search.toLowerCase()) ||
+    (p.inmediata_payer_id?.toLowerCase().includes(search.toLowerCase()) ?? false)
   );
 
   return (
@@ -130,6 +131,12 @@ export default function PayersPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-slate-400">Stedi ID:</span>
                     <span className="font-mono">{payer.stedi_payer_id}</span>
+                  </div>
+                )}
+                {payer.inmediata_payer_id && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">Inmediata ID:</span>
+                    <span className="font-mono">{payer.inmediata_payer_id}</span>
                   </div>
                 )}
               </div>

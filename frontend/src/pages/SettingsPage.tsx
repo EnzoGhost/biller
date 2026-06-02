@@ -1006,6 +1006,13 @@ export default function SettingsPage() {
                   </span>
                 )}
               </div>
+
+              <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <p className="text-xs text-slate-500">
+                  Payer ID mapping is managed per-payer on the <a href="/payers" className="text-sky-500 hover:text-sky-600 font-medium">Payers page</a>.
+                  Each payer's Inmediata ID is used for eligibility checks.
+                </p>
+              </div>
             </div>
           )}
 
