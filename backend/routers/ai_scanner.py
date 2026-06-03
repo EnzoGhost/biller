@@ -220,9 +220,20 @@ async def process_eligibility(body: ProcessRequest):
     client = _get_openai()
 
     prompt = (
-        "Extract insurance information from this card image. "
+        "Extract insurance information from this Puerto Rico health insurance card image. "
+        "CRITICAL for payer_name: Look carefully for plan type indicators like 'Vital', 'GHP', "
+        "'Reforma', 'Advantage', 'Medicare', 'Classicare' logos or text ANYWHERE on the card "
+        "(including watermarks, corner logos, and the ASES government logo which indicates Vital/Reforma). "
+        "Include the plan type in payer_name. Examples: "
+        "- Card says 'First Medical' with Vital/ASES logo → payer_name='First Medical Vital' "
+        "- Card says 'Triple-S' with 'Vital' → payer_name='Triple S Vital' "
+        "- Card says 'MCS' with 'Classicare' → payer_name='MCS Classicare' "
+        "- Card says 'MMM' with 'Vital' → payer_name='MMM Vital' "
+        "- Card says 'Triple-S' with 'Advantage' → payer_name='Triple S Advantage' "
+        "- Plain 'First Medical' without Vital/ASES → payer_name='First Medical' "
         "For subscriber_name, always return as FIRST_NAME LAST_NAME format "
         "(given name first, family name last). Never return as LAST, FIRST format. "
+        "For member_id, extract the full ID including any letter prefixes (like MPI number). "
         "Return JSON: "
         '{ "payer_name": "string", "plan_type": "string or null", '
         '"member_id": "string", "group_number": "string or null", '

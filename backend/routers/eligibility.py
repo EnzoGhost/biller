@@ -287,11 +287,12 @@ async def check_eligibility_direct(req: DirectEligibilityRequest):
     # submitter_id = the Inmediata username (matches what Inmediata expects)
     submitter_id = req.inmediata_username
 
-    logger.info(
-        "[check-direct] payer=%s payer_id=%s member=%s first=%s last=%s dob=%s gender=%s group=%s",
-        req.payer_name, req.payer_id, req.member_id,
-        req.subscriber_first_name, req.subscriber_last_name,
-        req.subscriber_dob, req.subscriber_gender, req.group_number,
+    print(
+        f"[check-direct] payer={req.payer_name} payer_id={req.payer_id} "
+        f"member={req.member_id} first={req.subscriber_first_name} last={req.subscriber_last_name} "
+        f"dob={req.subscriber_dob} gender={req.subscriber_gender} group={req.group_number} "
+        f"npi={req.provider_npi} taxonomy={req.provider_taxonomy} tax_id={req.provider_tax_id}",
+        flush=True,
     )
 
     try:
@@ -329,11 +330,16 @@ async def check_eligibility_direct(req: DirectEligibilityRequest):
     )
 
     # ── 3. Send 270 ───────────────────────────────────────────────────────────
+    # Log the 270 for debugging
+    print(f"[check-direct] 270 REQUEST (first 600):\n{x12_270[:600]}", flush=True)
     try:
         rt_result = await client.send_realtime(x12_270)
     except Exception as exc:
         logger.exception("check-direct: SecureTrack SendRealTime failed")
         raise HTTPException(status_code=502, detail=f"Inmediata SecureTrack error: {exc}")
+    print(f"[check-direct] RESULT: success={rt_result.success} errors={rt_result.error_count} msg={rt_result.message}", flush=True)
+    if rt_result.response:
+        print(f"[check-direct] 271 RESPONSE (first 500):\n{rt_result.response[:500]}", flush=True)
 
     # ── 4. Parse 271 ──────────────────────────────────────────────────────────
     parsed: dict[str, Any] = {}
