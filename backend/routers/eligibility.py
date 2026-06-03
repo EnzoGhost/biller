@@ -287,6 +287,13 @@ async def check_eligibility_direct(req: DirectEligibilityRequest):
     # submitter_id = the Inmediata username (matches what Inmediata expects)
     submitter_id = req.inmediata_username
 
+    logger.info(
+        "[check-direct] payer=%s payer_id=%s member=%s first=%s last=%s dob=%s gender=%s group=%s",
+        req.payer_name, req.payer_id, req.member_id,
+        req.subscriber_first_name, req.subscriber_last_name,
+        req.subscriber_dob, req.subscriber_gender, req.group_number,
+    )
+
     try:
         x12_270 = generate_270(
             submitter_id=submitter_id,
